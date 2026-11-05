@@ -801,7 +801,7 @@ function loadArrivals() {
   const ci   = (...n) => _colIndex(hdrs, ...n);
   const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=ci('CONFIRMATION NUMBER','CONFIRMATION_NO','CONFIRM'),
         taI=ci('TRAVEL AGENT','TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE'),
-        eI=ci('EMAIL','E-MAIL');
+        eI=ci('EMAIL','E-MAIL'), natI=ci('NATIONALITY','COUNTRY','NATION','NAT');
   if (rI < 0 || nI < 0) { alert('Could not find Room/Name columns.'); return; }
   _showColumnMap(hdrs, { Room:rI, Name:nI, 'Conf.':cI, Nights:niI, Email:eI,
                          'Travel Agent':taI, Company:coI, 'Booking Source':srcI, Nationality:natI });
@@ -812,7 +812,7 @@ function loadArrivals() {
     const rn   = (p[nI]||'').replace(/"/g,'').trim();
     if (!room || !rn) continue;
     guests.push({ room, conf:cI>=0?(p[cI]||'').replace(/"/g,'').trim():'', name:cleanName(rn), purpose:'Business',
-      nights:niI>=0?parseInt(p[niI])||1:1, nat:'', email: (eI>=0 && (p[eI]||'').trim()) ? (p[eI]||'').replace(/"/g,'').trim() : 'No@email.com',
+      nights:niI>=0?parseInt(p[niI])||1:1, nat: natI>=0 ? (p[natI]||'').replace(/"/g,'').trim() : '', email: (eI>=0 && (p[eI]||'').trim()) ? (p[eI]||'').replace(/"/g,'').trim() : 'No@email.com',
       source:cleanSource(taI>=0?(p[taI]||'').replace(/"/g,'').trim():'', coI>=0?(p[coI]||'').replace(/"/g,'').trim():'', srcI>=0?(p[srcI]||'').replace(/"/g,'').trim():''),
       remarks:'' });
   }
@@ -1324,7 +1324,7 @@ function loadPurpose() {
   const ci    = (...n) => _colIndex(hdrs, ...n);
   const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=ci('CONFIRMATION NUMBER','CONFIRMATION_NO','CONFIRM'),
         taI=ci('TRAVEL AGENT','TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE'),
-        eI=ci('EMAIL','E-MAIL');
+        eI=ci('EMAIL','E-MAIL'), natI=ci('NATIONALITY','COUNTRY','NATION','NAT');
   if (rI < 0 || nI < 0) { alert('Could not find Room/Name.'); return; }
   _showColumnMap(hdrs, { Room:rI, Name:nI, 'Conf.':cI, Nights:niI, Email:eI,
                          'Travel Agent':taI, Company:coI, 'Booking Source':srcI, Nationality:natI });
@@ -1335,7 +1335,7 @@ function loadPurpose() {
     const rn   = (p[nI]||'').replace(/"/g,'').trim();
     if (!room || !rn || _isPmRoom(room)) continue;
     guests.push({ room, conf:cI>=0?(p[cI]||'').replace(/"/g,'').trim():'', name:cleanName(rn), purpose:'Business',
-      nights:niI>=0?parseInt(p[niI])||1:1, nat:'', email: (eI>=0 && (p[eI]||'').trim()) ? (p[eI]||'').replace(/"/g,'').trim() : 'No@email.com',
+      nights:niI>=0?parseInt(p[niI])||1:1, nat: natI>=0 ? (p[natI]||'').replace(/"/g,'').trim() : '', email: (eI>=0 && (p[eI]||'').trim()) ? (p[eI]||'').replace(/"/g,'').trim() : 'No@email.com',
       source:cleanSource(taI>=0?(p[taI]||'').replace(/"/g,'').trim():'', coI>=0?(p[coI]||'').replace(/"/g,'').trim():'', srcI>=0?(p[srcI]||'').replace(/"/g,'').trim():''),
       originOfTravel: '',
       remarks:'' });

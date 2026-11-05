@@ -995,7 +995,7 @@
       if (side === 'DTCM') endDtcm = round2(endDtcm + delta); else endOpera = round2(endOpera + delta);
     });
     gap.monthEnd = { dtcm: endDtcm, opera: endOpera, equal: Math.abs(endDtcm - endOpera) < 0.005,
-      opera: endOpera, dtcmChanges: plan.filter(p => p.monthEnd.side === 'DTCM').length,
+      dtcmChanges: plan.filter(p => p.monthEnd.side === 'DTCM').length,
       operaChanges: plan.filter(p => p.monthEnd.side === 'Opera').length };
 
     const order = { Add: 0, Reverse: 1, Verify: 2, DTCM: 3 };

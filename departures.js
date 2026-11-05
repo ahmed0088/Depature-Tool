@@ -330,8 +330,11 @@ function parseDepReport(raw) {
   if (idx['ROOM'] === undefined) return null;
 
   const rooms = [];
+  // a row only has to reach the columns it needs (room, name): a shorter export, or one whose empty last columns were trimmed
+  // (Excel → text), used to be dropped whole — "no departure rooms found" with the rooms right there
+  const need = Math.max(idx['ROOM'], idx['GUEST_NAME'] !== undefined ? idx['GUEST_NAME'] : 0) + 1;
   for (let i = 1; i < lines.length; i++) {
-    const p    = lines[i].split('\t'); if (p.length < 15) continue;
+    const p    = lines[i].split('\t'); if (p.length < need) continue;
     const room = (p[idx['ROOM']] || '').trim(); if (!room || isNaN(parseInt(room)) || depIsPm(room)) continue;
     const bal  = parseFloat((p[idx['BALANCE']] || '0').replace(/,/g, '')) || 0;
     const agent = (p[idx['TRAVEL_AGENT_NAME']] || '').trim();

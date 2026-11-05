@@ -315,7 +315,7 @@ function statusOf(text, cat, head) {
 const HO_COPY_MIN = 3;                                   // the score a message needs
 const CAT_WEIGHT = { lost: 3, cash: 3, guest: 3, move: 3, pay: 2, res: 2, maint: 2, transport: 2, desk: 2, follow: 1, fb: 1, hk: 0, info: 0 };
 // the words of plain room commands and housekeeping status codes (what is left decides)
-const CMD_WORDS = /\b(?:rooms?|rm|co|c\/o|lco|l\/c|late|check(?:ed|ing)?[\s-]*(?:out|in)|checkout|chkout|out|left|gone|vacated|departed|ext(?:end(?:ed|ing)?|ension)?|extn|xtnd|stay(?:ing)?|more|nights?|\d+\s*n|till|until|to|at|by|and|all|vd|vc|oc|od|ooo|dnd|ready|clean(?:ed)?|done|ok(?:ay)?|noted|inspected|occupied|vacant|dirty|guest|inside|luggage|in|the|is|are|pls|please|asap|now|soon|mins?|minutes?|hrs?|today|am|pm|noon|[✓✔✅👍])\b|[✓✔✅👍]/gi;
+const CMD_WORDS = /\b(?:rooms?|rm|co|c\/o|lco|l\/c|late|check(?:ed|ing)?[\s-]*(?:out|in)|checkout|chkout|out|left|gone|vacated|departed|ext(?:end(?:ed|ing)?|ension)?|extn|xtnd|stay(?:ing)?|more|nights?|\d+\s*n|till|until|to|at|by|and|all|vd|vc|oc|od|ooo|dnd|ready|clean(?:ed)?|done|ok(?:ay)?|noted|inspected|occupied|vacant|dirty|guest|inside|luggage|in|the|is|are|pls|please|asap|now|soon|mins?|minutes?|hrs?|today|am|pm|noon|[✓✔✅👍])\b|[✓✔✅👍]/giu;
 // "I handover to the reception", "handed over the keys to the guest": handing something over, not a shift handover
 const HANDED_RX = /\b(?:i|we|he|she|they|will|to|already|just|please|pls|kindly)\s+hand\s*-?\s*(?:over|overed)\b|\bhand\s*-?\s*over(?:ed)?\s+(?:to|it|the|them|him|her|this|that)\b|\bhanded\s+over\b/i;
 // the HK group's routine asks: "physical check 301, 304", "any update due out rooms", "403 IP", "on queue"
@@ -401,7 +401,7 @@ function tagsOf(text, parse) {
 // ══ Splitting a message into items ══════════════════════════
 const BULLET_RX = /^\s*(?:[-–—•·*▪►▶➤➢→◦○●▫️✔️✅☑️🔸🔹🔺🔻⭐👉⚠❗‼📌🔴🟠🟡🟢🔵]+\s*|\(?\d{1,2}[.)]\s+|\(?[a-h][)]\s+)/u;
 const GREET_RX = /^(?:good\s*(?:morning|afternoon|evening|night|day)|hi+|hello|hey|dear\b|salam|assalam\w*|greetings|morning|evening)\b[\s\w,!.]*$/i;
-const SIGN_RX = /^(?:thanks?|thank\s*you|thx|thnx|ty|regards|best regards|kind regards|br|cheers|have a (?:good|nice|great|safe)\b.*|good luck.*|that'?s all.*|end of (?:handover|report).*)[\s!.🙏👍]*$/i;
+const SIGN_RX = /^(?:thanks?|thank\s*you|thx|thnx|ty|regards|best regards|kind regards|br|cheers|have a (?:good|nice|great|safe)\b.*|good luck.*|that'?s all.*|end of (?:handover|report).*)[\s!.🙏👍]*$/iu;
 const TITLE_RX = /\b(?:hand\s*-?\s*over|h\/o)\b/i;
 /** a title line ("Handover morning shift 20/10", "H/O night"): no item of its own */
 const isTitle = t => t.split(/\s+/).length <= 8 && TITLE_RX.test(t) && !roomsOf(t).length;

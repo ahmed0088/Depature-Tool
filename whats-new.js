@@ -9,6 +9,23 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 537, items: [
+    { ico: '🐞', title: 'Fixed: pasting Arrivals or Purpose of Stay crashed',
+      what: '⚡ Load Pasted on Arrivals and ⚡ Load on Purpose of Stay stopped with an error before loading anything (a name used there was never set — it came in with the Nationality column in an earlier update).',
+      does: 'Pasting works again, and the Nationality column of the paste is now read into each guest.' },
+    { ico: '🚪', title: 'Fixed: Departures files with fewer columns were refused',
+      what: 'A departures report with fewer than 15 columns — a shorter export, or Excel trimming the empty last columns — said "No departure rooms found" although the rooms were there.',
+      does: 'Any report with a ROOM column loads; a row only needs the room and the name.' },
+    { ico: '⌨️', title: 'Fixed: Space on the Night Checklist',
+      what: 'The keyboard shortcut Space ("tick the first step") called an old name and did nothing but an error.',
+      does: 'Space ticks the next step again.' },
+    { ico: '📝', title: 'Fixed: emojis broken in handover notes',
+      what: 'Cleaning a handover note could cut some emojis in half (for example 👋 next to a 👍 rule), leaving a broken character.',
+      does: 'Emojis stay whole.' },
+    { ico: '🧠', title: 'Things that now make sense',
+      what: 'The greeting said "Good morning" at 1 a.m. to the night shift; the start-of-day window could ask at 23:00 (day over) or 01:00 (the new day\'s reports don\'t exist yet), and asked view-only logins who can\'t load anything; after many missed updates What\'s new could become a 40-card slideshow.',
+      does: 'Until 05:00 it says "Good evening". Start of the day asks only 05:00–15:59 and only people who can load reports. What\'s new shows the newest 15 one by one; the rest are in "See them all as a list".' },
+  ] },
   { v: 536, items: [
     { ico: '✕', title: 'Run windows: minimise or close — your choice',
       what: 'A cloud run window now has both buttons: – minimises it (a chip stays at the bottom-left) and ✕ closes it for real (no chip). A running chip has its own × too.',
@@ -794,7 +811,7 @@ function wnOpen(all) {
   const m = document.createElement('div');
   m.id = 'wnModal';
   m.className = 'fr-overlay';
-  const S = all ? [] : wnSlides(list);
+  const S = all ? [] : wnSlides(list).slice(0, 15);   // many missed updates: the newest 15 one by one, the rest in the list ("See them all as a list")
   if (S.length && !wnOpen.asList) {
     let k = 0;
     m.innerHTML = `<div class="fr-sheet wn-sheet wn-story" role="dialog" aria-modal="true" aria-label="What's new">

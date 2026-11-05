@@ -170,7 +170,7 @@ function homeGreeting() {
   const sk = typeof hoShiftNow === 'function' ? hoShiftNow().key : (h >= 23 || h < 7 ? 'night' : h < 15 ? 'morning' : 'afternoon');
   const own = typeof hoCfg !== 'undefined' ? hoCfg.shiftLabel(sk) : '';   // the hotel's own shift names (Settings → Hotel setup → Shifts)
   const shift = own ? own + ' shift' : sk === 'night' ? 'Night shift' : sk === 'morning' ? 'Morning shift' : 'Afternoon shift';
-  const hi = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  const hi = h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';   // 00:00–04:59 is still the night shift's evening, not "morning"
   const name = (typeof hoPref === 'function' && !hoPref('greetName')) ? '' : (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) ? currentProfile.name.split(' ')[0] : '';
   return { hi: `${hi}${name ? ', ' + name : ''}`, shift };
 }

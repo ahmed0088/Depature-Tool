@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v536"/>
+<meta name="ho-version" content="v537"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -4695,7 +4695,7 @@ function clearImmig() {
       if (e.key === ' ') {
         e.preventDefault();
         const firstUndone = CL_STEPS.find(s => !clState.done.has(s.id) && !clState.skipped.has(s.id));
-        if (firstUndone) { clToggle(firstUndone.id); showKbToast('Step ticked ✓'); }
+        if (firstUndone) { clToggle2(firstUndone.id); showKbToast('Step ticked ✓'); }
         return;
       }
     }

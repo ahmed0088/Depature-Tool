@@ -22,8 +22,11 @@
     return { ih, dep, all: ih.ok && dep.ok };
   }
   /** ask now? (pure): signed in, not answered for today, not snoozed, something missing */
-  function shouldAsk(st, memo, t, now) {
+  function shouldAsk(st, memo, t, now, hour, role) {
     if (st.all) return false;
+    // the start of the day, not the end of it: 05:00–15:59 (at 01:00 the new day's reports don't exist yet; at 23:00 the day is over)
+    if (hour != null && (hour < 5 || hour >= 16)) return false;
+    if (role === 'readonly') return false;   // a view-only login can't load reports: nothing to ask
     if (memo.date === t && (memo.done || memo.skip)) return false;
     if (memo.date === t && memo.until && now < memo.until) return false;
     return true;
@@ -61,7 +64,7 @@
     const st = read(); if (st.all && !force) return;
     css();
     const w = D.createElement('div'); w.id = 'hoStartDay'; w.className = 'sd';
-    const h = new Date().getHours(), hi = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+    const h = new Date().getHours(), hi = h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
     w.innerHTML = `<div class="sd-bg"></div><section class="sd-card" role="dialog" aria-modal="true" aria-labelledby="sdTitle">
       <header class="sd-h"><span class="sd-sun" aria-hidden="true">☀️</span><div><b id="sdTitle">${hi} — start of the day</b><em class="sd-tap">tap to open</em><small>Load today's reports first: Departures, Purpose of Stay, the Brain and the checks all use them. <span class="sd-prog"></span></small></div>
         <button type="button" class="sd-x" data-sd="later" aria-label="Remind me later">✕</button></header>
@@ -89,7 +92,8 @@
   function check() {
     if (!signedIn() || D.getElementById('hoStartDay')) return;
     const app = D.getElementById('appWrapper'); if (app && app.style.display === 'none') return;
-    if (shouldAsk(read(), get(), today(), Date.now())) open();
+    let role = ''; try { role = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.role) || ''; } catch (_) {}
+    if (shouldAsk(read(), get(), today(), Date.now(), new Date().getHours(), role)) open();
   }
   function css() {
     if (D.getElementById('hoStartDayCss')) return;

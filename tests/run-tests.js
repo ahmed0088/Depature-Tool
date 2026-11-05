@@ -4412,6 +4412,16 @@ const haAsync = (async () => {
   { const rd3 = fs.readFileSync(path.join(ROOT, 'run-dock.js'), 'utf8'), gp3 = fs.readFileSync(path.join(ROOT, 'guest-pipeline.js'), 'utf8'), nx3 = fs.readFileSync(path.join(ROOT, 'neorcha.js'), 'utf8');
     check('Run windows: – minimises (chip stays), ✕ closes (window and chip go; the run keeps going and stays in Runs); a running chip can be closed too; opening it from Runs brings the chip back',
       [/data-gp-shut="1"/.test(gp3) && /hoRuns\.closed\('enrol'\)/.test(gp3), /data-shut="1"/.test(nx3) && /'closed' : 'minimized'/.test(nx3), /function closed\(kind\)/.test(rd3) && !/r\.state !== 'run' \? `<button type="button" class="hrd-x"/.test(rd3), /unhide\(r\.tag\)/.test(rd3)], [true, true, true, true]); }
+  { const apS = fs.readFileSync(path.join(ROOT, 'arrivals-purpose.js'), 'utf8'), depS = fs.readFileSync(path.join(ROOT, 'departures.js'), 'utf8'), hbS = fs.readFileSync(path.join(ROOT, 'handover-book.js'), 'utf8'), hmS = fs.readFileSync(path.join(ROOT, 'home.js'), 'utf8'), wnS2 = fs.readFileSync(path.join(ROOT, 'whats-new.js'), 'utf8');
+    const fnBody = (src, name) => { const i = src.indexOf('function ' + name + '('); return src.slice(i, src.indexOf('\nfunction ', i + 10)); };
+    check('Bug hunt v537: pasted Arrivals / Purpose set the Nationality column they use; Space on the checklist calls the real tick; a Departures row only needs its room and name; handover emoji rules are Unicode-safe; the night is "Good evening"; What\'s new caps the slideshow',
+      [['loadArrivals', 'loadPurpose'].every(n => /natI=ci\('NATIONALITY'/.test(fnBody(apS, n)) && /nat: natI>=0/.test(fnBody(apS, n))), /clToggle2\(firstUndone\.id\)/.test(ixS) && !/[^2]clToggle\(firstUndone/.test(ixS),
+       !/p\.length < 15/.test(depS) && /if \(p\.length < need\) continue/.test(depS), /\|\[✓✔✅👍\]\/giu/.test(hbS) && /\[\\s!\.🙏👍\]\*\$\/iu/.test(hbS), /h < 5 \? 'Good evening'/.test(hmS), /wnSlides\(list\)\.slice\(0, 15\)/.test(wnS2)],
+      [true, true, true, true, true, true]); }
+  { const sdS2 = fs.readFileSync(path.join(ROOT, 'start-day.js'), 'utf8'); const sb2 = { document: { readyState: 'complete', getElementById: () => null, addEventListener() {} }, setTimeout: () => 0, setInterval: () => 0, localStorage: { getItem: () => null, setItem() {} } };
+    sb2.window = sb2; vm.createContext(sb2); vm.runInContext(sdS2, sb2); const P2 = sb2.hoStartDay._pure, T1 = '2026-11-05', miss = P2.statusOf({}, T1);
+    check('Start of the day asks only at the start of the day (05:00–15:59) and only people who can load reports',
+      [P2.shouldAsk(miss, {}, T1, 0, 9, 'agent'), P2.shouldAsk(miss, {}, T1, 0, 1, 'agent'), P2.shouldAsk(miss, {}, T1, 0, 23, 'agent'), P2.shouldAsk(miss, {}, T1, 0, 15, 'manager'), P2.shouldAsk(miss, {}, T1, 0, 9, 'readonly')], [true, false, false, true, false]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');
