@@ -11,7 +11,7 @@
   const PIN_KEY = 'ho_nav_pins_v1', REC_KEY = 'ho_nav_recent_v1', FOLD_KEY = 'ho_nav_fold_v1';
   // what people call things → the pages that do them
   const WORDS = {
-    home: 'start dashboard overview today', departures: 'checkout check out leaving late lco extend extension balance owing ota dnd no answer due out',
+    home: 'start dashboard overview today shift report end of shift summary handover', departures: 'checkout check out leaving late lco extend extension balance owing ota dnd no answer due out',
     arrivals: 'checkin check in arriving coming new guests', opera: 'reader opera cloud pms link', inhouse: 'in house staying guests balance owing ota rooms occupied',
     xref: 'compare arrivals departures cross check', purpose: 'purpose of stay business leisure report email', neorcha: 'passport id documents registration police',
     wakeups: 'wake up call alarm morning', shifts: 'tasks todo shift morning afternoon night', 'ops-logs': 'front office log logbook',

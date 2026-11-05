@@ -4443,6 +4443,19 @@ const haAsync = (async () => {
     const okOnDark = h => (lumOf(DA(h).a) + .05) / (.0055 + .05) >= 4.5;
     check('Dark mode: every theme can turn dark (switch in the theme menu, applied before the first paint, kept across theme changes); a dark accent is lightened until it reads on the dark page',
       [['#111111', '#175A67', '#1f3a5f', '#c74634'].every(okOnDark), DA('#e0a800').a === 'rgb(224, 168, 0)', /localStorage\.getItem\('ho_dark_v1'\) === '1'/.test(ixS), /hoApplyDark\(\);   \/\/ 🌙/.test(utS2) && /class="ho-tp-dark/.test(utS2), /html\[data-dark="1"\]:not\(\[data-skin\^="atlas"\]\) \{/.test(tpS)], [true, true, true, true, true]); }
+  { const srS = fs.readFileSync(path.join(ROOT, 'shift-report.js'), 'utf8'), sbx4 = { document: { readyState: 'complete', addEventListener() {}, querySelector: () => null, getElementById: () => null }, setTimeout: () => 0 };
+    sbx4.window = sbx4; vm.createContext(sbx4); vm.runInContext(srS, sbx4); const SR = sbx4.hoShiftReport._pure;
+    const rooms = [{ room: '0101', es: 'out', checkoutAt: '16:10', balance: 0, owes: false }, { room: '0102', es: 'out', checkoutAt: '10:05', balance: 0, owes: false }, { room: '0204', es: 'na', overdue: true, balance: 1250, owes: true, ota: true, source: 'Booking.com' },
+      { room: '0310', es: 'extended', nights: 2, balance: 0, owes: false }, { room: '0411', es: 'due', balance: 80, owes: true }];
+    const S = SR.build({ rooms, startMin: 15 * 60, endMin: 23 * 60, hiBal: 500, tasks: { total: 5, done: 2, left: ['A', 'B', 'C'] }, checklist: null, arrivals: 3 }), flat = JSON.stringify(S);
+    check('Shift report: only the check-outs of THIS shift count (16:10 in the afternoon, not 10:05), a night shift crosses midnight, extensions / still to leave / no answer / balances (high and OTA named) / tasks are listed',
+      [SR.inShift('16:10', 900, 1380), SR.inShift('10:05', 900, 1380), SR.inShift('01:30', 1380, 420), SR.inShift('08:00', 1380, 420),
+       /Checked out this shift: 1 \(0101\)/.test(flat), /Extended: 1 \(0310 \+2n\)/.test(flat), /Still to leave: 2 \(0204, 0411\)/.test(flat), /No answer: 0204/.test(flat), /High \(≥ 500\): 0204/.test(flat) && /OTA \(usually prepaid/.test(flat), /2 of 5 done/.test(flat),
+       /<script src="shift-report\.js"><\/script>/.test(ixS) && /'\.\/shift-report\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))],
+      [true, false, true, false, true, true, true, true, true, true, true]); }
+  { const ut3 = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8'), sd3 = fs.readFileSync(path.join(ROOT, 'start-day.js'), 'utf8');
+    check('Shift Tasks opens on the shift you are working (not always Morning); Start of the day never opens on top of another window',
+      [/hoShiftNow\(\)\.key : ''; if \(cur && typeof SHIFTS !== 'undefined' && SHIFTS\[cur\] && cur !== window\._stAutoKey\)/.test(ut3), /#mbOverlay\.open, #wnModal, \.fr-overlay/.test(sd3)], [true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

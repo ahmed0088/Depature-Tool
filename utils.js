@@ -29,7 +29,13 @@ function showPanel(name) {
   const nav   = document.getElementById('nav-'   + name);
   if (panel) panel.classList.add('active');
   if (nav)   nav.classList.add('active');
-  if (name === 'shifts') renderShift(activeShift);
+  if (name === 'shifts') {
+    // open on the shift you are working: the afternoon and night teams used to land on Morning. A tab you pick stays until the next shift starts.
+    try { const cur = typeof hoShiftNow === 'function' ? hoShiftNow().key : ''; if (cur && typeof SHIFTS !== 'undefined' && SHIFTS[cur] && cur !== window._stAutoKey) { window._stAutoKey = cur; activeShift = cur; } } catch (_) {}
+    renderShift(activeShift);
+    document.querySelectorAll('.shift-tab').forEach(t => t.classList.toggle('active', t.dataset.shift === activeShift));
+    const rb = document.getElementById('shiftResetBtn'); if (rb && typeof SHIFTS !== 'undefined' && SHIFTS[activeShift]) rb.textContent = '↺ Reset ' + SHIFTS[activeShift].label;
+  }
   // Read history every time Trends is opened, so a run in another panel shows up without a reload.
   if (name === 'trends' && typeof trLoad === 'function') trLoad();
   if (name === 'adagio' && typeof window._adgBoot === 'function') window._adgBoot();
@@ -615,7 +621,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v539';
+const APP_VERSION = 'v540';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

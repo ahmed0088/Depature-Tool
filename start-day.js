@@ -91,6 +91,8 @@
   }
   function check() {
     if (!signedIn() || D.getElementById('hoStartDay')) return;
+    // never on top of another window (the Morning brief, What's new, a dialog): wait until it is closed
+    if (D.querySelector('#mbOverlay.open, #wnModal, .fr-overlay, .modal-bg.open, #hoShiftRep')) { clearTimeout(check.t); check.t = setTimeout(check, 15000); return; }
     const app = D.getElementById('appWrapper'); if (app && app.style.display === 'none') return;
     let role = ''; try { role = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.role) || ''; } catch (_) {}
     if (shouldAsk(read(), get(), today(), Date.now(), new Date().getHours(), role)) open();

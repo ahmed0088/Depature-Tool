@@ -9,6 +9,20 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 540, items: [
+    { ico: '📝', title: 'New: End-of-shift report — made for you',
+      what: 'Home → 📝 Shift report (or search "shift report"): a ready-to-send summary of YOUR shift, built from what HotelOps already knows — the check-outs done in your shift, extensions, late check-outs, rooms still to leave / past check-out / no answer / DND, open balances with the high and OTA ones named, your shift tasks still open, and on the night shift the night checklist.',
+      does: 'Nothing to type: 📋 Copy or 💬 WhatsApp it to the next shift or your manager. In the last 30 minutes of a shift the 🧠 Brain reminds you it is ready.' },
+    { ico: '🕐', title: 'Fixed: Shift Tasks opened on Morning for everyone',
+      what: 'The afternoon and night teams always landed on the 🌅 Morning tab of Shift Tasks.',
+      does: 'It opens on the shift you are working now (Morning, Afternoon or Night). A tab you pick yourself stays until the next shift starts.' },
+    { ico: '🪟', title: 'One window at a time',
+      what: 'At the start of the day, the Start-of-day window could open on top of the Morning brief or What\'s new.',
+      does: 'It now waits until the other window is closed.' },
+    { ico: '🧪', title: 'Tested for every shift',
+      what: 'The whole app was run as if it were 07:30, 15:30, 23:30 and 03:30 (Dubai time): every page opened and every button tapped with real-looking data, the greetings, shift names, check-out timers, overdue warnings, checklist times and pop-ups checked for each shift.',
+      does: 'No errors in any shift; the two shift problems found are fixed above.' },
+  ] },
   { v: 539, items: [
     { ico: '🔎', title: 'Find any page in a second',
       what: 'On top of the side menu: "Find a page…". Type and the menu narrows as you type — it knows what people call things, so "balance" finds Departures and In-House, "tax" the Tourism Dirham and DTCM pages, "passport" Neorcha and Immigration. Press / anywhere to jump to it; Enter opens the first page.',
