@@ -4385,7 +4385,7 @@ const haAsync = (async () => {
   { const rd = fs.readFileSync(path.join(ROOT, 'run-dock.js'), 'utf8'), gpx = fs.readFileSync(path.join(ROOT, 'guest-pipeline.js'), 'utf8'), nxx = fs.readFileSync(path.join(ROOT, 'neorcha.js'), 'utf8');
     check('Cloud runs: numbered (cloudRunSeq) and kept per hotel; closing a run window minimises it to a chip that opens it again; both run kinds record their start; no guest e-mail is kept; cached offline',
       [/cloudRunSeq/.test(rd) && /fbSet\('cloudRuns\/' \+ tag, rec\)/.test(rd), /data-hrd-open/.test(rd) && /KINDS\[r\.kind\]\.open\(\)/.test(rd),
-       /hoRuns\.start\('enrol'/.test(gpx) && /hoRuns\.start\('neorcha'/.test(nxx) && /hoRuns\.minimized\('enrol'\)/.test(gpx) && /hoRuns\.minimized\('neorcha'\)/.test(nxx),
+       /hoRuns\.start\('enrol'/.test(gpx) && /hoRuns\.start\('neorcha'/.test(nxx) && /hoRuns\.minimized\('enrol'\)/.test(gpx) && /'minimized'\]\('neorcha'\)/.test(nxx),
        /replace\(\/\\S\+@\\S\+\/g, '•@•'\)/.test(rd), /<script src="run-dock\.js"><\/script>/.test(ixS) && /'\.\/run-dock\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))], [true, true, true, true, true]); }
   check('Redline White theme: registered, applied before paint, a light base, its own focus ring and red menus with white words',
     [/'redwhite':\s*\{[^}]*skin: 'redwhite'/.test(thS), /'redwhite': 'opera'/.test(ixS) && /redwhite: 1/.test(ixS), /html\[data-skin="redwhite"\] :focus-visible/.test(tpS) && /html\[data-skin="redwhite"\] \.sidenav \{ background: linear-gradient\(180deg, #a80f1e/.test(tpS)], [true, true, true]);
@@ -4409,6 +4409,9 @@ const haAsync = (async () => {
     check('Runs history: every way a run starts is recorded (☁️ Enroll, Run again, duty PC); a run nobody registered (nightly schedule, another device) is recorded once from its live report; numbers come from a server transaction; a run that could not start is marked stopped for everyone',
       [/hoRuns\.start\('enrol'/.test(startOf('gpAccCloudEnroll')) && /hoRuns\.start\('enrol'/.test(startOf('gpAccCloudRestart')) && /hoRuns\.start\('enrol'/.test(startOf('gpCloudEnroll')),
        /function adopt\(kind, v\)/.test(rd2) && /transaction\(cur => \(cur \? undefined : rec\)\)/.test(rd2), /_ref\.child\('cloudRunSeq'\)\.transaction/.test(rd2), /fbUpdate\('enrollLive', \{ at: Date\.now\(\), state: 'error'/.test(startOf('gpAccCloudEnroll'))], [true, true, true, true]); }
+  { const rd3 = fs.readFileSync(path.join(ROOT, 'run-dock.js'), 'utf8'), gp3 = fs.readFileSync(path.join(ROOT, 'guest-pipeline.js'), 'utf8'), nx3 = fs.readFileSync(path.join(ROOT, 'neorcha.js'), 'utf8');
+    check('Run windows: – minimises (chip stays), ✕ closes (window and chip go; the run keeps going and stays in Runs); a running chip can be closed too; opening it from Runs brings the chip back',
+      [/data-gp-shut="1"/.test(gp3) && /hoRuns\.closed\('enrol'\)/.test(gp3), /data-shut="1"/.test(nx3) && /'closed' : 'minimized'/.test(nx3), /function closed\(kind\)/.test(rd3) && !/r\.state !== 'run' \? `<button type="button" class="hrd-x"/.test(rd3), /unhide\(r\.tag\)/.test(rd3)], [true, true, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

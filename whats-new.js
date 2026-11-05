@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 536, items: [
+    { ico: '✕', title: 'Run windows: minimise or close — your choice',
+      what: 'A cloud run window now has both buttons: – minimises it (a chip stays at the bottom-left) and ✕ closes it for real (no chip). A running chip has its own × too.',
+      does: 'Closing never stops the run — it keeps going and stays in 🗂 Runs, where 📡 Open live window brings it (and its chip) back any time. To stop a run, use ■ Stop inside the window.' },
+  ] },
   { v: 535, items: [
     { ico: '🗂', title: 'Every run has a history — and a running one is never lost',
       what: 'All runs are now kept and numbered, however they started: ☁️ Enroll, Run again, the duty PC, Neorcha\'s Run in the cloud, the nightly 03:17 Neorcha run, or a run a colleague started on another device. (Before, the main ☁️ Enroll run was not registered.) A run GitHub could not start now shows as ⛔ stopped, not running forever.',

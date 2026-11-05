@@ -528,9 +528,9 @@ function runWin() {
   let w = document.getElementById('nxRun');
   if (!w) {
     w = document.createElement('div'); w.id = 'nxRun'; w.className = 'nxr';
-    w.innerHTML = '<div class="nxr-bg" data-x="1"></div><div class="nxr-card" role="dialog" aria-label="Neorcha cloud run"><div class="nxr-h"><div class="nxr-ic">☁️</div><div class="nxr-t"><b>Neorcha · cloud run</b><small id="nxr-sub"></small></div><button type="button" class="nxr-x" data-x="1" aria-label="Minimise" title="Minimise — it keeps running; tap its chip at the bottom to open it again">–</button></div><div class="nxr-b" id="nxr-b"></div></div>';
+    w.innerHTML = '<div class="nxr-bg" data-x="1"></div><div class="nxr-card" role="dialog" aria-label="Neorcha cloud run"><div class="nxr-h"><div class="nxr-ic">☁️</div><div class="nxr-t"><b>Neorcha · cloud run</b><small id="nxr-sub"></small></div><button type="button" class="nxr-x" data-x="1" aria-label="Minimise" title="Minimise — it keeps running; a chip at the bottom-left opens it again">–</button><button type="button" class="nxr-x" data-x="1" data-shut="1" aria-label="Close" title="Close — the window and its chip go away; the run keeps going and stays in 🗂 Runs">✕</button></div><div class="nxr-b" id="nxr-b"></div></div>';
     document.body.appendChild(w);
-    w.addEventListener('click', e => { if (e.target.closest('[data-x]')) { w.classList.remove('on'); clearInterval(RUN.timer); try { if (W.hoRuns) W.hoRuns.minimized('neorcha'); } catch (_) {} }
+    w.addEventListener('click', e => { if (e.target.closest('[data-x]')) { w.classList.remove('on'); clearInterval(RUN.timer); try { if (W.hoRuns) W.hoRuns[e.target.closest('[data-shut]') ? 'closed' : 'minimized']('neorcha'); } catch (_) {} }
       if (e.target.id === 'nxr-con-t') { RUN.conOff = !RUN.conOff; e.target.closest('.nxr-con').classList.toggle('off', RUN.conOff); e.target.textContent = RUN.conOff ? 'Show' : 'Hide'; } });
   }
   w.classList.add('on'); clearInterval(RUN.timer); RUN.timer = setInterval(paintRun, 1000); paintRun();

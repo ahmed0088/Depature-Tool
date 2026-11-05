@@ -19,6 +19,7 @@
   const clean = (s, n) => String(s == null ? '' : s).replace(/\S+@\S+/g, '•@•').replace(/\s+/g, ' ').trim().slice(0, n || 60);
   const hidden = () => { try { return JSON.parse(localStorage.getItem(DISMISS_KEY) || '{}') || {}; } catch (_) { return {}; } };
   const hide = tag => { try { const h = hidden(); h[tag] = Date.now(); Object.keys(h).forEach(k => { if (Date.now() - h[k] > 7 * 864e5) delete h[k]; }); localStorage.setItem(DISMISS_KEY, JSON.stringify(h)); } catch (_) {} };
+  const unhide = tag => { try { const h = hidden(); delete h[tag]; localStorage.setItem(DISMISS_KEY, JSON.stringify(h)); } catch (_) {} };
   const winOpen = kind => { const w = D.getElementById(KINDS[kind].win); return !!w && w.classList.contains('on'); };
   const dur = s => { s = Math.max(0, Math.round(s)); return s >= 3600 ? Math.floor(s / 3600) + ' h ' + Math.floor(s % 3600 / 60) + ' min' : Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
   const when = t => { const d = new Date(+t); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); };
@@ -92,6 +93,12 @@
     if (r && typeof showToast === 'function') showToast('Minimised — run #' + (r.no || '?') + ' keeps going. Tap its chip at the bottom-left to open it again.', 'ok');
     paint();
   }
+  /** ✕: closed for good — the window and its chip go; the run keeps going and stays in 🗂 Runs */
+  function closed(kind) {
+    const r = latest(kind); if (r) hide(r.tag);
+    if (r && typeof showToast === 'function') showToast('Closed — run #' + (r.no || '?') + (r.state === 'run' ? ' keeps going' : '') + '. It stays in 🗂 Runs at the bottom-left.', 'ok');
+    paint();
+  }
   const latest = kind => Object.values(RUNS).filter(r => r.kind === kind).sort((a, b) => b.started - a.started)[0] || null;
   /** "Run #12 · Ibis Styles Dubai" for the run window's header */
   function label(kind) { const r = latest(kind); return r ? 'Run #' + (r.no || '?') + (r.hotel ? ' · ' + r.hotel : '') : ''; }
@@ -138,7 +145,7 @@
       const pct = r.state === 'done' ? 100 : r.kind === 'enrol' ? (r.n ? Math.round((r.done || 0) / r.n * 100) : 5) : Math.max(5, Math.min(97, r.prog || 10));
       return `<div class="hrd-chip ${esc(r.state)}" role="button" tabindex="0" data-hrd-open="${esc(r.tag)}" title="Open the live window of run #${esc(r.no)}">
         <span class="hrd-st">${t.st}</span><span class="hrd-t"><b>${esc(t.title)}</b><small>${esc(t.sub || r.note || '')}${t.sub ? ' · ' : ''}${dur(sec)}</small></span>
-        ${r.state !== 'run' ? `<button type="button" class="hrd-x" data-hrd-x="${esc(r.tag)}" aria-label="Hide this chip" title="Hide (it stays in 🗂 Runs)">×</button>` : ''}
+        <button type="button" class="hrd-x" data-hrd-x="${esc(r.tag)}" aria-label="Close this chip" title="Close${r.state === 'run' ? ' — the run keeps going;' : ' —'} it stays in 🗂 Runs">×</button>
         <i class="hrd-bar" style="width:${pct}%"></i></div>`;
     }).join('') + `<button type="button" class="hrd-all" data-hrd-list="1" title="All cloud runs, numbered, with their hotel and results">🗂 Runs</button>`;
     clearInterval(timer); if (L.some(r => r.state === 'run')) timer = setInterval(paint, 1000);
@@ -154,7 +161,7 @@
     if (!w) { w = D.createElement('div'); w.id = 'hoRunList'; w.className = 'hrl'; D.body.appendChild(w);
       w.addEventListener('click', e => {
         if (e.target.closest('[data-hrl-x]')) { w.classList.remove('on'); return; }
-        const o = e.target.closest('[data-hrl-open]'); if (o) { const r = RUNS[o.dataset.hrlOpen]; if (r) { w.classList.remove('on'); KINDS[r.kind].open(); setTimeout(paint, 50); } }
+        const o = e.target.closest('[data-hrl-open]'); if (o) { const r = RUNS[o.dataset.hrlOpen]; if (r) { unhide(r.tag); w.classList.remove('on'); KINDS[r.kind].open(); setTimeout(paint, 50); } }
       });
       D.addEventListener('keydown', e => { if (e.key === 'Escape') w.classList.remove('on'); }); }
     const all = Object.values(RUNS).sort((a, b) => b.started - a.started);
@@ -222,5 +229,5 @@
     Object.keys(KINDS).forEach(k => fbListen(KINDS[k].live, v => onLive(k, v)));
   })();
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', () => { css(); paint(); }); else { css(); paint(); }
-  W.hoRuns = { start, minimized, label, list, paint, _pure: { fromLive, chipText, liveKey } };
+  W.hoRuns = { start, minimized, closed, label, list, paint, _pure: { fromLive, chipText, liveKey } };
 })();
