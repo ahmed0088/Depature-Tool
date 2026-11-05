@@ -4501,6 +4501,9 @@ const haAsync = (async () => {
   { const tc3 = fs.readFileSync(path.join(ROOT, 'team-chat.js'), 'utf8');
     check('Team chat on phones: no <main> / <aside> (the styles make every <main> see-through), the window follows the visible screen when the iPhone keyboard opens and closes, the page behind is locked, and the chat\'s own boxes win over any style',
       [!/<main|<aside/.test(tc3), /visualViewport\.addEventListener\('resize'/.test(tc3) && /top:var\(--vvt,0px\);width:100vw;height:var\(--vvh,100dvh\)/.test(tc3), /classList\.add\('wc-lock'\)/.test(tc3) && /classList\.remove\('wc-lock'\)/.test(tc3), /#tcPanel \.wc-comp textarea#wcIn\{border:0!important/.test(tc3)], [true, true, true, true]); }
+  { const tc4 = fs.readFileSync(path.join(ROOT, 'team-chat.js'), 'utf8');
+    check('Voice messages: no native <audio> (it showed "Error" on the iPhone); played from a blob; recorded MP4 first (iPhone + PC), WebM otherwise; the loading placeholder never reaches a player or a photo',
+      [!/<audio/.test(tc4), /URL\.createObjectURL\(new Blob\(\[u8\]/.test(tc4), /\['audio\/mp4;codecs=mp4a\.40\.2', 'audio\/mp4', 'audio\/aac', 'audio\/webm;codecs=opus', 'audio\/webm'\]/.test(tc4), !/S\.files\[m\.file\.fid\] = 'data:,'/.test(tc4) && /const realFile = /.test(tc4)], [true, true, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

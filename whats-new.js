@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 545, items: [
+    { ico: '🎤', title: 'Fixed: voice messages said "Error"',
+      what: 'A voice message could show "Error" instead of playing — on the iPhone (which records MP4 and would not play it from where it was stored) and for a moment while any voice message or photo was still loading.',
+      does: 'Voice messages now have WhatsApp\'s own player: ▶ / ❚❚, a line that fills as it plays, and the time. New recordings are saved in a format iPhones and PCs both play. A photo or voice message that is still loading shows … instead of an error.' },
+  ] },
   { v: 544, items: [
     { ico: '🩹', title: 'Fixed: Team chat broken on the iPhone',
       what: 'On a phone the open chat was see-through (the chats list showed behind your messages in Redline and other styles), its header slid up under the notch after typing, and the search and message boxes turned white.',

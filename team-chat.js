@@ -21,7 +21,7 @@
   const EMO = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
   const PICK = '😀😁😂🤣😊😍😘😎🤔😴😅😉🙂🙃😇🥳😢😭😡🤯👍👎👏🙌🙏💪👌✌️🤝👋🔥⭐✅❌⚠️❗❓💯🎉💡📌🛏️🧳🚕💳🧾🔑☕🍽️🧹🔧📞⏰✈️🏨'.match(/\p{Extended_Pictographic}(️)?(‍\p{Extended_Pictographic}️?)*/gu);
   const GEMO = ['👥', '🛎️', '🌙', '☀️', '🧹', '🔧', '💳', '🍽️', '🏨', '⭐', '🚕', '📣'];
-  const S = { convs: {}, msgs: {}, reads: {}, dlv: {}, typing: {}, pres: {}, users: {}, cur: '', reply: null, edit: null, filter: 'all', q: '', open: false, files: {}, started: 0, seenMsg: {} };
+  const S = { convs: {}, msgs: {}, reads: {}, dlv: {}, typing: {}, pres: {}, users: {}, cur: '', reply: null, edit: null, filter: 'all', q: '', open: false, files: {}, loading: {}, started: 0, seenMsg: {} };
 
   // ── pure helpers (tested) ──
   /** the members of a chat: the whole team for the team group (every active user), else its own list (pure) */
@@ -227,14 +227,44 @@
     if (nearBottom) box.scrollTop = box.scrollHeight;
     if (S.open && D.visibilityState !== 'hidden') markRead(c.id);
   }
+  const realFile = v => typeof v === 'string' && /^data:(image|audio)\/[\w.+-]+(;[^,]*)?,./.test(v);
+  const mmss = t => { t = Math.max(0, Math.round(+t || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
   function fileHtml(m) {
-    const f = m.file, src = S.files[f.fid];
+    const f = m.file, src = realFile(S.files[f.fid]) ? S.files[f.fid] : '';
     if (f.kind === 'img') return `<button type="button" class="wc-img" data-img="${esc(f.fid)}" style="aspect-ratio:${+f.w || 4}/${+f.h || 3}">${src ? `<img src="${esc(src)}" alt="Photo" loading="lazy">` : '<span class="wc-load">📷</span>'}</button>`;
-    return `<span class="wc-voice">${src ? `<audio controls preload="none" src="${esc(src)}"></audio>` : '<span class="wc-load">🎤 loading…</span>'}<small>${f.dur ? Math.round(f.dur) + ' s' : ''}</small></span>`;
+    // a voice note: WhatsApp's player (▶, a line that fills, the time) — the sound plays from a blob, which iPhone Safari plays (a data: link it often refuses)
+    const on = PLAY.fid === f.fid;
+    return `<span class="wc-voice"><button type="button" class="wc-play${on && PLAY.playing ? ' on' : ''}" data-play="${esc(f.fid)}" ${src ? '' : 'disabled'} aria-label="${on && PLAY.playing ? 'Pause' : 'Play'} voice message">${src ? (on && PLAY.playing ? '❚❚' : '▶') : '…'}</button>
+      <span class="wc-wave"><i style="width:${on ? Math.round(PLAY.pct * 100) : 0}%"></i></span><small class="wc-vt" data-vt="${esc(f.fid)}">${on && PLAY.t ? mmss(PLAY.t) : mmss(f.dur)}</small><span class="wc-mic" aria-hidden="true">🎤</span></span>`;
+  }
+  // ── playing a voice note ──
+  const PLAY = { fid: '', audio: null, playing: false, pct: 0, t: 0, urls: {} };
+  async function blobUrl(fid) {
+    if (PLAY.urls[fid]) return PLAY.urls[fid];
+    const d = S.files[fid]; if (!realFile(d)) return '';
+    const [head, b64] = d.split(','), type = (head.match(/^data:([^;,]+)/) || [])[1] || 'audio/mp4';
+    const bin = atob(b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return (PLAY.urls[fid] = URL.createObjectURL(new Blob([u8], { type })));
+  }
+  function playPaint() {
+    D.querySelectorAll('#wcMsgs .wc-play').forEach(b => { const on = b.dataset.play === PLAY.fid && PLAY.playing; b.classList.toggle('on', on); if (!b.disabled) b.textContent = on ? '❚❚' : '▶'; });
+    D.querySelectorAll('#wcMsgs .wc-voice').forEach(v => { const b = v.querySelector('.wc-play'), i = v.querySelector('.wc-wave i'), t = v.querySelector('.wc-vt'); if (!b) return;
+      const on = b.dataset.play === PLAY.fid; if (i) i.style.width = (on ? Math.round(PLAY.pct * 100) : 0) + '%'; if (t && on && PLAY.t) t.textContent = mmss(PLAY.t); });
+  }
+  async function play(fid) {
+    if (PLAY.fid === fid && PLAY.audio) { if (PLAY.playing) PLAY.audio.pause(); else PLAY.audio.play().catch(() => {}); return; }
+    if (PLAY.audio) { PLAY.audio.pause(); PLAY.audio = null; }
+    const url = await blobUrl(fid); if (!url) { toast('Still loading — try again in a second', 'info'); return; }
+    const a = new Audio(); a.preload = 'auto'; a.src = url; PLAY.fid = fid; PLAY.audio = a; PLAY.pct = 0; PLAY.t = 0;
+    a.onplay = () => { PLAY.playing = true; playPaint(); }; a.onpause = () => { PLAY.playing = false; playPaint(); };
+    a.ontimeupdate = () => { PLAY.t = a.currentTime; PLAY.pct = a.duration && isFinite(a.duration) ? a.currentTime / a.duration : 0; playPaint(); };
+    a.onended = () => { PLAY.playing = false; PLAY.pct = 0; PLAY.t = 0; playPaint(); };
+    a.onerror = () => { PLAY.playing = false; playPaint(); toast('This voice message can\'t play on this device (recorded in a format it does not support)', 'err'); };
+    a.play().catch(() => {});
   }
   async function loadFiles(id) {
-    const need = msgsOf(id).filter(m => m.file && m.file.fid && !S.files[m.file.fid] && !m.del).slice(-30);
-    for (const m of need) { S.files[m.file.fid] = 'data:,'; const v = await safe(() => fbGet(P('files/' + m.file.fid)), null); if (v && typeof v === 'string' && /^data:(image|audio)\//.test(v)) { S.files[m.file.fid] = v; } else delete S.files[m.file.fid]; }
+    const need = msgsOf(id).filter(m => m.file && m.file.fid && !realFile(S.files[m.file.fid]) && !S.loading[m.file.fid] && !m.del).slice(-30);
+    for (const m of need) { if (S.loading[m.file.fid]) continue; S.loading[m.file.fid] = 1; const v = await safe(() => fbGet(P('files/' + m.file.fid)), null); delete S.loading[m.file.fid]; if (realFile(v)) S.files[m.file.fid] = v; }
     if (need.length && S.cur === id) renderChat();
   }
   function bar() {
@@ -256,7 +286,8 @@
     const room = t.closest('.tc-room'); if (room) { const r = room.dataset.room; close(); if (W.hoRoom && W.hoRoom.open) W.hoRoom.open(r); return; }
     const go = t.closest('[data-goto]'); if (go) { jumpTo(go.dataset.goto); return; }
     const mm = t.closest('[data-mm]'); if (mm) { msgMenu(mm.dataset.mm, mm.closest('.wc-msg')); return; }
-    const im = t.closest('[data-img]'); if (im && S.files[im.dataset.img]) { layer(`<div class="wc-lb" data-wc="layerx"><img src="${esc(S.files[im.dataset.img])}" alt="Photo"></div>`); return; }
+    const pl = t.closest('[data-play]'); if (pl) { play(pl.dataset.play); return; }
+    const im = t.closest('[data-img]'); if (im && realFile(S.files[im.dataset.img])) { layer(`<div class="wc-lb" data-wc="layerx"><img src="${esc(S.files[im.dataset.img])}" alt="Photo"></div>`); return; }
     const who = t.closest('[data-who]'); if (who) { reactWho(who.dataset.who); return; }
     if (t.closest('[data-wc="layerx"]') && t.classList.contains('wc-lb')) { closeLayer(); return; }
     if (t.classList.contains('wc-layer-bg')) { closeLayer(); return; }
@@ -353,7 +384,7 @@
         stars: () => { const s = Object.entries(starred()).filter(([k]) => k.startsWith(c.id + '/')); layer(`<div class="wc-dlg"><header><b>⭐ Starred</b><button type="button" class="wc-ib" data-wc="layerx">✕</button></header>${s.map(([k, v]) => `<button type="button" class="wc-pr wc-pick" data-goto="${esc(k.split('/')[1])}"><b>${esc(v.text)}</b><small>${listTime(v.at)}</small></button>`).join('') || '<small class="wc-none">No starred messages — long-press or right-click a message → ⭐ Star.</small>'}</div>`); },
         mute: () => { const mu = LSg('ho_wc_mute', {}); if (mu[c.id]) delete mu[c.id]; else mu[c.id] = 1; LSs('ho_wc_mute', mu); toast(mu[c.id] ? '🔕 Muted — no pop-ups from this chat (except @mentions)' : '🔔 Unmuted'); render(); },
         pinchat: () => { const p = LSg('ho_wc_pin', {}); if (p[c.id]) delete p[c.id]; else p[c.id] = 1; LSs('ho_wc_pin', p); renderList(); },
-        media: () => { const imgs = msgsOf(c.id).filter(m => m.file && m.file.kind === 'img' && !m.del); layer(`<div class="wc-dlg"><header><b>🖼 Photos</b><button type="button" class="wc-ib" data-wc="layerx">✕</button></header><div class="wc-grid">${imgs.map(m => S.files[m.file.fid] ? `<button type="button" data-img="${esc(m.file.fid)}"><img src="${esc(S.files[m.file.fid])}" alt=""></button>` : '').join('') || '<small class="wc-none">No photos yet</small>'}</div></div>`); },
+        media: () => { const imgs = msgsOf(c.id).filter(m => m.file && m.file.kind === 'img' && !m.del); layer(`<div class="wc-dlg"><header><b>🖼 Photos</b><button type="button" class="wc-ib" data-wc="layerx">✕</button></header><div class="wc-grid">${imgs.map(m => realFile(S.files[m.file.fid]) ? `<button type="button" data-img="${esc(m.file.fid)}"><img src="${esc(S.files[m.file.fid])}" alt=""></button>` : '').join('') || '<small class="wc-none">No photos yet</small>'}</div></div>`); },
         leave: () => leaveGroup(c) })[b.dataset.a]();
     });
   }
@@ -434,12 +465,13 @@
     if (REC) { REC.stop(); return; }
     if (!navigator.mediaDevices || typeof MediaRecorder === 'undefined') { toast('Voice messages need a microphone and a newer browser', 'err'); return; }
     let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (_) { toast('Allow the microphone to send a voice message', 'err'); return; }
-    const chunks = [], t0 = Date.now(), rec = new MediaRecorder(stream, safe(() => MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 24000 } : {}, {}));
+    const type = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/aac', 'audio/webm;codecs=opus', 'audio/webm'].find(t => safe(() => MediaRecorder.isTypeSupported(t), false)) || '';
+    const chunks = [], t0 = Date.now(), rec = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : {});
     REC = rec; const btn = D.getElementById('wcSend'); if (btn) { btn.classList.add('rec'); btn.textContent = '■'; btn.setAttribute('aria-label', 'Stop and send'); }
     const cap = setTimeout(() => rec.state === 'recording' && rec.stop(), 90000);
     rec.ondataavailable = e => e.data && chunks.push(e.data);
     rec.onstop = async () => { clearTimeout(cap); REC = null; stream.getTracks().forEach(t => t.stop()); if (btn) btn.classList.remove('rec'); sendBtn();
-      const dur = (Date.now() - t0) / 1000; if (dur < 1) return; const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+      const dur = (Date.now() - t0) / 1000; if (dur < 1) return; const blob = new Blob(chunks, { type: (rec.mimeType || type || 'audio/mp4').split(';')[0] });
       const url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
       if (url.length > 700000) { toast('Too long — keep voice messages under a minute and a half', 'err'); return; }
       const fid = newId(); S.files[fid] = url; await safe(() => fbSet(P('files/' + fid), url)); send('', { file: { kind: 'audio', fid, dur } }); };
@@ -561,7 +593,11 @@
 .wc-quote{display:flex;flex-direction:column;align-items:flex-start;width:100%;margin:0 0 4px;padding:5px 8px;border:0;border-left:4px solid var(--wa-green);border-radius:6px;background:rgba(0,0,0,.05);color:var(--wa-tx2);cursor:pointer;text-align:left;font-size:13px}.wc-dark .wc-quote{background:rgba(255,255,255,.06)}.wc-quote b{font-size:12.5px}.wc-quote span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .wc-fwd{display:block;font-size:12px;color:var(--wa-tx2);font-style:italic;margin-bottom:2px}.wc-del{color:var(--wa-tx2);font-size:13.5px;padding-right:56px;display:block}
 .wc-img{display:block;width:min(300px,62vw);max-height:340px;border:0;padding:0;border-radius:6px;overflow:hidden;background:rgba(0,0,0,.08);cursor:zoom-in;margin-bottom:2px}.wc-img img{width:100%;height:100%;object-fit:cover;display:block}
-.wc-load{display:grid;place-items:center;height:100%;min-height:80px;color:var(--wa-tx2)}.wc-voice{display:flex;align-items:center;gap:6px;padding-right:56px}.wc-voice audio{height:36px;max-width:240px}.wc-voice small{color:var(--wa-tx2)}
+.wc-load{display:grid;place-items:center;height:100%;min-height:80px;color:var(--wa-tx2)}
+.wc-voice{display:flex;align-items:center;gap:9px;min-width:min(250px,60vw);padding:4px 52px 12px 2px}
+.wc-play{flex:none;width:40px;height:40px;border-radius:50%;border:0;background:var(--wa-green);color:#fff;font-size:14px;cursor:pointer;display:grid;place-items:center}.wc-play:disabled{opacity:.5;cursor:default}.wc-play.on{font-size:12px}
+.wc-wave{flex:1;height:4px;border-radius:2px;background:rgba(0,0,0,.18);overflow:hidden;position:relative}.wc-dark .wc-wave{background:rgba(255,255,255,.22)}.wc-wave i{position:absolute;left:0;top:0;bottom:0;background:var(--wa-green);border-radius:2px;transition:width .2s linear}.wc-msg.mine .wc-wave i{background:#53bdeb}
+.wc-vt{position:absolute;left:58px;bottom:4px;font-size:11px;color:var(--wa-tx2)}.wc-voice{position:relative}.wc-mic{flex:none;font-size:16px;opacity:.7}
 .wc-flash .wc-bub{animation:wcFlash 1.3s ease}@keyframes wcFlash{30%{box-shadow:0 0 0 4px rgba(37,211,102,.45)}}.wc-hit .wc-bub{outline:2px solid #ffd279;outline-offset:1px}
 .wc-down{position:absolute;right:18px;bottom:78px;z-index:2;width:42px;height:42px;border-radius:50%;border:0;background:var(--wa-panel);color:var(--wa-tx2);box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer;font-size:20px}.wc-down[hidden]{display:none}
 .wc-bar{position:relative;z-index:1;display:flex;align-items:center;gap:8px;padding:8px 10px 0;background:var(--wa-hd)}
