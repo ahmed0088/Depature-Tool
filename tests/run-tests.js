@@ -4392,6 +4392,10 @@ const haAsync = (async () => {
   { const wnS = fs.readFileSync(path.join(ROOT, 'whats-new.js'), 'utf8');
     check("What's new: one update at a time, each with what changed and what it does for you",
       [/function wnSlides/.test(wnS) && /What it does for you/.test(wnS) && /wn-next/.test(wnS), /\{ v: 532, items: \[\s*\{ ico:/.test(wnS)], [true, true]); }
+  { const rdr = fs.readFileSync(path.join(ROOT, 'tools/hotelops-opera.console.js'), 'utf8'), obr = fs.readFileSync(path.join(ROOT, 'opera-bridge.js'), 'utf8');
+    check('Reader asks: HotelOps sends its open "checked out or extended?" questions with every answer to the reader; the reader shows them with the buttons and sends the tap back; HotelOps only accepts an answer that is one of that question\'s own buttons',
+      [(obr.match(/ask: readerAsks\(\)/g) || []).length >= 3 && /if \(d\.answer && typeof d\.answer === 'object'\)/.test(obr), /if \(!q \|\| !q\.opts\.some\(o => o\[1\] === act\)\) return/.test(obr),
+       /Array\.isArray\(d\.ask\)/.test(rdr) && /answer: \{ id: q\.id, act: o\[1\] \}/.test(rdr) && /❓ HotelOps asks/.test(rdr)], [true, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

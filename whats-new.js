@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 533, items: [
+    { ico: '❓', title: 'The Opera reader asks you too — right inside Opera',
+      what: 'When HotelOps is not sure if a guest checked out or extended, the question now also appears in the reader\'s box in the Opera tab: "❓ HotelOps asks — Room 412: checked out or extended?" The box opens by itself for a new question, and its corner badge shows "?" while one waits.',
+      does: 'Answer without leaving Opera: tap ↪ Extended or 🚪 Checked out and HotelOps updates the board at once ("Room 412 marked extended ✓"). Or tap 🔎 Let Opera show me, then open Departures, Arrivals and In House: the reader looks again and settles it by itself. The reader still only reads Opera — it never clicks or types there.' },
+  ] },
   { v: 532, items: [
     { ico: '🗂', title: 'Cloud runs are never lost — minimise, numbered, with their hotel',
       what: 'Closing a cloud run window (Guest enrolment or Neorcha) now minimises it. A chip stays at the bottom-left: "#12 ✍️ Guest enrolment · Ibis Styles · 5/12 · 3:20" with a progress line. Every run gets a number, and 🗂 Runs lists them all.',

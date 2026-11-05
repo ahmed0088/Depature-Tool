@@ -1116,12 +1116,35 @@ function opAct(act, t) {
   }
   else if (act === 'page') openPage();
 }
-(W.BL_THINKERS = W.BL_THINKERS || []).push(add => {
-  const T = operaThoughts({ stuck: stuckLoad(), asked: Object.fromEntries(Object.keys(LS.get(LS_ASKED, {}) || {}).map(k => [k, 1])), taught: TEACH, dayOff: !!(W.hoNotify && W.hoNotify.dayOffOn), cfg: CFG,
+/** every Opera thought right now (the Brain shows them; the "checked out or extended?" ones also go to the reader in Opera) */
+function thoughtsNow() {
+  return operaThoughts({ stuck: stuckLoad(), asked: Object.fromEntries(Object.keys(LS.get(LS_ASKED, {}) || {}).map(k => [k, 1])), taught: TEACH, dayOff: !!(W.hoNotify && W.hoNotify.dayOffOn), cfg: CFG,
     board: boardNow(), last: LAST, folios: Object.values(FOL.date === today() ? FOL.rooms : {}), now: Date.now(), today: today(), coMin: safe(() => (typeof _depCoMin === 'function' ? _depCoMin() : null), null),
     readerV: LINK ? LINK.v : '', appV: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', linkAt: LINK ? LINK.at : 0,
     recon: safe(() => (LAST.departures ? reconNow() : null), null), routines: safe(() => (learnOn() ? learnModelNow().routines : []), []),
     seen: Object.fromEntries(Object.keys(LAST || {}).map(k => [k, (LAST[k] && LAST[k].at) || 0])) });
+}
+// ── the reader asks too: the open "checked out or extended?" questions ride on every answer to the reader, its box in the Opera tab
+//    shows them with the same buttons, and a tap there comes back here as {answer:{id, act}} ──
+const LOOKING = {};   // question id → when "let Opera show me" was tapped in the reader (it waits 15 min for the screens)
+function readerAsks() {
+  if (!signedIn()) return [];
+  return safe(() => thoughtsNow().filter(t => t.type === 'opAsk' && !(LOOKING[t.id] > Date.now() - 15 * 60e3)).slice(0, 3)
+    .map(t => ({ id: t.id, text: t.text, opts: t.opts.map(([l, a]) => [String(l).slice(0, 30), a]) })), []);
+}
+function readerAnswer(a) {
+  const id = String(a && a.id || ''), act = String(a && a.act || '');
+  const q = safe(() => thoughtsNow().find(t => t.type === 'opAsk' && t.id === id), null);
+  if (!q || !q.opts.some(o => o[1] === act)) return 'That question is settled already';
+  if (act === 'look') { LOOKING[id] = Date.now(); return `🔎 Open Departures, then Arrivals and In House here — I'll settle room ${q.room} by itself`; }
+  if (!canWrite()) return 'Your role can\'t change lists';
+  opAct(act, q);
+  const room = q.room, ext = /^rc:ext:/.test(act);
+  addLog({ kind: 'departures', text: `Room ${room}: ${ext ? 'extended' : 'checked out'} (answered in the Opera reader)`, how: 'tapped' });
+  return `Room ${room} marked ${ext ? 'extended' : 'checked out'} ✓`;
+}
+(W.BL_THINKERS = W.BL_THINKERS || []).push(add => {
+  const T = thoughtsNow();
   // quiet ones wait in the Brain's Now list (the 🧠 number); "not sure: checked out or extended?" and a habit it learned ask out loud
   T.forEach(t => add({ id: t.id, type: t.type, icon: t.icon, tone: t.tone, text: t.text, why: t.why, silent: !t.loud,
     acts: t.opts.map(([l, a]) => [l, () => (t.type === 'opQ' ? opAnswer(t.id, a) : opAct(a, t))]) }));
@@ -1525,14 +1548,15 @@ W.addEventListener('message', e => {
   if (d.guard && typeof d.guard === 'object') { safe(() => ogFromReader(d.guard, reply)); return; }
   if (d.stuck && typeof d.stuck === 'object') { const ok = safe(() => stuckAdd(d.stuck, d.h, 'reader'), false); reply({ source: 'ho-op-ack', stuck: String(d.h || '').slice(0, 24), ok: !!ok }); return; }
   if (Array.isArray(d.learn)) { const hint = safe(() => learnAdd(d.learn), ''); reply({ source: 'ho-op-ack', hint: hint || '', learn: learnOn() }); return; }
+  if (d.answer && typeof d.answer === 'object') { const text = safe(() => readerAnswer(d.answer), 'Not changed'); toast('📡 ' + text, 'ok'); reply({ source: 'ho-op-ack', answered: String(d.answer.id || '').slice(0, 80), text, ask: readerAsks() }); safe(paint); return; }
   if (d.ping) {
     // answered at once, signed in or not (only applying waits): the reader shows "linked" as soon as this tab has loaded
-    reply({ source: 'ho-op-ack', pong: 1, frame: String(d.frame || ''), again: !!(d.h && !SEEN.has(String(d.h))), auto: CFG.auto, learn: learnOn(), app: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', teach: teachNow(), guard: ogKnown() ? ogMsg() : null });
+    reply({ source: 'ho-op-ack', pong: 1, frame: String(d.frame || ''), again: !!(d.h && !SEEN.has(String(d.h))), auto: CFG.auto, learn: learnOn(), app: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', teach: teachNow(), guard: ogKnown() ? ogMsg() : null, ask: readerAsks() });
     if (d.home) safe(() => rememberHome(d.home));
     if (!was) paint();
     return;
   }
-  if (d.snap) { const res = receive(d.snap, d.h, reply); reply({ source: 'ho-op-ack', h: String(d.h || ''), text: res }); }
+  if (d.snap) { const res = receive(d.snap, d.h, reply); reply({ source: 'ho-op-ack', h: String(d.h || ''), text: res, ask: readerAsks() }); }
 });
 if (/opera-reader/.test(location.hash)) safe(() => history.replaceState(null, '', location.pathname + location.search));   // opened by the console reader
 

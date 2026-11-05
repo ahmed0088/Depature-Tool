@@ -1640,6 +1640,7 @@
   // One passive listener that only notes a label: nothing typed, no keys, no input values, never the words of a
   // list's line (that is guest data — it is noted as "a line of the list"). Cleaned before it is sent.
   var LEARN = LS.get('ho_op_learn', true) !== false, steps = [], flushT = 0, lastScreen = '', hintNow = null;
+  var ASK = [], askH = '', askSeen = {}, askSent = {};   // HotelOps' open questions ("checked out or extended?"): asked here too, answered with one tap
   var CLICK_SEL = 'button, a, [role="button"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="tab"], [role="link"], [role="option"], [role="treeitem"], summary';
   function onClickLearn(e) {
     if (!LEARN || stopped) return;
@@ -1706,6 +1707,18 @@
     if (d.h && d.text) { var nt = String(d.text).slice(0, 140); if (!lastAck || lastAck.text !== nt || Date.now() - lastAck.at > 60000) tl('✓', 'HotelOps: ' + nt); lastAck = { text: nt, at: Date.now() }; }
     if (typeof d.learn === 'boolean' && d.learn !== LEARN) { LEARN = d.learn; LS.set('ho_op_learn', LEARN); if (!LEARN) steps = []; }   // "Learn from me in Opera" (HotelOps → Settings)
     if (typeof d.hint === 'string') hintNow = d.hint ? { text: d.hint.slice(0, 60), at: Date.now() } : null;
+    if (Array.isArray(d.ask)) {
+      var A = d.ask.slice(0, 3).filter(function (q) { return q && typeof q.id === 'string' && typeof q.text === 'string' && Array.isArray(q.opts); })
+        .map(function (q) { return { id: q.id.slice(0, 80), text: q.text.slice(0, 220), opts: q.opts.slice(0, 3).filter(function (o) { return Array.isArray(o) && typeof o[0] === 'string' && typeof o[1] === 'string'; }).map(function (o) { return [o[0].slice(0, 30), o[1].slice(0, 60)]; }) }; });
+      var ah = JSON.stringify(A);
+      if (ah !== askH) {
+        askH = ah; ASK = A;
+        var fresh = ASK.filter(function (q) { return !askSeen[q.id]; });
+        fresh.forEach(function (q) { askSeen[q.id] = 1; tl('❓', q.text.slice(0, 120)); });
+        if (fresh.length && TOP && host) { touched = true; if (isMin) setMin(false); setTab('now'); }   // a new question: the box opens to ask it
+      }
+    }
+    if (d.answered) { delete askSent[d.answered]; if (d.text) { var at2 = String(d.text).slice(0, 140); lastAck = { text: at2, at: Date.now() }; tl('✓', 'HotelOps: ' + at2); } }
     if (d.again && (!d.frame || d.frame === FRAME)) { sentHash = ''; send(true); }   // HotelOps (re)opened and hasn't got what is on screen
     render();
   }
@@ -1810,6 +1823,7 @@
     ['now', 'today', 'help'].forEach(function (k) { panes[k] = el('div', 'display:none;flex-direction:column;gap:8px', null, body); });
     // Now
     var P = panes.now;
+    E.ask = el('div', 'display:none;flex-direction:column;gap:8px', null, P);   // HotelOps asks: checked out or extended?
     E.link = el('div', CARD + 'display:none;border-color:rgba(251,191,36,.38);background:rgba(251,191,36,.09)', null, P);
     E.linkT = el('div', 'font-weight:700;color:#fde68a', '', E.link);
     E.linkD = el('div', 'margin-top:3px;color:' + COL.txt + ';font-size:12.5px', '', E.link);
@@ -1926,7 +1940,7 @@
     var did = lastAck && now - lastAck.at < 600000 ? lastAck : null, hint = hintNow && now - hintNow.at < 120000 ? hintNow.text : '';
     var stuckOn = stuckAt && now - stuckAt < 600000, helpOn = helpTxt && now - helpAt < 120000;
     var sig = [tone, L.code, L.text, n, kind, total, view.title, did ? did.text + Math.floor((now - did.at) / 60000) : '', hint, stuckOn, TL.length, TL[0] ? TL[0].at : 0, curTab, isMin, helpOn ? helpTxt : '',
-      relay ? relay.apps : '-', appV, errOn ? lastErr : ''].join('|');
+      relay ? relay.apps : '-', appV, errOn ? lastErr : '', askH, Object.keys(askSent).join(',')].join('|');
     if (sig === lastSig) return;
     lastSig = sig;
     var col = COL[tone];
@@ -1947,6 +1961,23 @@
       E.conn.style.display = EXT ? 'none' : 'inline-flex';
       E.openApp.style.display = EXT && L.code !== 'linking' ? 'inline-flex' : 'none';
     }
+    while (E.ask.firstChild) E.ask.removeChild(E.ask.firstChild);
+    E.ask.style.display = ASK.length ? 'flex' : 'none';
+    ASK.forEach(function (q) {
+      var c = el('div', CARD + 'border-color:rgba(251,191,36,.5);background:rgba(251,191,36,.12)', null, E.ask);
+      el('div', LABEL + 'color:#fde68a', '❓ HotelOps asks', c);
+      el('div', 'margin-top:4px;color:#fff;font:600 13px/1.4 ' + SANS, q.text, c);
+      var row = el('div', 'display:flex;gap:6px;flex-wrap:wrap;margin-top:9px', null, c);
+      if (askSent[q.id]) { el('div', 'color:' + COL.txt2 + ';font-size:12.5px', 'Sent to HotelOps…', row); return; }
+      q.opts.forEach(function (o, i) {
+        btn(o[0], i === 0 ? BTN_GO : BTN_2, row, 'ask-' + i, function () {
+          askSent[q.id] = 1; lastSig = '';
+          if (!post({ source: 'ho-op', v: VERSION, answer: { id: q.id, act: o[1] }, frame: FRAME })) { delete askSent[q.id]; helpSay('Not linked to HotelOps — answer it there'); }
+          render();
+        });
+      });
+      el('div', 'margin-top:6px;color:' + COL.txt3 + ';font-size:11.5px', 'Or open Departures, then Arrivals and In House: the reader looks again and settles it by itself.', c);
+    });
     E.scr.textContent = kind ? (KLABEL[kind] || cap(kind)) : 'Watching Opera';
     E.scr2.textContent = n ? cap(summary(kind, n, total)) + (view.title && view.title.toLowerCase().indexOf(String(KLABEL[kind] || kind).toLowerCase()) < 0 ? ' · ' + view.title : '') : kind ? 'Nothing to read on it yet' : 'Open a screen in Opera: it reads it by itself';
     E.did.textContent = did ? did.text + ' · ' + hhmm(did.at) : L.code === 'linked' ? 'Nothing to change yet' : 'Waiting for HotelOps';
@@ -1964,7 +1995,7 @@
       el('span', 'flex:none;width:18px;text-align:center', x.i, r);
       el('span', 'min-width:0;color:' + COL.txt + ';overflow-wrap:anywhere', x.t, r);
     });
-    bNum.style.display = n ? 'block' : 'none'; bNum.textContent = n > 999 ? '999+' : String(n);
+    bNum.style.display = n || ASK.length ? 'block' : 'none'; bNum.textContent = ASK.length ? '?' + (ASK.length > 1 ? ASK.length : '') : n > 999 ? '999+' : String(n); bNum.style.background = ASK.length ? '#b45309' : '#1f2937';
     badge.title = 'HotelOps · ' + (n ? summary(kind, n, total) : 'watching Opera') + ' · ' + hTxt.textContent;
   }
 
