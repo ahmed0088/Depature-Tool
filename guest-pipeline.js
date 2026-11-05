@@ -344,7 +344,7 @@ async function gpAccCloudRestart() {
   try {
     await fbUpdate('enrollLive', { at: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: gpEnrollRows().length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
     await fbSet('enrollJob', { tsv: gpEnrollTsv(gpEnrollRows(), true), n: gpEnrollRows().length, at: Date.now(), test: false, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
-    try { if (window.hoRuns) window.hoRuns.start('enrol', gpCloudTag, { hotel: (document.getElementById('hotelName') || {}).textContent || '', n: rows.length, test: !!test }); } catch (_) {}
+    try { if (window.hoRuns) window.hoRuns.start('enrol', gpCloudTag, { hotel: (document.getElementById('hotelName') || {}).textContent || '', n: gpEnrollRows().length, test: false, how: 'run again' }); } catch (_) {}
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: '', tag: gpCloudTag, hid, portal_url: url } }) });
     GP_ACC.at = Date.now();
     gpAccorRunWin(true);
@@ -362,13 +362,15 @@ async function gpAccCloudEnroll(test) {
   try {
     await fbSet('enrollJob', { tsv: gpEnrollTsv(rows, true), n: rows.length, at: Date.now(), by: (currentProfile && currentProfile.name) || '', test: !!test, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
     await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Starting the cloud enrolment…', con: [] });
+    try { if (window.hoRuns) window.hoRuns.start('enrol', gpCloudTag, { hotel: (document.getElementById('hotelName') || {}).textContent || '', n: rows.length, test: !!test, how: 'cloud' }); } catch (_) {}
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: test ? '1' : '', tag: gpCloudTag, hid, portal_url: url } }) });
     GP_ACC.at = Date.now(); GP_ACC.cat = '';
     gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'GitHub accepted the run · waiting for a cloud computer…', con: [{ t: Date.now(), g: 'GH', m: 'Run requested from HotelOps · ' + rows.length + ' guest(s) who agreed' }] });
     gpAccorRunWin(true);
     gpAccPoll(gpCloudTag);
     showToast(test ? '🧪 Test started — nothing will be submitted' : '☁️ Enrolment started', 'ok');
-  } catch (e) { showToast(e.message, 'err'); gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'error', step: 'error', note: e.message, con: [{ t: Date.now(), g: 'ERR', m: e.message }] }); }
+  } catch (e) { showToast(e.message, 'err'); gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'error', step: 'error', note: e.message, con: [{ t: Date.now(), g: 'ERR', m: e.message }] });
+    try { await fbUpdate('enrollLive', { at: Date.now(), state: 'error', step: 'error', tag: gpCloudTag, note: 'Not started: ' + e.message }); } catch (_) {} }   // every device (and 🗂 Runs) sees it stopped
 }
 // GitHub's side of the run (queued / running / failed): kept apart from the robot's own report (enrollLive),
 // so a GitHub status never wipes the robot's console. Both are merged by gpCloudPaint.
@@ -402,6 +404,7 @@ async function gpCloudEnroll(test) {
   try {
     await fbSet('enrollJob', { tsv: gpEnrollTsv(rows), n: rows.length, at: Date.now(), by, test: !!test, tag: gpCloudTag, state: 'queued' });
     await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Waiting for the duty PC to pick it up…', con: [] });
+    try { if (window.hoRuns) window.hoRuns.start('enrol', gpCloudTag, { hotel: (document.getElementById('hotelName') || {}).textContent || '', n: rows.length, test: !!test, how: 'duty PC' }); } catch (_) {}
   } catch (_) { showToast('Could not save the list', 'err'); return; }
   showToast(test ? '🧪 Test run queued for the duty PC — nothing will be sent' : '☁️ ' + rows.length + ' guest(s) queued — the duty PC enrolls them', 'ok');
 }

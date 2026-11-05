@@ -4404,6 +4404,11 @@ const haAsync = (async () => {
        SDp.shouldAsk(st('', 0, ''), { date: T0, skip: true }, T0, 0), SDp.shouldAsk(st('', 0, ''), { date: T0, until: 100 }, T0, 50), SDp.shouldAsk(st('', 0, ''), { date: '2026-11-04', skip: true }, T0, 0),
        /<script src="start-day\.js"><\/script>/.test(ixS) && /'\.\/start-day\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))],
       [true, true, true, true, false, false, false, true, true]); }
+  { const rd2 = fs.readFileSync(path.join(ROOT, 'run-dock.js'), 'utf8'), gp2 = fs.readFileSync(path.join(ROOT, 'guest-pipeline.js'), 'utf8');
+    const startOf = name => { const i = gp2.indexOf('async function ' + name + '('); return gp2.slice(i, gp2.indexOf('\n}', i)); };
+    check('Runs history: every way a run starts is recorded (☁️ Enroll, Run again, duty PC); a run nobody registered (nightly schedule, another device) is recorded once from its live report; numbers come from a server transaction; a run that could not start is marked stopped for everyone',
+      [/hoRuns\.start\('enrol'/.test(startOf('gpAccCloudEnroll')) && /hoRuns\.start\('enrol'/.test(startOf('gpAccCloudRestart')) && /hoRuns\.start\('enrol'/.test(startOf('gpCloudEnroll')),
+       /function adopt\(kind, v\)/.test(rd2) && /transaction\(cur => \(cur \? undefined : rec\)\)/.test(rd2), /_ref\.child\('cloudRunSeq'\)\.transaction/.test(rd2), /fbUpdate\('enrollLive', \{ at: Date\.now\(\), state: 'error'/.test(startOf('gpAccCloudEnroll'))], [true, true, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

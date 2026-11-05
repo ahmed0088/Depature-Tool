@@ -43,14 +43,45 @@
     return { title: '#' + (r.no || '?') + ' ' + K.ic + ' ' + K.name + (r.test ? ' · 🧪 test' : ''), sub: [r.hotel, far].filter(Boolean).join(' · '), st };
   }
 
+  /** the next run number, from the hotel's counter in one step on the server (two devices never get the same number) */
+  async function nextNo() {
+    try {
+      if (dbOk() && _ref.child) { const r = await _ref.child('cloudRunSeq').transaction(n => (+n || 0) + 1); const v = r && r.snapshot && (typeof r.snapshot.val === 'function' ? r.snapshot.val() : r.snapshot); if (+v > 0) return +v; }
+      if (dbOk()) { const n = (+(await fbGet('cloudRunSeq')) || 0) + 1; await fbSet('cloudRunSeq', n); return n; }
+    } catch (_) {}
+    return 0;
+  }
+  /** a run nobody registered (the nightly schedule, the duty PC, another device, an older HotelOps): recorded the first time
+   *  its live report is seen, under a key every device works out the same way, so it is one run with one number */
+  const liveKey = (kind, v) => v.tag ? String(v.tag).replace(/[.#$\[\]\/]/g, '_').slice(0, 60) : kind + '_' + Math.round(+v.started || +v.at || 0).toString(36);
+  const ADOPT = {};
+  async function adopt(kind, v) {
+    const key = liveKey(kind, v); if (RUNS[key] || ADOPT[key]) return;
+    ADOPT[key] = 1;
+    await new Promise(r => setTimeout(r, 400 + Math.random() * 2500));   // another device may record it first
+    if (RUNS[key]) return;
+    const hn = (D.getElementById('hotelName') || {}).textContent || '';
+    const rec = Object.assign({ tag: key, kind, no: 0, hotel: clean(kind === 'neorcha' && W.__hoNxHotel ? W.__hoNxHotel() : hn, 50), account: '', from: clean(v.from, 10), to: clean(v.to, 10),
+      by: v.tag ? '' : 'Nightly schedule', started: +v.started || +v.at || Date.now(), auto: true }, fromLive(kind, v));
+    let created = false;
+    try {
+      if (dbOk() && _ref.child) { const r = await _ref.child('cloudRuns/' + key).transaction(cur => (cur ? undefined : rec)); created = !!(r && r.committed); }
+      else created = true;
+    } catch (_) { created = true; }
+    if (!created) return;
+    rec.no = await nextNo() || Object.keys(RUNS).length + 1;
+    RUNS[key] = rec; paint();
+    try { if (dbOk()) fbUpdate('cloudRuns/' + key, { no: rec.no }); } catch (_) {}
+  }
   async function start(kind, tag, info) {
     if (!tag || !KINDS[kind]) return;
+    ADOPT[tag] = 1;   // registered here: the live report that arrives meanwhile does not record it a second time
     info = info || {};
     let no = 0;
-    try { if (dbOk()) { no = (+(await fbGet('cloudRunSeq')) || 0) + 1; await fbSet('cloudRunSeq', no); } } catch (_) {}
+    no = await nextNo();
     if (!no) no = Object.keys(RUNS).length + 1;
     const rec = { tag, kind, no, hotel: clean(info.hotel, 50), account: clean(info.account, 30), from: clean(info.from, 10), to: clean(info.to, 10),
-      n: +info.n || 0, test: !!info.test, by: clean(me(), 40), started: Date.now(), at: Date.now(), state: 'run', note: 'Starting…' };
+      n: +info.n || 0, test: !!info.test, how: clean(info.how, 20), by: clean(me(), 40), started: Date.now(), at: Date.now(), state: 'run', note: 'Starting…' };
     RUNS[tag] = rec; paint();
     try { if (dbOk()) await fbSet('cloudRuns/' + tag, rec); } catch (_) {}
     prune();
@@ -69,7 +100,8 @@
   function onLive(kind, v) {
     LIVE[kind] = v || null;
     if (!v) return paint();
-    const r = (v.tag && RUNS[v.tag]) || (!v.tag ? latest(kind) : null);
+    const r = RUNS[liveKey(kind, v)] || (v.tag && RUNS[v.tag]) || null;
+    if (!r && Date.now() - (+v.at || 0) < 24 * 3600e3) { adopt(kind, v); return paint(); }
     if (r) {
       const f = fromLive(kind, v), key = o => [o.state, o.done, o.n, o.prog, o.url, o.started, JSON.stringify(o.tally || '')].join('|');
       const changed = key(f) !== key(r);
@@ -98,7 +130,7 @@
         const c = e.target.closest('[data-hrd-open]'); if (c) { const r = RUNS[c.dataset.hrdOpen]; if (r) openRun(r); return; }
         if (e.target.closest('[data-hrd-list]')) list();
       }); }
-    const L = chips(), recent = Object.values(RUNS).some(r => Date.now() - r.started < 3 * 864e5);
+    const L = chips(), recent = Object.keys(RUNS).length > 0;   // the 🗂 Runs history stays one tap away
     if (!L.length && !recent) { dock.innerHTML = ''; dock.hidden = true; return; }
     dock.hidden = false;
     dock.innerHTML = L.map(r => {
@@ -134,7 +166,7 @@
         return `<article class="hrl-run ${esc(r.state)}${focus === r.tag ? ' focus' : ''}">
           <div class="hrl-no">#${esc(r.no || '?')}</div>
           <div class="hrl-main"><b>${K.ic} ${esc(K.name)}${r.test ? ' <em>🧪 test</em>' : ''}</b>
-            <span class="hrl-meta">🏨 ${esc(r.hotel || '—')}${r.account ? ' · ' + esc(r.account) : ''} · 👤 ${esc(r.by || '—')}</span>
+            <span class="hrl-meta">🏨 ${esc(r.hotel || '—')}${r.account ? ' · ' + esc(r.account) : ''} · 👤 ${esc(r.by || '—')}${r.how ? ' · ' + esc(r.how) : ''}</span>
             <span class="hrl-meta">🕒 ${esc(when(r.started))} · ⏱ ${esc(dur(sec))} · ${{ run: '⏳ running', done: '✅ finished', error: '⛔ stopped with an error', stopped: '⏹ stopped by you' }[r.state] || ''}</span>
             ${res(r) ? `<span class="hrl-res">${esc(res(r))}</span>` : ''}${r.note ? `<span class="hrl-note">${esc(r.note)}</span>` : ''}
             <span class="hrl-act">${isNew ? `<button type="button" class="btn sm${r.state === 'run' ? ' gold' : ''}" data-hrl-open="${esc(r.tag)}">📡 Open live window</button>` : ''}${r.url ? `<a class="btn sm" href="${esc(r.url)}" target="_blank" rel="noopener">GitHub ↗</a>` : ''}</span></div></article>`; }).join('')
@@ -190,5 +222,5 @@
     Object.keys(KINDS).forEach(k => fbListen(KINDS[k].live, v => onLive(k, v)));
   })();
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', () => { css(); paint(); }); else { css(); paint(); }
-  W.hoRuns = { start, minimized, label, list, paint, _pure: { fromLive, chipText } };
+  W.hoRuns = { start, minimized, label, list, paint, _pure: { fromLive, chipText, liveKey } };
 })();

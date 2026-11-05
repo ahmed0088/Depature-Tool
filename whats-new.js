@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 535, items: [
+    { ico: '🗂', title: 'Every run has a history — and a running one is never lost',
+      what: 'All runs are now kept and numbered, however they started: ☁️ Enroll, Run again, the duty PC, Neorcha\'s Run in the cloud, the nightly 03:17 Neorcha run, or a run a colleague started on another device. (Before, the main ☁️ Enroll run was not registered.) A run GitHub could not start now shows as ⛔ stopped, not running forever.',
+      does: 'While a run is going and its window is closed, it sits minimised as a chip at the bottom-left — tap to open it. 🗂 Runs is always there with the full history: number, hotel, who or what started it (you, the duty PC, the nightly schedule), when, how long, the result, and its GitHub link.' },
+  ] },
   { v: 534, items: [
     { ico: '☀️', title: 'Start of the day: it asks you to load the important reports',
       what: 'The first time you open HotelOps each day, if the In-house report or today\'s Departures is not loaded yet, a "Good morning — start of the day" window asks for them, with what is missing and "0 of 2 loaded".',
