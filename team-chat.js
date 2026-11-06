@@ -150,7 +150,7 @@
     const w = shell(); w.classList.add('wc-in');
     const c = convOf(id); if (!c) return;
     D.getElementById('wcMain').innerHTML = `<header class="wc-ch"><button type="button" class="wc-ib wc-back" data-wc="back" aria-label="Back">←</button><button type="button" class="wc-chid" data-wc="info">${avatar(c, 40)}<span><b>${esc(titleOf(c))}</b><small id="wcSub"></small></span></button>
-        <span class="wc-cha"><button type="button" class="wc-ib" data-wc="search" title="Search" aria-label="Search in this chat">🔎</button><button type="button" class="wc-ib" data-wc="menu" title="Menu" aria-label="Chat menu">⋮</button></span></header>
+        <span class="wc-cha"><button type="button" class="wc-ib" data-wc="search" title="Search" aria-label="Search in this chat">🔎</button><button type="button" class="wc-ib" data-wc="menu" title="Menu" aria-label="Chat menu">⋮</button><button type="button" class="wc-ib wc-mobile-close" data-wc="close" title="Close chat" aria-label="Close team chat">✕</button></span></header>
       <div class="wc-find" id="wcFind" hidden><input type="search" id="wcFindQ" placeholder="Search in this chat…"><span id="wcFindN"></span><button type="button" class="wc-ib" data-wc="findup" aria-label="Previous">↑</button><button type="button" class="wc-ib" data-wc="finddn" aria-label="Next">↓</button><button type="button" class="wc-ib" data-wc="findx" aria-label="Close search">✕</button></div>
       <div class="wc-pin" id="wcPin" hidden></div>
       <div class="wc-msgs" id="wcMsgs"></div>
@@ -566,7 +566,7 @@
 .wc-ch{position:relative;z-index:1;display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--wa-hd);min-height:60px}
 .wc-chid{flex:1;min-width:0;display:flex;align-items:center;gap:12px;border:0;background:transparent;color:var(--wa-tx);cursor:pointer;text-align:left;padding:0 4px}
 .wc-chid span{display:flex;flex-direction:column;min-width:0}.wc-chid b{font-size:15.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wc-chid small{font-size:12.5px;color:var(--wa-tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.wc-cha{display:flex}.wc-back{display:none}
+.wc-cha{display:flex}.wc-mobile-close{display:none}.wc-back{display:none}
 .wc-find{position:relative;z-index:1;display:flex;align-items:center;gap:4px;padding:6px 10px;background:var(--wa-hd);border-top:1px solid var(--wa-line)}.wc-find[hidden],.wc-pin[hidden],.wc-bar[hidden],.wc-at-list[hidden]{display:none}
 .wc-find input{flex:1;height:34px;border-radius:8px;border:0!important;padding:0 10px!important;background:var(--wa-panel)!important;color:var(--wa-tx)!important}.wc-find span{font-size:12px;color:var(--wa-tx2);min-width:34px;text-align:center}
 .wc-pin{position:relative;z-index:1;display:flex;align-items:center;background:var(--wa-panel);border-bottom:1px solid var(--wa-line)}.wc-pin>button:first-child{flex:1;display:flex;gap:10px;align-items:center;border:0;background:transparent;color:var(--wa-tx);padding:8px 14px;cursor:pointer;text-align:left;min-width:0}
@@ -630,7 +630,7 @@
 .tc-pop span:last-child{min-width:0}.tc-pop b{display:block;font-size:13px}@keyframes wcIn{from{opacity:0;transform:translateY(10px)}}
 @media (max-width:768px){.wc-win{inset:auto;left:0;top:var(--vvt,0px);width:100vw;height:var(--vvh,100dvh);border-radius:0;transform:none;grid-template-columns:100% 100%;transition:none;opacity:1}.wc.on .wc-win{transform:none}
   .wc-win{grid-template-columns:1fr}.wc-main{position:absolute;inset:0;transform:translateX(100%);transition:transform .22s cubic-bezier(.2,.8,.2,1)}.wc.wc-in .wc-main{transform:none}
-  .wc-back{display:inline-grid}.wc-msgs{padding:10px 10px 14px}.wc-comp textarea{font-size:16px!important}.wc-bub{max-width:86%}.tc-pop{bottom:calc(150px + env(safe-area-inset-bottom))}
+  .wc-back,.wc-mobile-close{display:inline-grid}.wc-msgs{padding:10px 10px 14px}.wc-comp textarea{font-size:16px!important}.wc-bub{max-width:86%}.tc-pop{bottom:calc(150px + env(safe-area-inset-bottom))}
   .wc-menu,.wc-dlg{left:0;right:0;top:auto;bottom:0;transform:none;width:100%;max-width:none;border-radius:16px 16px 0 0;animation:wcUp .2s ease}.wc-dlg.wc-big{height:94dvh}@keyframes wcUp{from{transform:translateY(30px);opacity:0}}
   .wc-at-list{left:10px}}
 @media (prefers-reduced-motion:reduce){.wc-win,.wc-main,.wc .tc-bg,.wc-msg{transition:none}.wc-menu,.wc-dlg,.tc-pop{animation:none}}`;
