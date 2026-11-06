@@ -130,11 +130,12 @@
         if (c) { go(c.dataset.nvfGo); if (typeof closeMobMore === 'function') closeMobMore(); }
       }); }
     const chip = id => { const el = by.get(id); return el ? `<button type="button" class="nvf-chip" data-nvf-go="${esc(id)}"><span>${esc(iconOf(el))}</span>${esc(labelOf(el))}</button>` : ''; };
+    const favoritesOpen = !!m.querySelector('.nvf-fav-manage[open]');
     const chooser = [...by.entries()].map(([id, el]) => {
       const pinned = pins.includes(id);
       return `<button type="button" class="nvf-fav-choice${pinned ? ' on' : ''}" data-nvf-pin="${esc(id)}" aria-pressed="${pinned}" aria-label="${pinned ? 'Remove' : 'Add'} ${esc(labelOf(el))} ${pinned ? 'from' : 'to'} favorites"><span aria-hidden="true">${pinned ? '★' : '☆'}</span><span>${esc(labelOf(el))}</span></button>`;
     }).join('');
-    m.innerHTML = `<details class="nvf-fav-manage"><summary>☆ Favorites <span>${pins.length} saved · tap to edit</span></summary><div class="nvf-fav-list">${chooser}</div></details>`
+    m.innerHTML = `<details class="nvf-fav-manage"${favoritesOpen ? ' open' : ''}><summary>☆ Favorites <span>${pins.length} saved · tap to edit</span></summary><div class="nvf-fav-list">${chooser}</div></details>`
       + (pins.length ? `<div class="nvf-row"><b>⭐ Favorites</b>${pins.map(chip).join('')}</div>` : '')
       + (rec.length ? `<div class="nvf-row"><b>🕘 Recent</b>${rec.map(chip).join('')}</div>` : '');
   }
