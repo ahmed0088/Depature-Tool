@@ -1,0 +1,38 @@
+name: Recover blocked Pages publication
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/pages-recovery.yml
+  workflow_dispatch:
+permissions:
+  pages: write
+jobs:
+  recover:
+    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Recover blocked v553 Pages deployment'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Clear the timed-out v553 deployment
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const deploymentId = '43fa0769fcdf6ba4386c95a9a278dd932479b7b5';
+            const params = { owner: context.repo.owner, repo: context.repo.repo, deploymentId };
+            const endpoint = 'GET /repos/{owner}/{repo}/pages/deployments/{deploymentId}';
+            const before = await github.request(endpoint, params);
+            core.info('Timed-out deployment status: ' + before.data.status);
+            if (['succeed', 'succeeded', 'success'].includes(before.data.status)) {
+              core.info('The deployment already completed; leaving it alone.');
+              return;
+            }
+            await github.request('POST /repos/{owner}/{repo}/pages/deployments/{deploymentId}/cancel', params);
+            for (let attempt = 0; attempt < 12; attempt++) {
+              const response = await github.request(endpoint, params);
+              const status = response.data.status;
+              core.info('After cancellation: ' + status);
+              if (['cancelled', 'canceled', 'failed', 'errored'].includes(status)) return;
+              if (['succeed', 'succeeded', 'success'].includes(status)) return;
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+            core.setFailed('GitHub has not cleared the timed-out deployment yet.');
