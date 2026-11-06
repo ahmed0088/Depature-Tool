@@ -133,6 +133,7 @@
       .sort((a, b) => b.started - a.started).slice(0, 3);
   }
   function paint() {
+    clearInterval(timer); timer = 0;
     let dock = D.getElementById('hoRunDock');
     if (!dock) { if (!D.body) return; dock = D.createElement('div'); dock.id = 'hoRunDock'; dock.className = 'hrd'; dock.setAttribute('aria-live', 'polite'); D.body.appendChild(dock);
       dock.addEventListener('click', e => {
@@ -142,17 +143,32 @@
       }); }
     let L = chips(); try { if (localStorage.getItem('ho_rundock_off') === '1') L = []; } catch (_) {}   // chips switched off (⚙️): 🗂 Runs stays
     const recent = Object.keys(RUNS).length > 0;   // the 🗂 Runs history stays one tap away
-    if (!L.length && !recent) { dock.innerHTML = ''; dock.hidden = true; return; }
+    if (!L.length && !recent) { if (dock.innerHTML) dock.innerHTML = ''; dock._hrdKey = ''; dock.hidden = true; return; }
     dock.hidden = false;
+    // Heartbeats change "at" every second. Keep the card and its buttons mounted unless
+    // actual content changes; only the clock text needs refreshing on a timer.
+    const key = JSON.stringify(L.map(r => [r.tag, r.kind, r.no, r.state, r.hotel, r.n, r.done, r.prog, r.note, r.test, r.started]));
+    if (dock._hrdKey !== key) {
+    dock._hrdKey = key;
     dock.innerHTML = L.map(r => {
       const t = chipText(r), sec = ((r.state === 'run' ? Date.now() : r.at || Date.now()) - r.started) / 1000;
       const pct = r.state === 'done' ? 100 : r.kind === 'enrol' ? (r.n ? Math.round((r.done || 0) / r.n * 100) : 5) : Math.max(5, Math.min(97, r.prog || 10));
       return `<div class="hrd-chip ${esc(r.state)}" role="button" tabindex="0" data-hrd-open="${esc(r.tag)}" title="Open the live window of run #${esc(r.no)}">
-        <span class="hrd-st">${t.st}</span><span class="hrd-t"><b>${esc(t.title)}</b><small>${esc(t.sub || r.note || '')}${t.sub ? ' · ' : ''}${dur(sec)}</small></span>
+        <span class="hrd-st">${t.st}</span><span class="hrd-t"><b>${esc(t.title)}</b><small>${esc(t.sub || r.note || '')}${t.sub || r.note ? ' · ' : ''}<time data-hrd-time="${esc(r.tag)}" aria-live="off">${dur(sec)}</time></small></span>
         <button type="button" class="hrd-x" data-hrd-x="${esc(r.tag)}" aria-label="Close this chip" title="Close${r.state === 'run' ? ' — the run keeps going;' : ' —'} it stays in 🗂 Runs">×</button>
         <i class="hrd-bar" style="width:${pct}%"></i></div>`;
     }).join('') + `<button type="button" class="hrd-all" data-hrd-list="1" title="Cloud run history and any active runs">🗂 Run history</button>`;
-    clearInterval(timer); if (L.some(r => r.state === 'run')) timer = setInterval(paint, 1000);
+    }
+    tickDock();
+    if (L.some(r => r.state === 'run')) timer = setInterval(tickDock, 1000);
+  }
+  function tickDock() {
+    const dock = D.getElementById('hoRunDock'); if (!dock || dock.hidden) return;
+    dock.querySelectorAll('[data-hrd-time]').forEach(el => {
+      const r = RUNS[el.dataset.hrdTime]; if (!r) return;
+      const text = dur(((r.state === 'run' ? Date.now() : r.at || r.started) - r.started) / 1000);
+      if (el.textContent !== text) el.textContent = text;
+    });
   }
   function openRun(r) {
     const cur = latest(r.kind);
@@ -194,9 +210,9 @@
     const s = D.createElement('style'); s.id = 'hoRunDockCss';
     s.textContent = `.hrd{position:fixed;left:16px;bottom:16px;z-index:9000;display:flex;flex-direction:column;align-items:flex-start;gap:8px;max-width:min(340px,calc(100vw - 110px));pointer-events:none}
 .hrd[hidden]{display:none}.hrd>*{pointer-events:auto}
-.hrd-chip{position:relative;overflow:hidden;display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;padding:9px 12px 11px;border-radius:14px;cursor:pointer;background:var(--card2,#1e2533);color:var(--text,#fff);border:1px solid var(--border2,rgba(255,255,255,.18));box-shadow:0 12px 30px -12px rgba(0,0,0,.5);animation:hrdIn .3s ease}
+.hrd-chip{position:relative;overflow:hidden;display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;padding:9px 12px 11px;border-radius:14px;cursor:pointer;background:var(--card2,#1e2533);color:var(--text,#fff);border:1px solid var(--border2,rgba(255,255,255,.18));box-shadow:0 12px 30px -12px rgba(0,0,0,.5)}
 .hrd-chip:hover{border-color:var(--accent)}.hrd-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.hrd-st{font-size:18px;flex:none}.hrd-chip.run .hrd-st{animation:hrdPulse 1.6s ease-in-out infinite}
+.hrd-st{font-size:18px;flex:none}.hrd-t time{display:inline-block;min-width:4ch;font-variant-numeric:tabular-nums}
 .hrd-t{display:flex;flex-direction:column;min-width:0;flex:1}.hrd-t b{font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hrd-t small{font-size:.72rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hrd-x{flex:none;width:26px;height:26px;border-radius:50%;border:0;background:transparent;color:var(--text2);font-size:18px;cursor:pointer}.hrd-x:hover{background:var(--border)}
 .hrd-bar{position:absolute;left:0;bottom:0;height:3px;background:var(--accent);transition:width .5s ease}.hrd-chip.done .hrd-bar{background:var(--green,#22c55e)}.hrd-chip.error .hrd-bar{background:var(--red,#ef4444)}

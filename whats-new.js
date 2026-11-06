@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 551, items: [
+    { ico: '☁️', title: 'Cloud run chips stay steady',
+      what: 'The elapsed-time clock and background heartbeats were rebuilding the chip and replaying its animation.',
+      does: 'The clock now updates in place, with stable controls and no repeated fade or pulse. Progress and results still update as the run advances.' },
+  ] },
   { v: 550, items: [
     { ico: '🎨', title: 'A cleaner Appearance menu',
       what: 'Roomier display controls, aligned switches and a clearer eye-saver strength selector replace the cramped cards.',
