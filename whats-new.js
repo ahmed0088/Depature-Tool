@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 553, items: [
+    { ico: '↗', title: 'Find missing manual sales',
+      what: 'Package Audit → Manual sales: upload your Opera journal, Reservation Detail and IN-Gauge product export. See proposed additions, existing requests, uncertain matches and dates needing a newer export.',
+      does: 'Every sale shows the reservation, net charge, original note, named seller and posting user. Copy the details or export the full review. Audit reports can be reused in both tabs.' },
+    { ico: '⏳', title: 'Pending means already requested',
+      what: 'Package Audit recognizes pending seller requests and explicitly marked manual records. A pending request awaits approval in IN-Gauge; an approved manual request keeps its approved seller.',
+      does: 'Requests are not rejected just because there is no Opera package event. Upload a fresh IN-Gauge export after approving a request to update its status.' },
+  ] },
   { v: 552, items: [
     { ico: '🎨', title: 'Clearer navigation across themes',
       what: 'Search, Pinned and Recent shortcuts no longer float over the page links. Sidebar rows keep their height and shortcuts use an aligned grid.',

@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v552"/>
+<meta name="ho-version" content="v553"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -315,6 +315,7 @@
   .adg-charts{grid-template-columns:1fr}
 }
 </style>
+<link rel="stylesheet" href="manual-upsells.css"/>
 </head>
 <body>
 
@@ -1786,7 +1787,7 @@
           <button type="button" role="tab" data-v="audit" class="on" aria-selected="true" onclick="pkgShowView('audit')">📋 Audit</button>
           <button type="button" role="tab" data-v="rules" aria-selected="false" onclick="pkgShowView('rules')">⚙️ Rules</button>
         </div>
-        <button class="btn rose" onclick="pkgClear()">✕ Clear</button>
+        <button class="btn rose" id="pkgClearReports" onclick="pkgClear()">✕ Clear Audit</button>
       </div>
     </div>
 
@@ -1802,7 +1803,7 @@
       <li><b>⚙️ Rules</b> (top right) shows every rule the audit uses, with an example. Managers can switch them and see at once what changes.</li>
       <li><b>🧠 Memory</b> keeps every package the audit resolves. Next month, a package that continues (same booking, or the guest's back-to-back booking) keeps its seller: "↪ continues from Sep".</li>
       <li><b>🛠 Settings</b>: package kinds and codes, the team (who left, renames, logins), report columns, how long things are kept, which values your cards show. No code needed.</li>
-      <li>IN-Gauge status: <b>REVIEWED</b> rows keep their seller and stop being work; <b>DENIED</b> rows are left out.</li>
+      <li>IN-Gauge status: <b>PENDING</b> means a seller request already exists and awaits approval; <b>Manually Added Record = Yes</b> preserves its requested or approved seller. <b>REVIEWED</b> rows keep their seller; <b>DENIED</b> rows are left out.</li>
     </ul></details>
 
     <details class="howto"><summary>❔ Which reports to pull</summary><ol>
@@ -5517,6 +5518,7 @@ async function appInit() {
 <script src="security.js"></script>
 <script src="enter-save.js"></script>
 <script src="my-upsells.js"></script>
+<script src="manual-upsells.js"></script>
 <script src="undo.js"></script>
 <script src="wa-bridge.js"></script>
 <script src="wa-guard.js"></script>

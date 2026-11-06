@@ -29,3 +29,5 @@ jobs:
         run: node tests/run-history.test.js
       - name: Opera Departures checks
         run: node tests/opera-departures.test.js
+      - name: Manual sales and seller requests
+        run: node tests/manual-upsells.test.js

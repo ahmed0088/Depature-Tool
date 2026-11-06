@@ -285,6 +285,9 @@ const PKG_IG_FIELDS = [
   ['employee', 'Seller (employee)',  ['Employee']],
   ['daily',    'Charge date',        ['Daily Date']],
   ['status',   'Status',             ['Status']],
+  ['manual',   'Manually added request', ['Manually Added Record']],
+  ['creator',  'Request created by', ['Created By']],
+  ['recordId', 'IN-Gauge record ID', ['ID']],
 ];
 const PKG_GUEST_FIELDS = [
   ['conf', 'Confirmation no.',   ['Confirmation Number', 'Confirmation No', 'Confirmation no'], true],
@@ -360,6 +363,9 @@ function _pkgParseExcelUnknowns(rows) {
       dep:    iDep    >= 0 ? String(r[iDep]    || '').trim() : '',
       daily:  iDaily  >= 0 ? String(r[iDaily]  || '').trim() : '',
       status: iStatus >= 0 ? String(r[iStatus] || '').trim().toUpperCase() : '',
+      manualAdded: C.manual >= 0 && /^(yes|true|1)$/i.test(String(r[C.manual] || '').trim()),
+      requestedBy: C.creator >= 0 ? String(r[C.creator] || '').trim() : '',
+      recordId: C.recordId >= 0 ? String(r[C.recordId] || '').trim().replace(/\.0+$/, '') : '',
       product, employee, needsProduct, needsEmployee,
     });
   }
@@ -1263,7 +1269,7 @@ function _pkgArchive(results) {
   if (typeof saveHistory !== 'function') return;
   const byDay = {};
   results.forEach(r => {
-    if (r.verdict === 'deny' || r.verdict === 'settled') return;
+    if ((r.requestedSale && !r.requestApproved) || r.pendingRequest || r.verdict === 'deny' || r.verdict === 'settled') return;
     const day = _pkgDayNum(r.daily);
     if (!day) return;
     const iso = `${String(day).slice(0,4)}-${String(day).slice(4,6)}-${String(day).slice(6,8)}`;
@@ -1336,7 +1342,7 @@ async function pkgRun() {
   const showErr = msg => { document.getElementById('pkgErrorMsg').textContent = msg; errBox.classList.add('show'); };
 
   if (!pkgUnknowns.length) return showErr('Upload the IN-Gauge export first — no rows loaded.');
-  if (!Object.keys(pkgEvents).length) return showErr('Upload the Opera Changes Log PDF first.');
+  if (!Object.keys(pkgEvents).length && !pkgUnknowns.some(_pkgIsRequestedSale)) return showErr('Upload the Opera Changes Log PDF first.');
 
   busyStart('Checking the charges', `matching ${pkgUnknowns.length} against Opera…`);
   await busyPaint();
@@ -1401,13 +1407,57 @@ function _pkgCompute() {
     };
   });
 
-  _pkgApplyVerdicts(results);
-  _pkgApplyMemory(results);        // a package continuing from an earlier month keeps its seller (before the extension rule, which builds on it)
-  _pkgApplyExtensionCredit(results);
-  _pkgFlagSplitSellers(results);   // after credit is settled — it compares final sellers
-  _pkgDropNoOpReassigns(results);  // nothing that needs no change stays on the list
-  _pkgApplyPins(results);          // last: a person's pinned decision beats the log
+  // Seller requests already exist in IN-Gauge. Do not infer their seller from an absent package log.
+  const normal = results.filter(r => !_pkgIsRequestedSale(r));
+  _pkgApplyRequestedSales(results);
+  _pkgApplyVerdicts(normal);
+  _pkgApplyMemory(normal);        // a package continuing from an earlier month keeps its seller (before the extension rule, which builds on it)
+  _pkgApplyExtensionCredit(normal);
+  _pkgFlagSplitSellers(normal);   // after credit is settled — it compares final sellers
+  _pkgDropNoOpReassigns(normal);  // nothing that needs no change stays on the list
+  _pkgApplyPins(normal);          // last: a person's pinned decision beats the log
+  _pkgFlagRequestedOverlaps(results);
   return results;
+}
+
+// An explicit manual record or a PENDING request is separate from automatic package credit.
+// Pending is not approval; the Employee column is the requested beneficiary, not necessarily Created By.
+function _pkgFlagRequestedOverlaps(results) {
+  const groups = new Map();
+  results.forEach(r => {
+    if (r.status === 'DENIED') return;
+    const day = _pkgDayNum(r.daily), family = _pkgFamilyName(r);
+    if (!day || !family || /unknown/i.test(family)) return;
+    const key = r.conf + '|' + family.toLowerCase() + '|' + (_pkgRule('oneTime') && _pkgIsOneTime(family) ? 'one-off' : day);
+    if (!groups.has(key)) groups.set(key, []); groups.get(key).push(r);
+  });
+  groups.forEach(rows => {
+    if (rows.length < 2 || !rows.some(_pkgIsRequestedSale)) return;
+    rows.forEach(r => {
+      r.requestedCollision = true; r.verdict = 'review'; r.alreadyComplete = false;
+      r.note = 'A seller request overlaps another IN-Gauge entry for this confirmation and product (the same day, or a one-off charge across days). Check whether they are duplicates before approval or seller changes.';
+    });
+  });
+}
+function _pkgIsRequestedSale(r) { return r.status === 'PENDING' || r.manualAdded === true; }
+function _pkgApplyRequestedSales(results) {
+  results.filter(_pkgIsRequestedSale).forEach(r => {
+    r.requestedSale = true; r.ruleHits = [];
+    r.pendingRequest = r.status === 'PENDING';
+    r.requestApproved = r.manualAdded && ['APPROVED', 'REVIEWED'].includes(r.status);
+    r.manualSale = r.manualAdded;
+    r.user = r.employee; r.wasUser = ''; r.reassign = false; r.noSeller = false;
+    r.code = r.product; r.price = String(r.charge); r.from = r.arr; r.to = r.dep;
+    r.matchedEvent = null; r.originEvent = null;
+    r.splitSeller = false; r.denyReason = ''; r.family = _pkgFamilyName(r);
+    r.alreadyComplete = !r.needsProduct && !r.needsEmployee;
+    if (r.status === 'DENIED') { r.verdict = 'settled'; r.note = 'Manual request denied in IN-Gauge. Do not add it again.'; return; }
+    r.verdict = r.requestApproved && r.alreadyComplete ? 'credit' : 'review';
+    r.note = r.pendingRequest
+      ? `Already requested in IN-Gauge for ${r.needsEmployee ? 'an unnamed seller' : r.employee}; awaiting approval. No new request is needed. Review and approve or reject it in IN-Gauge, then upload a fresh export.`
+      : r.requestApproved ? 'Manually added request already approved in IN-Gauge. Preserve its approved seller; no matching Opera package event is required.'
+      : 'Manually added request already exists. Check its status and any missing product or seller in IN-Gauge; do not submit it again.';
+  });
 }
 
 // ── Pins: decisions a person made that the audit must remember ──────────
@@ -1585,6 +1635,9 @@ function _pkgRenderCoverage() {
 // Plain-language instruction for the row: what the person reading this
 // actually has to go and do, rather than which field happened to be blank.
 function _pkgActionText(r) {
+  if (r.requestedCollision) return 'Check overlapping request';
+  if (r.pendingRequest) return 'Awaiting approval in IN-Gauge';
+  if (r.requestApproved && r.alreadyComplete) return 'Approved manual request';
   // Reviewing settles who earned a sale, not whether the charge is sound.
   // So the factual checks run first and the stamp is added to whatever they
   // find — a decision made on bad information should be visible, not hidden.
@@ -1663,7 +1716,7 @@ function _pkgNewerReport(d) { return pkgReportAt > 0 && pkgReportAt > _pkgFixedA
 /** Marked fixed, but an IN-Gauge report saved after that still shows this night wrong. */
 function pkgBackWrong(r) { const d = pkgDone[_pkgPinKey(r)]; return !!d && _pkgNeeds(r) && _pkgNewerReport(d); }
 /** This night was fixed (copied) and nothing newer says otherwise. */
-function pkgNightDone(r) { return !!pkgDone[_pkgPinKey(r)] && !pkgBackWrong(r); }
+function pkgNightDone(r) { if (r.pendingRequest) return false; return !!pkgDone[_pkgPinKey(r)] && !pkgBackWrong(r); }
 function pkgIsDone(r) { return pkgNightDone(r); }
 function pkgIsCopied(r) { return !!pkgDone[_pkgPinKey(r)]; }
 /** back · confirmed · waiting · gone (a newer report no longer has it) */
@@ -1747,6 +1800,7 @@ function pkgCopyChip(btn) {
  *  "Fixed already" and stays there on later reports unless a NEWER report still shows it wrong. */
 function pkgMarkFixed(btn, key) {
   const rows = _pkgGroupRows(key), need = rows.filter(_pkgNeeds);
+  if (rows.some(r => r.pendingRequest)) { showToast('Approve or reject the existing request in IN-Gauge, then upload a fresh export. Pending is not fixed.', 'err'); return; }
   if (!rows.length) return;
   const conf = String(rows[0].conf || '');
   if (!need.length) { showToast('Nothing to fix on this package', 'ok'); return; }
@@ -1784,7 +1838,7 @@ function pkgUndone(key) {
 }
 /** A bulk copy (rows to update / to remove) holds every night of each package: all of them count as fixed. */
 function _pkgCopiedMany(rows) {
-  const keys = [...new Set(rows.filter(r => !pkgNightDone(r)).map(_pkgPinKey))];
+  const keys = [...new Set(rows.filter(r => !r.pendingRequest && !pkgNightDone(r) && !_pkgGroupRows(_pkgPinKey(r)).some(x => x.pendingRequest)).map(_pkgPinKey))];
   if (!keys.length) return;
   const snap = {}; keys.forEach(k => { snap[k] = pkgDone[k] ? JSON.parse(JSON.stringify(pkgDone[k])) : null; });
   keys.forEach(k => {
@@ -1805,7 +1859,7 @@ let pkgDoneOpen = false;
 let pkgFixedOpen = false;
 /** ✓ Mark all fixed: every package in the To fix list (Undo for a few seconds). */
 function pkgMarkAllFixed() {
-  const groups = _pkgAllGroups().filter(g => _pkgInView(g, 'action'));
+  const groups = _pkgAllGroups().filter(g => _pkgInView(g, 'action') && !g.rows.some(r => r.pendingRequest));
   if (!groups.length) return;
   _pkgCopiedMany(groups.flatMap(g => g.rows));
   groups.forEach(g => { try { _pkgMemoryNoteFixed(g.key); } catch (_) {} });
@@ -1815,14 +1869,15 @@ function pkgToggleDoneList() { pkgDoneOpen = !pkgDoneOpen; pkgRender(); }
 function pkgWhy(key) { if (pkgWhyOpen.has(key)) pkgWhyOpen.delete(key); else pkgWhyOpen.add(key); pkgRender(); }
 
 const _PKG_VIEWS = [
-  ['action', '🛠 To fix'], ['deny', '⛔ Remove'], ['review', '🔎 Check by hand'], ['pinned', '📌 Frozen'],
+  ['action', '🛠 To fix'], ['pending', '⏳ Approval requests'], ['deny', '⛔ Remove'], ['review', '🔎 Check by hand'], ['pinned', '📌 Frozen'],
   ['outside', '⏳ Not in log'], ['complete', '✓ Nothing to do'], ['all', 'All'],
 ];
 function _pkgInView(g, f) {
   const rows = g.rows, need = rows.filter(_pkgNeeds);
   if (f && f.startsWith('rule:')) return rows.some(r => (r.ruleHits || []).includes(f.slice(5)));
   switch (f) {
-    case 'action':   return need.length > 0 && (!pkgDone[g.key] || rows.some(pkgBackWrong));
+    case 'action':   return need.length > 0 && (rows.some(r => r.pendingRequest) || !pkgDone[g.key] || rows.some(pkgBackWrong));
+    case 'pending':  return rows.some(r => r.pendingRequest);
     case 'deny':     return rows.some(r => r.verdict === 'deny' && !r.pinSkip);
     case 'review':   return rows.some(r => r.verdict === 'review' && !r.pinSkip);
     case 'pinned':   return rows.some(r => r.pin);
@@ -1869,15 +1924,15 @@ function pkgRender() {
   const sum = document.getElementById('pkgSummary');
   if (sum) sum.innerHTML = _pkgSummaryHtml();
 
-  const left = counts.action;
+  const left = counts.action, fixable = all.filter(g => _pkgInView(g, 'action') && !g.rows.some(r => r.pendingRequest)).length;
   // Fixed packages stay visible (like the TD page): under "Fixed already", with Undo.
-  const fixedG = pkgFilter_ === 'action' ? all.filter(g => pkgDone[g.key] && !g.rows.some(pkgBackWrong) && (!q || hay(g).includes(q))) : [];
-  const fixedAll = all.filter(g => pkgDone[g.key] && !g.rows.some(pkgBackWrong)).length;
+  const fixedG = pkgFilter_ === 'action' ? all.filter(g => pkgDone[g.key] && !g.rows.some(r => r.pendingRequest) && !g.rows.some(pkgBackWrong) && (!q || hay(g).includes(q))) : [];
+  const fixedAll = all.filter(g => pkgDone[g.key] && !g.rows.some(r => r.pendingRequest) && !g.rows.some(pkgBackWrong)).length;
   const head = document.getElementById('pkgListHead');
   if (head) head.innerHTML = pkgFilter_ === 'action'
     ? `<span class="pa-count"><b>${left}</b> to fix <i>·</i> <b class="ok">${fixedAll}</b> fixed</span>
-       <small>Copy the values you need with the small copy buttons, then press <b>✓ Fixed</b> when it is done in IN-Gauge.</small>
-       ${left > 1 ? `<button type="button" class="pa-link" onclick="pkgMarkAllFixed()" title="Mark every package in this list fixed (Undo for a few seconds)">✓ Mark all ${left} fixed</button>` : ''}`
+       <small>Copy the values you need with the small copy buttons, then press <b>✓ Fixed</b> when it is done in IN-Gauge. Pending requests need approval there and a fresh export here.</small>
+       ${fixable > 1 ? `<button type="button" class="pa-link" onclick="pkgMarkAllFixed()" title="Mark every package in this list fixed (Undo for a few seconds)">✓ Mark all ${fixable} fixed</button>` : ''}`
     : `<b>${shown.length}</b> package${shown.length !== 1 ? 's' : ''} <small>${escapeHtml((_PKG_VIEWS.find(v => v[0] === pkgFilter_) || [0, ''])[1])}</small>`;
 
   const fixedHtml = fixedG.length ? `<details class="pa-fixed" ${pkgFixedOpen ? 'open' : ''} ontoggle="pkgFixedOpen=this.open">
@@ -1925,6 +1980,7 @@ function _pkgSummaryHtml() {
 /** The seller now (IN-Gauge) → the seller it should be, for a set of nights. */
 function _pkgSellerLine(need) {
   const r0 = need[0];
+  if (r0.pendingRequest) return `<div class="pa-who"><div><small>Requested seller</small><b>${escapeHtml(r0.employee || 'Missing seller')}</b></div><span class="pa-arrow">→</span><div><small>IN-Gauge status</small><b class="warn">Pending approval</b></div></div>`;
   const now = [...new Set(need.map(r => (r.employee && r.employee !== '-') ? _pkgUserLabel(r.employee) : ''))];
   const nowTxt = now.map(n => n || 'nobody').join(' / ');
   if (r0.verdict === 'deny') return `<div class="pa-who"><div><small>In IN-Gauge now</small><b>${escapeHtml(nowTxt)}</b></div><span class="pa-arrow">→</span><div><small>Should be</small><b class="bad">Removed (denied)</b></div></div>`;
@@ -1937,6 +1993,7 @@ function _pkgSellerLine(need) {
 
 /** One sentence: why this needs a change. The full story is under Why? */
 function _pkgShortWhy(r) {
+  if (r.requestedSale) return r.note || 'Manual request already exists in IN-Gauge.';
   if (r.pinSkip) return 'Skipped (frozen by ' + (r.pin && r.pin.by || 'someone') + ')';
   if (r.pin && (r.pin.seller || r.pin.manual)) return `Frozen by ${r.pin.by || 'someone'}${r.pin.at ? ' on ' + _pkgWhen(r.pin.at).replace(/ \d\d:\d\d$/, '') : ''}`;
   if (r.verdict === 'deny') return r.denyReason || '';
@@ -2003,7 +2060,7 @@ function _pkgCardHtml(g, inFixed) {
   const carry = rows.find(r => r.carriedFrom);
   const carryTag = carry ? `<button type="button" class="pa-carry" onclick="pkgMemoryOpen(${J(String(carry.carriedFrom.conf))})" title="Remembered from an earlier report: open its record">↪ continues from ${escapeHtml(_pkgMonShort(carry.carriedFrom.month))}${carry.carriedFrom.conf !== r0.conf ? ' · ' + escapeHtml(carry.carriedFrom.conf) : ''}</button>` : '';
   const learnTag = r0.learned ? `<span class="pa-chip">🧠 learned rule</span>` : '';
-  const fixBtn = !need.length ? '' : (inFixed || (pkgDone[g.key] && !back.length))
+  const fixBtn = r0.pendingRequest ? `<button type="button" class="pa-btn" onclick="pkgShowView('manual')">Open Manual sales</button>` : !need.length ? '' : (inFixed || (pkgDone[g.key] && !back.length))
     ? `<button type="button" class="pa-fix undo" onclick="pkgUndone(${J(g.key)})" title="Not fixed after all: back to the to-do list">↩ Undo</button>`
     : `<button type="button" class="pa-fix" onclick="pkgMarkFixed(this,${J(g.key)})" title="Done in IN-Gauge: it moves to Fixed already, for the whole team">✓ Fixed</button>`;
   return `<article class="pa-card t-${inFixed ? 'ok' : tone}${inFixed ? ' is-fixed' : ''}" data-key="${escapeHtml(g.key)}">
@@ -2020,7 +2077,7 @@ function _pkgCardHtml(g, inFixed) {
     <div class="pa-foot">
       ${fixBtn}
       <button type="button" class="pa-btn${whyOpen ? ' on' : ''}" aria-expanded="${whyOpen}" onclick="pkgWhy(${J(g.key)})">Why?</button>
-      ${_pkgPinPicker(r0, g.key)}
+      ${r0.requestedSale ? '' : _pkgPinPicker(r0, g.key)}
     </div>
     ${whyOpen ? `<div class="pa-whybox">${_pkgWhyHtml(g)}</div>` : ''}
   </article>`;
@@ -2032,6 +2089,8 @@ function _pkgWhyHtml(g) {
   const steps = [];
   const emp = [...new Set(rows.map(r => (r.employee && r.employee !== '-') ? _pkgUserLabel(r.employee) : 'nobody'))].join(' / ');
   steps.push(['📄', 'IN-Gauge', `${rows.length} night${rows.length > 1 ? 's' : ''} of ${_pkgFamilyName(r0) || r0.code} on booking ${r0.conf}, room ${r0.room || '?'}: ${_pkgNightsText(rows)}. Seller shown: <b>${escapeHtml(emp)}</b>${r0.status ? ` · status ${escapeHtml(r0.status)}` : ''}.`, true]);
+
+  if (r0.requestedSale) steps.push(['↗', r0.pendingRequest ? 'Seller request · pending' : 'Manual request', `${escapeHtml(r0.note)}${r0.requestedBy ? ' Created by: ' + escapeHtml(r0.requestedBy) + '.' : ''}${r0.recordId ? ' IN-Gauge ID: ' + escapeHtml(r0.recordId) + '.' : ''}`]);
 
   const ev = (r0.candidates || []).slice().sort((a, b) => a.ts - b.ts);
   if (!ev.length) {
@@ -2080,7 +2139,9 @@ function _pkgWhyHtml(g) {
   // what to do
   const nights = _pkgNightsText(need.length ? need : rows);
   let todo;
-  if (!need.length) todo = 'Nothing to change in IN-Gauge.';
+  if (r0.requestedCollision) todo = 'Check the overlapping IN-Gauge records before approving or changing anything. Do not add another request.';
+  else if (r0.pendingRequest) todo = `Review the existing request on confirmation <b>${escapeHtml(r0.conf)}</b> in IN-Gauge. Approve or reject it there, then upload a fresh product export. No new request is needed.`;
+  else if (!need.length) todo = 'Nothing to change in IN-Gauge.';
   else if (r0.verdict === 'deny') todo = `Open booking <b>${escapeHtml(r0.conf)}</b> in IN-Gauge and deny the charge on ${escapeHtml(nights)}.`;
   else if (r0.verdict === 'review') todo = `Check booking <b>${escapeHtml(r0.conf)}</b> in Opera. When you know who sold it, freeze the seller here (📌), then fix IN-Gauge.`;
   else {
@@ -2244,6 +2305,8 @@ function _pkgCanEdit() {
   return r === 'supervisor';
 }
 function pkgShowView(v) {
+  if (v === 'manual' && window.ManualUpsells) { window.ManualUpsells.show(); return; }
+  if (window.ManualUpsells) window.ManualUpsells.hide();
   _pkgMountViews();
   _pkgView = ['rules', 'memory', 'settings'].includes(v) ? v : 'audit';
   const ids = { rules: 'pkgRulesView', memory: 'pkgMemoryView', settings: 'pkgSettingsView', audit: 'pkgMainView' };

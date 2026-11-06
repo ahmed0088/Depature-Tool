@@ -1022,6 +1022,7 @@
   }
   function show() {
     if (!mount()) return;
+    if (global.ManualUpsells) global.ManualUpsells.hide();
     ['pkgRulesView', 'pkgMainView', 'pkgMemoryView', 'pkgSettingsView'].forEach(id => { const e = document.getElementById(id); if (e) e.hidden = true; });
     document.querySelectorAll('#pkgTabs [data-v]').forEach(b => { const on = b.dataset.v === 'mine'; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
     document.getElementById('muView').hidden = false;
