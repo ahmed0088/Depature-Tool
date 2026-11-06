@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 550, items: [
+    { ico: '🎨', title: 'A cleaner Appearance menu',
+      what: 'Roomier display controls, aligned switches and a clearer eye-saver strength selector replace the cramped cards.',
+      does: 'Browse styles in a compact two-column grid. The panel fits the screen, includes its own close button and keeps your existing settings.' },
+  ] },
   { v: 549, items: [
     { ico: '📡', title: 'Opera Departures are recognized correctly',
       what: 'An old learned screen label could call the Departures screen “other”, even after its guest rows were read correctly.',
