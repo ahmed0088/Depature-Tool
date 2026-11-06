@@ -22,3 +22,6 @@ jobs:
         run: for f in *.js scripts/*.js tests/*.js; do node --check "$f"; done
       - name: Regression tests
         run: node tests/run-tests.js
+      - name: Mobile chat lifecycle checks
+        run: node tests/chat-mobile.test.js
+

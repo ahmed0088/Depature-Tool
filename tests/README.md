@@ -9,3 +9,8 @@ made-up one** (the same replacement in both files, so matching behaves exactly l
 Never add a report with real guest names here — the repository is public.
 
 When you fix a bug, add a check for it here so it cannot come back.
+
+`node tests/chat-mobile.test.js` checks microphone permission races, recording
+cancel/send/error cleanup, closing a conversation, and the voice playback policy
+with synthetic data. It does not request a real microphone or connect to Firebase.
+

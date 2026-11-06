@@ -111,7 +111,7 @@
   function shell() {
     let w = D.getElementById('tcPanel'); if (w) return w;
     css(); w = D.createElement('div'); w.id = 'tcPanel'; w.className = 'tc wc';
-    w.innerHTML = `<div class="tc-bg" data-wc="close"></div><section class="wc-win" role="dialog" aria-label="Team chat">
+    w.innerHTML = `<div class="tc-bg" data-wc="close"></div><section class="wc-win" role="dialog" aria-modal="true" aria-label="Team chat">
       <div class="wc-side"><header class="wc-sh"><b>Chats</b><span><button type="button" class="wc-ib" data-wc="newgroup" title="New group" aria-label="New group">👥＋</button><button type="button" class="wc-ib" data-wc="newchat" title="New chat" aria-label="New chat">✏️</button><button type="button" class="wc-ib wc-x" data-wc="close" title="Close" aria-label="Close">✕</button></span></header>
         <label class="wc-search"><span>🔎</span><input type="search" id="wcQ" placeholder="Search or start a new chat" autocomplete="off"></label>
         <div class="wc-filters">${[['all', 'All'], ['unread', 'Unread'], ['groups', 'Groups'], ['dm', 'Direct']].map(([k, l]) => `<button type="button" data-wcf="${k}">${l}</button>`).join('')}</div>
@@ -130,8 +130,10 @@
     D.addEventListener('keydown', e => { if (e.key === 'Escape' && S.open) { if (D.querySelector('#wcLayer > *')) { closeLayer(); return; } if (S.reply || S.edit) { S.reply = S.edit = null; bar(); return; } close(); } });
     return w;
   }
+  let pageScroll = null;
   function open(id) {
     const w = shell(); D.getElementById('tcPop')?.remove();
+    if (!S.open) pageScroll = { x: W.scrollX, y: W.scrollY };
     w.classList.add('on'); S.open = true; w.classList.toggle('wc-dark', isDark()); D.documentElement.classList.add('wc-lock'); fitViewport();
     if (id) openChat(id); else if (!S.cur && matchMedia('(min-width: 769px)').matches) openChat('team'); else render();
   }
@@ -139,16 +141,26 @@
   // page shows below it). The window is sized to the part of the screen you can see, and the page is put back when the keyboard closes.
   function fitViewport() {
     const w = D.getElementById('tcPanel'), vv = W.visualViewport; if (!w) return;
-    if (vv) { w.style.setProperty('--vvh', Math.round(vv.height) + 'px'); w.style.setProperty('--vvt', Math.round(vv.offsetTop) + 'px'); }
+    if (vv) { w.style.setProperty('--vvh', Math.round(vv.height) + 'px'); w.style.setProperty('--vvt', Math.round(vv.offsetTop) + 'px'); w.style.setProperty('--vvw', Math.round(vv.width) + 'px'); w.style.setProperty('--vvl', Math.round(vv.offsetLeft) + 'px'); }
   }
   if (W.visualViewport) { W.visualViewport.addEventListener('resize', () => S.open && fitViewport()); W.visualViewport.addEventListener('scroll', () => S.open && fitViewport()); }
+  W.addEventListener('resize', () => S.open && fitViewport());
   D.addEventListener('focusout', e => { if (S.open && e.target && e.target.closest && e.target.closest('#tcPanel')) setTimeout(() => { if (!D.activeElement || !D.activeElement.closest || !D.activeElement.closest('#tcPanel textarea, #tcPanel input')) { W.scrollTo(0, 0); fitViewport(); } }, 60); });
-  function close() { const w = D.getElementById('tcPanel'); D.documentElement.classList.remove('wc-lock'); W.scrollTo(0, 0); if (w) w.classList.remove('on'); S.open = false; badge(); }
+  function close() {
+    const w = D.getElementById('tcPanel');
+    cancelVoice(); if (PLAY.audio) PLAY.audio.pause(); closeLayer();
+    if (D.activeElement && w && w.contains(D.activeElement)) D.activeElement.blur();
+    D.documentElement.classList.remove('wc-lock');
+    if (w) w.classList.remove('on'); S.open = false;
+    if (pageScroll) { W.scrollTo(pageScroll.x, pageScroll.y); pageScroll = null; }
+    badge();
+  }
   const isDark = () => { const t = D.documentElement.dataset.theme; return t && t !== 'opera'; };
   function openChat(id) {
+    const c = convOf(id); if (!c) return;
+    cancelVoice(); if (PLAY.audio) PLAY.audio.pause(); closeLayer();
     S.cur = id; S.reply = S.edit = null; S.search = '';
     const w = shell(); w.classList.add('wc-in');
-    const c = convOf(id); if (!c) return;
     D.getElementById('wcMain').innerHTML = `<header class="wc-ch"><button type="button" class="wc-ib wc-back" data-wc="back" aria-label="Back">←</button><button type="button" class="wc-chid" data-wc="info">${avatar(c, 40)}<span><b>${esc(titleOf(c))}</b><small id="wcSub"></small></span></button>
         <span class="wc-cha"><button type="button" class="wc-ib" data-wc="search" title="Search" aria-label="Search in this chat">🔎</button><button type="button" class="wc-ib" data-wc="menu" title="Menu" aria-label="Chat menu">⋮</button><button type="button" class="wc-ib wc-mobile-close" data-wc="close" title="Close chat" aria-label="Close team chat">✕</button></span></header>
       <div class="wc-find" id="wcFind" hidden><input type="search" id="wcFindQ" placeholder="Search in this chat…"><span id="wcFindN"></span><button type="button" class="wc-ib" data-wc="findup" aria-label="Previous">↑</button><button type="button" class="wc-ib" data-wc="finddn" aria-label="Next">↓</button><button type="button" class="wc-ib" data-wc="findx" aria-label="Close search">✕</button></div>
@@ -159,19 +171,24 @@
       <div class="wc-at-list" id="wcAt" hidden></div>
       <form class="wc-comp" id="wcForm"><button type="button" class="wc-ib" data-wc="emoji" aria-label="Emoji">😊</button><button type="button" class="wc-ib" data-wc="attach" aria-label="Send a photo">📎</button>
         <textarea id="wcIn" rows="1" maxlength="2000" placeholder="Type a message"></textarea><input type="file" id="wcFile" accept="image/*" hidden>
+        <div class="wc-rec" id="wcRec" hidden><button type="button" class="wc-ib" data-wc="rec-cancel" aria-label="Cancel voice recording">✕</button><span role="status" aria-live="polite" id="wcRecLabel">Opening microphone…</span><time id="wcRecTime">0:00</time></div>
         <button type="submit" class="wc-send" id="wcSend" aria-label="Send">🎤</button></form>`;
     const inp = D.getElementById('wcIn');
     inp.addEventListener('input', () => { inp.style.height = 'auto'; inp.style.height = Math.min(140, inp.scrollHeight) + 'px'; sendBtn(); typing(); atList(); });
     inp.addEventListener('keydown', e => { const L = D.getElementById('wcAt'); if (L && !L.hidden && (e.key === 'Enter' || e.key === 'Tab')) { const f = L.querySelector('button'); if (f) { e.preventDefault(); f.click(); return; } }
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); D.getElementById('wcForm').requestSubmit(); } });
-    D.getElementById('wcForm').addEventListener('submit', e => { e.preventDefault(); const v = inp.value; if (!v.trim() && !S.edit) { voice(); return; } send(v); inp.value = ''; inp.style.height = ''; sendBtn(); inp.focus(); });
+    D.getElementById('wcForm').addEventListener('submit', e => { e.preventDefault(); const v = inp.value; if (REC || (!v.trim() && !S.edit)) { voice(); return; } send(v); inp.value = ''; inp.style.height = ''; sendBtn(); inp.focus(); });
     D.getElementById('wcFile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) photo(f); });
     D.getElementById('wcFindQ').addEventListener('input', () => { S.find = 0; findGo(0); });
     D.getElementById('wcMsgs').addEventListener('scroll', () => { const b = D.getElementById('wcMsgs'); D.getElementById('wcDown').hidden = b.scrollHeight - b.scrollTop - b.clientHeight < 200; });
     render(true); markRead(id);
     if (matchMedia('(hover: hover)').matches) setTimeout(() => inp.focus(), 50);
   }
-  const sendBtn = () => { const b = D.getElementById('wcSend'), i = D.getElementById('wcIn'); if (b && i) { const t = !!i.value.trim() || !!S.edit; b.textContent = t ? '➤' : '🎤'; b.setAttribute('aria-label', t ? 'Send' : 'Record a voice message'); } };
+  const sendBtn = () => {
+    const b = D.getElementById('wcSend'), i = D.getElementById('wcIn'), f = D.getElementById('wcForm'), r = D.getElementById('wcRec');
+    if (f) f.classList.toggle('wc-recording', !!REC); if (r) r.hidden = !REC;
+    if (b && i) { const t = !!i.value.trim() || !!S.edit; b.disabled = !!REC && !REC.rec; b.classList.toggle('rec', !!REC && !!REC.rec); b.textContent = REC ? '■' : t ? '➤' : '🎤'; b.setAttribute('aria-label', REC ? 'Stop and send voice message' : t ? 'Send' : 'Record a voice message'); }
+  };
 
   // ── drawing ──
   function render(jump) { renderList(); renderChat(jump); badge(); }
@@ -239,7 +256,7 @@
   }
   // ── playing a voice note ──
   const PLAY = { fid: '', audio: null, playing: false, pct: 0, t: 0, urls: {} };
-  async function blobUrl(fid) {
+  function blobUrl(fid) {
     if (PLAY.urls[fid]) return PLAY.urls[fid];
     const d = S.files[fid]; if (!realFile(d)) return '';
     const [head, b64] = d.split(','), type = (head.match(/^data:([^;,]+)/) || [])[1] || 'audio/mp4';
@@ -251,16 +268,17 @@
     D.querySelectorAll('#wcMsgs .wc-voice').forEach(v => { const b = v.querySelector('.wc-play'), i = v.querySelector('.wc-wave i'), t = v.querySelector('.wc-vt'); if (!b) return;
       const on = b.dataset.play === PLAY.fid; if (i) i.style.width = (on ? Math.round(PLAY.pct * 100) : 0) + '%'; if (t && on && PLAY.t) t.textContent = mmss(PLAY.t); });
   }
-  async function play(fid) {
-    if (PLAY.fid === fid && PLAY.audio) { if (PLAY.playing) PLAY.audio.pause(); else PLAY.audio.play().catch(() => {}); return; }
+  function play(fid) {
+    const failed = () => toast('Could not play this voice message. Tap Play to try again.', 'err');
+    if (PLAY.fid === fid && PLAY.audio) { if (PLAY.playing) PLAY.audio.pause(); else PLAY.audio.play().catch(failed); return; }
     if (PLAY.audio) { PLAY.audio.pause(); PLAY.audio = null; }
-    const url = await blobUrl(fid); if (!url) { toast('Still loading — try again in a second', 'info'); return; }
+    let url; try { url = blobUrl(fid); } catch (_) { failed(); return; } if (!url) { toast('Still loading — try again in a second', 'info'); return; }
     const a = new Audio(); a.preload = 'auto'; a.src = url; PLAY.fid = fid; PLAY.audio = a; PLAY.pct = 0; PLAY.t = 0;
     a.onplay = () => { PLAY.playing = true; playPaint(); }; a.onpause = () => { PLAY.playing = false; playPaint(); };
     a.ontimeupdate = () => { PLAY.t = a.currentTime; PLAY.pct = a.duration && isFinite(a.duration) ? a.currentTime / a.duration : 0; playPaint(); };
     a.onended = () => { PLAY.playing = false; PLAY.pct = 0; PLAY.t = 0; playPaint(); };
     a.onerror = () => { PLAY.playing = false; playPaint(); toast('This voice message can\'t play on this device (recorded in a format it does not support)', 'err'); };
-    a.play().catch(() => {});
+    a.play().catch(failed);
   }
   async function loadFiles(id) {
     const need = msgsOf(id).filter(m => m.file && m.file.fid && !realFile(S.files[m.file.fid]) && !S.loading[m.file.fid] && !m.del).slice(-30);
@@ -293,7 +311,8 @@
     if (t.classList.contains('wc-layer-bg')) { closeLayer(); return; }
     switch (k) {
       case 'close': close(); break;
-      case 'back': S.cur = ''; shell().classList.remove('wc-in'); renderList(); break;
+      case 'back': cancelVoice(); if (PLAY.audio) PLAY.audio.pause(); S.cur = ''; shell().classList.remove('wc-in'); D.getElementById('wcIn')?.blur(); closeLayer(); renderList(); break;
+      case 'rec-cancel': cancelVoice(); break;
       case 'newgroup': newGroup(); break;
       case 'newchat': newChat(); break;
       case 'info': info(); break;
@@ -447,7 +466,7 @@
       const mk = e.target.closest('[data-mk]'); if (mk) { const on = !(c.admins || {})[mk.dataset.mk]; (S.convs[c.id].admins = S.convs[c.id].admins || {})[mk.dataset.mk] = on || null; safe(() => fbSet(P(`convs/${c.id}/admins/${mk.dataset.mk}`), on || null)); info(); }
     });
   }
-  async function leaveGroup(c) { if (!confirm(`Exit "${titleOf(c)}"?`)) return; const my = me().uid; await send(`🚪 ${me().name} left`, { sys: true }); delete (S.convs[c.id].members || {})[my]; safe(() => fbSet(P(`convs/${c.id}/members/${my}`), null)); S.cur = ''; shell().classList.remove('wc-in'); D.getElementById('wcMain').innerHTML = ''; render(); }
+  async function leaveGroup(c) { if (!confirm(`Exit "${titleOf(c)}"?`)) return; cancelVoice(); if (PLAY.audio) PLAY.audio.pause(); const my = me().uid; await send(`🚪 ${me().name} left`, { sys: true }); delete (S.convs[c.id].members || {})[my]; safe(() => fbSet(P(`convs/${c.id}/members/${my}`), null)); S.cur = ''; shell().classList.remove('wc-in'); D.getElementById('wcMain').innerHTML = ''; render(); }
   // ── photos & voice notes (kept small: a photo ≤ ~200 KB, a voice note ≤ 90 s) ──
   async function photo(file) {
     if (!/^image\//.test(file.type)) { toast('Only photos can be sent here', 'err'); return; }
@@ -460,22 +479,50 @@
     const cap = (D.getElementById('wcIn') || {}).value || ''; if (cap) { D.getElementById('wcIn').value = ''; sendBtn(); }
     send(cap, { file: { kind: 'img', fid, w: cv.width, h: cv.height } });
   }
-  let REC = null;
+  let REC = null, voiceEpoch = 0;
+  function cancelVoice() {
+    voiceEpoch++;
+    const r = REC; if (!r) return;
+    r.cancelled = true; clearTimeout(r.cap); clearInterval(r.tick); REC = null;
+    if (r.rec && r.rec.state !== 'inactive') safe(() => r.rec.stop());
+    if (r.stream) r.stream.getTracks().forEach(t => t.stop());
+    sendBtn();
+  }
+  D.addEventListener('visibilitychange', () => { if (D.visibilityState === 'hidden') { cancelVoice(); if (PLAY.audio) PLAY.audio.pause(); } });
+  W.addEventListener('pagehide', cancelVoice);
   async function voice() {
-    if (REC) { REC.stop(); return; }
+    if (REC) { if (REC.rec && REC.rec.state === 'recording') REC.rec.stop(); return; }
     if (!navigator.mediaDevices || typeof MediaRecorder === 'undefined') { toast('Voice messages need a microphone and a newer browser', 'err'); return; }
-    let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (_) { toast('Allow the microphone to send a voice message', 'err'); return; }
-    const type = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/aac', 'audio/webm;codecs=opus', 'audio/webm'].find(t => safe(() => MediaRecorder.isTypeSupported(t), false)) || '';
-    const chunks = [], t0 = Date.now(), rec = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : {});
-    REC = rec; const btn = D.getElementById('wcSend'); if (btn) { btn.classList.add('rec'); btn.textContent = '■'; btn.setAttribute('aria-label', 'Stop and send'); }
-    const cap = setTimeout(() => rec.state === 'recording' && rec.stop(), 90000);
-    rec.ondataavailable = e => e.data && chunks.push(e.data);
-    rec.onstop = async () => { clearTimeout(cap); REC = null; stream.getTracks().forEach(t => t.stop()); if (btn) btn.classList.remove('rec'); sendBtn();
-      const dur = (Date.now() - t0) / 1000; if (dur < 1) return; const blob = new Blob(chunks, { type: (rec.mimeType || type || 'audio/mp4').split(';')[0] });
-      const url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
-      if (url.length > 700000) { toast('Too long — keep voice messages under a minute and a half', 'err'); return; }
-      const fid = newId(); S.files[fid] = url; await safe(() => fbSet(P('files/' + fid), url)); send('', { file: { kind: 'audio', fid, dur } }); };
-    rec.start(); toast('🎤 Recording… tap ■ to send', 'info');
+    if (!S.open || !S.cur) return;
+    const r = { chat: S.cur, uid: me().uid, epoch: voiceEpoch, rec: null, stream: null, cancelled: false };
+    REC = r; sendBtn(); D.getElementById('wcIn')?.blur();
+    const label = D.getElementById('wcRecLabel'), clock = D.getElementById('wcRecTime'); if (label) label.textContent = 'Opening microphone…'; if (clock) clock.textContent = '0:00';
+    const current = () => !r.cancelled && r.epoch === voiceEpoch && S.open && S.cur === r.chat && me().uid === r.uid;
+    const release = () => { clearTimeout(r.cap); clearInterval(r.tick); if (r.stream) r.stream.getTracks().forEach(t => t.stop()); if (REC === r) REC = null; sendBtn(); };
+    let started = false;
+    try {
+      r.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!current()) { release(); return; }
+      const type = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find(t => safe(() => MediaRecorder.isTypeSupported(t), false)) || '';
+      const rec = r.rec = new MediaRecorder(r.stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : {}), chunks = [], t0 = Date.now();
+      rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.onerror = () => { r.cancelled = true; if (rec.state !== 'inactive') safe(() => rec.stop()); release(); toast('Recording stopped. Please try again.', 'err'); };
+      rec.onstop = async () => {
+        release(); if (!current()) return;
+        try {
+          const dur = (Date.now() - t0) / 1000; if (dur < 1) { toast('Hold your message a little longer — at least one second', 'info'); return; }
+          const blob = new Blob(chunks, { type: rec.mimeType || type || (chunks[0] && chunks[0].type) || 'audio/mp4' }); if (!blob.size) { toast('No sound was recorded. Please try again.', 'err'); return; }
+          const url = await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => no(fr.error); fr.readAsDataURL(blob); });
+          if (!current()) return;
+          if (url.length > 700000) { toast('Too long — keep voice messages under a minute and a half', 'err'); return; }
+          const fid = newId(); S.files[fid] = url; await fbSet(P('files/' + fid), url);
+          if (current()) await send('', { file: { kind: 'audio', fid, dur } });
+        } catch (_) { toast('Voice message could not be sent. Please try again.', 'err'); }
+      };
+      rec.start(); started = true; sendBtn(); if (label) label.textContent = 'Recording';
+      r.tick = setInterval(() => { if (clock) clock.textContent = mmss((Date.now() - t0) / 1000); }, 500);
+      r.cap = setTimeout(() => rec.state === 'recording' && rec.stop(), 90000);
+    } catch (_) { release(); if (!r.cancelled) toast(started ? 'Recording failed. Please try again.' : 'Could not start recording. Allow microphone access and try again.', 'err'); }
   }
   // ── live data ──
   function onMsgs(v) {
@@ -643,10 +690,33 @@
 #tcPanel .wc-search{background:var(--wa-hd)!important}
 #tcPanel textarea:focus-visible,#tcPanel input:focus-visible{outline:0!important;box-shadow:none!important}
 html.wc-lock,html.wc-lock body{overflow:hidden!important;overscroll-behavior:none}
-@media (max-width:768px){#tcPanel .wc-comp textarea#wcIn{font-size:16px!important}}`;
+#tcPanel{visibility:hidden}#tcPanel.on{visibility:visible}
+#tcPanel .wc-win,#tcPanel .wc-win *{box-sizing:border-box}
+#tcPanel .wc-sh,#tcPanel .wc-ch,#tcPanel .wc-comp,#tcPanel .wc-filters,#tcPanel .wc-search{flex-shrink:0}
+#tcPanel .wc-side,#tcPanel .wc-list,#tcPanel .wc-msgs{min-height:0;min-width:0}
+#tcPanel .wc-comp textarea{min-width:0}
+#tcPanel .wc-cha{flex:none;align-items:center}
+#tcPanel .wc-rec{display:flex;align-items:center;gap:8px;flex:1;min-width:0;height:44px;color:var(--wa-tx);font:14px var(--font)}
+#tcPanel .wc-rec[hidden]{display:none}#tcPanel .wc-rec span{flex:1;min-width:0}#tcPanel .wc-rec time{font-variant-numeric:tabular-nums;flex:none}
+#tcPanel .wc-recording textarea,#tcPanel .wc-recording [data-wc="emoji"],#tcPanel .wc-recording [data-wc="attach"]{display:none}
+@media (max-width:768px){
+  #tcPanel .wc-win{left:var(--vvl,0px);top:var(--vvt,0px);width:var(--vvw,100vw);height:var(--vvh,100dvh);max-height:none}
+  #tcPanel .wc-sh{padding:calc(8px + env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) 8px max(10px,env(safe-area-inset-left))}
+  #tcPanel .wc-ch{padding:calc(8px + env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) 8px max(6px,env(safe-area-inset-left));gap:2px}
+  #tcPanel .wc-ib{width:44px;height:44px;min-width:44px;touch-action:manipulation}
+  #tcPanel .wc-chid{gap:6px;padding:0;overflow:hidden}
+  #tcPanel .wc-chid .wc-av{width:32px;height:32px}
+  #tcPanel .wc-chid b{font-size:14px}
+  #tcPanel .wc-comp{padding-left:max(6px,env(safe-area-inset-left));padding-right:max(6px,env(safe-area-inset-right))}
+  #tcPanel .wc-comp textarea#wcIn{font-size:16px!important}
+  #tcPanel .wc-pop-layer{position:absolute;left:var(--vvl,0px);top:var(--vvt,0px);width:var(--vvw,100vw);height:var(--vvh,100dvh);right:auto;bottom:auto}
+  #tcPanel .wc-dlg,#tcPanel .wc-menu{max-height:100%;padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  #tcPanel .wc-dlg.wc-big{height:94%;max-height:100%}
+}`;
     D.head.appendChild(s);
   }
   function start() { css(); mountButtons(); setTimeout(mountButtons, 2500); }
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', start); else start();
   W.hoTeamChat = { open, close, send, openChat, _pure: { unreadOf: unreadIn, richText, ticks, membersOf, dmId, lastSeen, typers } };
 })();
+

@@ -4461,7 +4461,7 @@ const haAsync = (async () => {
       [/dataset\.pgsOpen = id/.test(pg) && /querySelectorAll\('\.panel\[id\^="panel-"\]'\)/.test(pg), ['pin', 'start', 'tile', 'hide', 'big', 'compact'].every(k => pg.includes("tog('" + k + "'")),
        /ho_startday_off/.test(sd4) && /ho_srp_remind_off/.test(sr4) && /const asksOff = /.test(ob4) && /ho_rundock_off/.test(rd4),
        /<script src="page-settings\.js"><\/script>/.test(ixS) && /'\.\/page-settings\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))], [true, true, true, true]); }
-  { const tcS = fs.readFileSync(path.join(ROOT, 'team-chat.js'), 'utf8'), sbx5 = { document: { readyState: 'complete', addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, head: { appendChild() {} }, createElement: () => ({ style: {} }) }, setTimeout: () => 0 };
+  { const tcS = fs.readFileSync(path.join(ROOT, 'team-chat.js'), 'utf8'), sbx5 = { addEventListener() {}, document: { readyState: 'complete', addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, head: { appendChild() {} }, createElement: () => ({ style: {} }) }, setTimeout: () => 0 };
     sbx5.window = sbx5; vm.createContext(sbx5); vm.runInContext(tcS, sbx5); const TC = sbx5.hoTeamChat._pure;
     check('Team chat: unread counts only colleagues\' messages after the last read; text is escaped and room numbers become links; stored per hotel (chat/msgs), loaded and cached',
       [TC.unreadOf([{ uid: 'a', at: 5 }, { uid: 'me', at: 6 }, { uid: 'b', at: 9 }, { uid: 'b', at: 2 }], 'me', 4), TC.richText('<b>Room 412</b>'), /fbSet\(P\(`msgs\/\$\{c\.id\}\/\$\{k\}`\), msg\)/.test(tcS),
@@ -4489,7 +4489,7 @@ const haAsync = (async () => {
        OP.shouldReopen(I({})), OP.shouldReopen(I({ on: false })), OP.shouldReopen(I({ reopenAt: 1e12 + 60e3 })), OP.shouldReopen(I({ locked: true })), OP.shouldReopen(I({ everLinked: 0 })), OP.shouldReopen(I({ now: 1e12 + 30e3 })),
        /prop: readProp\(\)/.test(rdS) && /post\(\{ source: 'ho-op', gone: \{ why: why \}/.test(rdS) && /d\.source === 'ho-op-reload'/.test(rdS), /src === 'ho-op-open'/.test(whS) && /d\.source === 'ho-op-open' \|\| d\.source === 'ho-op-reload'/.test(whS)],
       ['', true, '', '', true, false, false, false, false, false, true, true]); }
-  { const tc2 = fs.readFileSync(path.join(ROOT, 'team-chat.js'), 'utf8'), sbx7 = { document: { readyState: 'complete', addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, head: { appendChild() {} }, createElement: () => ({ style: {} }) }, setTimeout: () => 0, setInterval: () => 0 };
+  { const tc2 = fs.readFileSync(path.join(ROOT, 'team-chat.js'), 'utf8'), sbx7 = { addEventListener() {}, document: { readyState: 'complete', addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, head: { appendChild() {} }, createElement: () => ({ style: {} }) }, setTimeout: () => 0, setInterval: () => 0 };
     sbx7.window = sbx7; vm.createContext(sbx7); vm.runInContext(tc2, sbx7); const T7 = sbx7.hoTeamChat._pure, users = { me: { active: true }, sam: { active: true }, old: { active: false } };
     const m = { at: 100 }, NOW = new Date(2026, 10, 5, 12, 0).getTime();
     check('Team chat like WhatsApp: sent / delivered / seen by everyone; the whole-team group is every active user, a group its members; one direct chat id for both people; typing shows for 6 s (never yourself); online / last seen',
@@ -4503,7 +4503,7 @@ const haAsync = (async () => {
       [!/<main|<aside/.test(tc3), /visualViewport\.addEventListener\('resize'/.test(tc3) && /top:var\(--vvt,0px\);width:100vw;height:var\(--vvh,100dvh\)/.test(tc3), /classList\.add\('wc-lock'\)/.test(tc3) && /classList\.remove\('wc-lock'\)/.test(tc3), /#tcPanel \.wc-comp textarea#wcIn\{border:0!important/.test(tc3)], [true, true, true, true]); }
   { const tc4 = fs.readFileSync(path.join(ROOT, 'team-chat.js'), 'utf8');
     check('Voice messages: no native <audio> (it showed "Error" on the iPhone); played from a blob; recorded MP4 first (iPhone + PC), WebM otherwise; the loading placeholder never reaches a player or a photo',
-      [!/<audio/.test(tc4), /URL\.createObjectURL\(new Blob\(\[u8\]/.test(tc4), /\['audio\/mp4;codecs=mp4a\.40\.2', 'audio\/mp4', 'audio\/aac', 'audio\/webm;codecs=opus', 'audio\/webm'\]/.test(tc4), !/S\.files\[m\.file\.fid\] = 'data:,'/.test(tc4) && /const realFile = /.test(tc4)], [true, true, true, true]); }
+      [!/<audio/.test(tc4), /URL\.createObjectURL\(new Blob\(\[u8\]/.test(tc4), /\['audio\/mp4;codecs=mp4a\.40\.2', 'audio\/mp4', 'audio\/webm;codecs=opus', 'audio\/webm'\]/.test(tc4), !/S\.files\[m\.file\.fid\] = 'data:,'/.test(tc4) && /const realFile = /.test(tc4)], [true, true, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');
@@ -4547,3 +4547,4 @@ Promise.all([nhAsync, ogAsync, haAsync, nxAsync]).then(() => {
   console.log(`\n${pass} passed · ${fail} failed`);
   process.exit(fail ? 1 : 0);
 });
+

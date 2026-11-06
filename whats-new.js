@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 547, items: [
+    { ico: '💬', title: 'Chat works better on phones',
+      what: 'The header, messages and typing box fit the visible screen when the keyboard opens. Closing chat also dismisses any open menu.',
+      does: 'The close and back buttons stay within reach, with larger tap targets and space for the phone’s notch.' },
+    { ico: '🎤', title: 'Voice messages: play, record and cancel',
+      what: 'Fixed blocked voice playback. Recording now shows a timer and a cancel button, and releases the microphone when you close chat, switch conversations or leave the app.',
+      does: 'Tap the microphone to record, ■ to send, or ✕ to discard. A cancelled recording is never sent to another chat.' },
+  ] },
   { v: 546, items: [
     { ico: '⭐', title: 'Favorites are easier to use on your phone',
       what: 'The star for saving favorite pages was hidden on touchscreens, and the phone More menu did not have a way to add favorites.',
