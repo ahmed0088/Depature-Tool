@@ -131,7 +131,8 @@ async function fbGet(path) {
     const snap = await Promise.race([_ref.child(path).once('value'),
       new Promise((_, no) => setTimeout(() => no(new Error('no answer from the database (offline?)')), 10000))]);
     const val  = snap.val();
-    if (val !== null) lsSave(path, val);
+    if (val === null) lsDelete(path);
+    else lsSave(path, val);
     _dbClearError();
     return val;
   } catch (e) { _dbNoteError('reading ' + path, e); return lsLoad(path); }
@@ -150,7 +151,8 @@ function fbListen(path, cb) {
   if (!_fbSignedIn()) { _fbWaiting.push([path, cb]); return; }
   _ref.child(path).on('value', snap => {
     const val = snap.val();
-    if (val !== null) lsSave(path, val);
+    if (val === null) lsDelete(path);
+    else lsSave(path, val);
     _dbClearError();
     cb(val);
   }, err => {
@@ -161,6 +163,9 @@ function fbListen(path, cb) {
 
 function lsSave(path, data) {
   try { localStorage.setItem('ibis_' + path.replace(/\//g,'_'), JSON.stringify(data)); } catch(e) {}
+}
+function lsDelete(path) {
+  try { localStorage.removeItem('ibis_' + path.replace(/\//g, '_')); } catch(e) {}
 }
 function lsLoad(path) {
   try { const v = localStorage.getItem('ibis_' + path.replace(/\//g,'_')); return v ? JSON.parse(v) : null; } catch(e) { return null; }
