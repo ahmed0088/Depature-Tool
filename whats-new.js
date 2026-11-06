@@ -9,6 +9,17 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 546, items: [
+    { ico: '⭐', title: 'Favorites are easier to use on your phone',
+      what: 'The star for saving favorite pages was hidden on touchscreens, and the phone More menu did not have a way to add favorites.',
+      does: 'Open More → ☆ Favorites and tap a star next to any page. Your favorites appear at the top of the menu. The sidebar star is also visible on touchscreens.' },
+    { ico: '✕', title: 'Fixed: close Team chat from an open conversation',
+      what: 'On a phone the conversation covered the only close button in the chat list.',
+      does: 'An ✕ button now sits in the conversation header so you can close Team chat directly.' },
+    { ico: '🔄', title: 'Fixed: deleted records could stay in offline copies',
+      what: 'Firebase could confirm a record was removed while the phone or PC kept its old local copy.',
+      does: 'When Firebase confirms a deletion, HotelOps removes the old cached copy as well. Temporary connection failures still keep your offline copy.' },
+  ] },
   { v: 545, items: [
     { ico: '🎤', title: 'Fixed: voice messages said "Error"',
       what: 'A voice message could show "Error" instead of playing — on the iPhone (which records MP4 and would not play it from where it was stored) and for a moment while any voice message or photo was still loading.',
