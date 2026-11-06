@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 552, items: [
+    { ico: '🎨', title: 'Clearer navigation across themes',
+      what: 'Search, Pinned and Recent shortcuts no longer float over the page links. Sidebar rows keep their height and shortcuts use an aligned grid.',
+      does: 'The sidebar scrolls as one readable menu. Native form controls match light and dark themes, and touch shortcuts have larger targets.' },
+    { ico: '📡', title: 'Opera dashboard totals are recognized',
+      what: 'The Room Type / Clean / Dirty dashboard grid contains totals, not guest records.',
+      does: 'These known summaries no longer trigger an unknown-screen warning or become departure entries. Unfamiliar guest lists still report reading problems.' },
+  ] },
   { v: 551, items: [
     { ico: '☁️', title: 'Cloud run chips stay steady',
       what: 'The elapsed-time clock and background heartbeats were rebuilding the chip and replaying its animation.',

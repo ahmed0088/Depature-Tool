@@ -1079,6 +1079,12 @@
 
   /** headers of Opera tables that are known and hold no departures / guests to read: the report list, Folio History (past invoices) */
   var KNOWN_HEAD = / REPORT GROUP | INTERNAL NAME | MULTI PROPERTY REPORT | INVOICE NO(?:UMBER)? | ASSOC FOLIOS | POST IT NO(?:UMBER)? /;
+  /** Dashboard totals by room type are counts, never individual guest / room records. */
+  function isRoomStatusSummary(head) {
+    var h = (head || []).map(normH);
+    return h.indexOf('ROOM TYPE') >= 0 && h.filter(function (s) { return /^(?:INSPECTED|CLEAN|PICKUP|DIRTY)$/.test(s); }).length >= 2
+      && !h.some(function (s) { return /^(?:ROOM|ROOM NO|NAME|GUEST NAME|CONFIRMATION NO)$/.test(s); });
+  }
   /** Opera's report screens (Report Parameters, report list): settings for a report, not guests → never "unknown". */
   function isReportForm(c) {
     return (c.pairs || []).some(function (p) { return /^(?:report name|report group|file format|sort order|from date|to date|include internal notes|primary only)$/i.test(String(p[0] || '').replace(/\s+/g, ' ').trim()); })
@@ -1088,7 +1094,7 @@
     setTaught: setTaught, screenKey: screenKey, shapeOf: shapeOf, headText: headText, structText: structText, pathShape: pathShape, classShape: classShape, mapName: mapName, reportLeaks: reportLeaks, makeReport: makeReport, reportText: reportText, linkDiag: linkDiag,
     maskCards: maskCards, secretLabel: secretLabel, scrub: scrub, payType: payType, normRoomStatus: normRoomStatus, postFieldOf: postFieldOf, traceFieldOf: traceFieldOf, usablePost: usablePost, usableTrace: usableTrace,
     postingsFrom: postingsFrom, folioFrom: folioFrom, tracesFrom: tracesFrom, tableFrom: tableFrom, pairsExtra: pairsExtra, auditState: auditState, cleanLabel: cleanLabel, safeTitle: safeTitle,
-    normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, normStatus: normStatus, money: money,
+    isRoomStatusSummary: isRoomStatusSummary, normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, normStatus: normStatus, money: money,
     roomOf: roomOf, roomKey: roomKey, nameKey: nameKey, confOf: confOf, emailOf: emailOf, rowFrom: rowFrom, finishRows: finishRows, rowKey: rowKey, mergeRows: mergeRows, pairsToRow: pairsToRow,
     kindOfText: kindOfText, pageKind: pageKind, sigKind: sigKind, formLabel: formLabel, dataLook: dataLook, isReportForm: isReportForm, KNOWN_HEAD: KNOWN_HEAD, hash: hash, summary: summary, totalOf: totalOf, totalLine: totalLine, FIELDS: FIELDS, VERSION: VERSION, READER_REV: READER_REV };
   if (typeof module !== 'undefined' && module.exports) { module.exports = H; return; }
@@ -1227,6 +1233,7 @@
     var kindOfHead = function (h) {
       if (!h) return '';
       var mg = mapHeaders(h), mt = mapHeaders(h, traceFieldOf);
+      if (isRoomStatusSummary(h)) return 'known';
       if (hint === 'traces' && usableTrace(mt)) return 'trace';
       var hs = ' ' + h.map(normH).join(' | ') + ' ';
       if (/ CARD NUMBER | CARD HOLDER | EXPIRATION /.test(hs)) return 'card';   // payment instructions / memberships: a card column — never read, never kept
@@ -1530,7 +1537,7 @@
     var why = [], g = c.g || { seen: [], raw: [] }, anyGuest = (g.raw || []).length > 0, dataN = 0;
     g.seen.forEach(function (s) {
       s.bad = false; s.data = dataLook(s.rows, s.w);
-      if (s.data) dataN++;
+      if (s.data && s.k !== 'known' && s.k !== 'card') dataN++;
       if (!s.k) {
         if (s.data) { s.bad = true; why.push({ c: 'unread-grid', t: 'a list with ' + s.n + ' rows and ' + s.w + ' columns has no header line it could read' }); }
       } else if (s.k === 'card' || s.k === 'known' || FORM_K[c.hint]) {
