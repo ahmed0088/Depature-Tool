@@ -90,13 +90,13 @@
   /** the window was closed: say once where it went */
   function minimized(kind) {
     const r = latest(kind);
-    if (r && typeof showToast === 'function') showToast('Minimised — run #' + (r.no || '?') + ' keeps going. Tap its chip at the bottom-left to open it again.', 'ok');
+    if (r && typeof showToast === 'function') showToast(r.state === 'run' ? 'Minimised — run #' + (r.no || '?') + ' keeps going. Tap its chip at the bottom-left to open it again.' : 'Run #' + (r.no || '?') + ' has ended. Its result is saved in Run history.', 'ok');
     paint();
   }
   /** ✕: closed for good — the window and its chip go; the run keeps going and stays in 🗂 Runs */
   function closed(kind) {
     const r = latest(kind); if (r) hide(r.tag);
-    if (r && typeof showToast === 'function') showToast('Closed — run #' + (r.no || '?') + (r.state === 'run' ? ' keeps going' : '') + '. It stays in 🗂 Runs at the bottom-left.', 'ok');
+    if (r && typeof showToast === 'function') showToast('Closed — run #' + (r.no || '?') + (r.state === 'run' ? ' keeps going' : ' has ended') + '. It stays in 🗂 Run history at the bottom-left.', 'ok');
     paint();
   }
   const latest = kind => Object.values(RUNS).filter(r => r.kind === kind).sort((a, b) => b.started - a.started)[0] || null;
@@ -110,7 +110,10 @@
     const r = RUNS[liveKey(kind, v)] || (v.tag && RUNS[v.tag]) || null;
     if (!r && Date.now() - (+v.at || 0) < 24 * 3600e3) { adopt(kind, v); return paint(); }
     if (r) {
-      const f = fromLive(kind, v), key = o => [o.state, o.done, o.n, o.prog, o.url, o.started, JSON.stringify(o.tally || '')].join('|');
+      const f = fromLive(kind, v);
+      // A delayed progress report must never turn a finished history record back into a live run.
+      if (+v.at < +r.at || (r.state !== 'run' && f.state === 'run')) return paint();
+      const key = o => [o.state, o.done, o.n, o.prog, o.url, o.started, JSON.stringify(o.tally || '')].join('|');
       const changed = key(f) !== key(r);
       if (+v.started > 0 && +v.started < r.started && r.started - v.started < 6 * 3600e3) f.started = +v.started;   // the run's real start (it can be a little before this record)
       Object.assign(r, f);
@@ -126,7 +129,7 @@
   // ── the dock ──
   function chips() {
     const h = hidden(), now = Date.now();
-    return Object.values(RUNS).filter(r => !winOpen(r.kind) && !h[r.tag] && (r.state === 'run' ? now - (r.at || r.started) < 3 * 3600e3 : now - (r.at || r.started) < 45 * 60e3))
+    return Object.values(RUNS).filter(r => r.state === 'run' && !winOpen(r.kind) && !h[r.tag] && now - (r.at || r.started) < 3 * 3600e3)
       .sort((a, b) => b.started - a.started).slice(0, 3);
   }
   function paint() {
@@ -148,12 +151,12 @@
         <span class="hrd-st">${t.st}</span><span class="hrd-t"><b>${esc(t.title)}</b><small>${esc(t.sub || r.note || '')}${t.sub ? ' · ' : ''}${dur(sec)}</small></span>
         <button type="button" class="hrd-x" data-hrd-x="${esc(r.tag)}" aria-label="Close this chip" title="Close${r.state === 'run' ? ' — the run keeps going;' : ' —'} it stays in 🗂 Runs">×</button>
         <i class="hrd-bar" style="width:${pct}%"></i></div>`;
-    }).join('') + `<button type="button" class="hrd-all" data-hrd-list="1" title="All cloud runs, numbered, with their hotel and results">🗂 Runs</button>`;
+    }).join('') + `<button type="button" class="hrd-all" data-hrd-list="1" title="Cloud run history and any active runs">🗂 Run history</button>`;
     clearInterval(timer); if (L.some(r => r.state === 'run')) timer = setInterval(paint, 1000);
   }
   function openRun(r) {
     const cur = latest(r.kind);
-    if (cur && cur.tag === r.tag) { KINDS[r.kind].open(); setTimeout(paint, 50); return; }
+    if (r.state === 'run' && cur && cur.tag === r.tag) { KINDS[r.kind].open(); setTimeout(paint, 50); return; }
     list(r.tag);   // an older run: its details (the live window only follows the newest of its kind)
   }
   // ── 🗂 Runs: every run with its number, hotel and result ──
@@ -162,22 +165,25 @@
     if (!w) { w = D.createElement('div'); w.id = 'hoRunList'; w.className = 'hrl'; D.body.appendChild(w);
       w.addEventListener('click', e => {
         if (e.target.closest('[data-hrl-x]')) { w.classList.remove('on'); return; }
-        const o = e.target.closest('[data-hrl-open]'); if (o) { const r = RUNS[o.dataset.hrlOpen]; if (r) { unhide(r.tag); w.classList.remove('on'); KINDS[r.kind].open(); setTimeout(paint, 50); } }
+        const o = e.target.closest('[data-hrl-open]'); if (o) { const r = RUNS[o.dataset.hrlOpen]; if (r && r.state === 'run' && latest(r.kind) === r) { unhide(r.tag); w.classList.remove('on'); KINDS[r.kind].open(); setTimeout(paint, 50); } }
       });
       D.addEventListener('keydown', e => { if (e.key === 'Escape') w.classList.remove('on'); }); }
-    const all = Object.values(RUNS).sort((a, b) => b.started - a.started);
+    const sorted = Object.values(RUNS).sort((a, b) => b.started - a.started);
+    const active = sorted.filter(r => r.state === 'run'), history = sorted.filter(r => r.state !== 'run');
+    const all = active.concat(history);
     const res = r => r.kind === 'enrol' ? (r.tally ? `✅ ${r.tally.enrolled} ${r.test ? 'checked' : 'enrolled'} · 👤 ${r.tally.already} already · ⏭ ${r.tally.skipped} skipped · ⚠️ ${r.tally.errors} errors` : r.n ? `${r.done || 0} of ${r.n} guests` : '')
       : (r.n ? `🪪 ${r.n} card${r.n === 1 ? '' : 's'} read` : '') + (r.from ? ` · arrivals ${r.from}${r.to && r.to !== r.from ? ' → ' + r.to : ''}` : '');
-    w.innerHTML = `<div class="hrl-bg" data-hrl-x="1"></div><section class="hrl-card" role="dialog" aria-modal="true" aria-label="Cloud runs">
-      <header class="hrl-h"><span class="hrl-ic">🗂</span><div><b>Cloud runs</b><small>Every run, numbered — closed windows are never lost</small></div><button type="button" class="hrl-close" data-hrl-x="1" aria-label="Close">✕</button></header>
+    w.innerHTML = `<div class="hrl-bg" data-hrl-x="1"></div><section class="hrl-card" role="dialog" aria-modal="true" aria-label="Cloud run history">
+      <header class="hrl-h"><span class="hrl-ic">🗂</span><div><b>Cloud run history</b><small>Finished runs are saved here. Active runs are listed separately.</small></div><button type="button" class="hrl-close" data-hrl-x="1" aria-label="Close">✕</button></header>
       <div class="hrl-b">${all.length ? all.map(r => { const K = KINDS[r.kind] || { ic: '☁️', name: 'Cloud run' }, isNew = latest(r.kind) === r, sec = ((r.state === 'run' ? Date.now() : r.at || r.started) - r.started) / 1000;
-        return `<article class="hrl-run ${esc(r.state)}${focus === r.tag ? ' focus' : ''}">
+        const heading = r === active[0] ? '<h3 class="hrl-section">Active runs</h3>' : r === history[0] ? '<h3 class="hrl-section">Run history · ended</h3>' : '';
+        return `${heading}<article class="hrl-run ${esc(r.state)}${focus === r.tag ? ' focus' : ''}">
           <div class="hrl-no">#${esc(r.no || '?')}</div>
           <div class="hrl-main"><b>${K.ic} ${esc(K.name)}${r.test ? ' <em>🧪 test</em>' : ''}</b>
             <span class="hrl-meta">🏨 ${esc(r.hotel || '—')}${r.account ? ' · ' + esc(r.account) : ''} · 👤 ${esc(r.by || '—')}${r.how ? ' · ' + esc(r.how) : ''}</span>
             <span class="hrl-meta">🕒 ${esc(when(r.started))} · ⏱ ${esc(dur(sec))} · ${{ run: '⏳ running', done: '✅ finished', error: '⛔ stopped with an error', stopped: '⏹ stopped by you' }[r.state] || ''}</span>
             ${res(r) ? `<span class="hrl-res">${esc(res(r))}</span>` : ''}${r.note ? `<span class="hrl-note">${esc(r.note)}</span>` : ''}
-            <span class="hrl-act">${isNew ? `<button type="button" class="btn sm${r.state === 'run' ? ' gold' : ''}" data-hrl-open="${esc(r.tag)}">📡 Open live window</button>` : ''}${r.url ? `<a class="btn sm" href="${esc(r.url)}" target="_blank" rel="noopener">GitHub ↗</a>` : ''}</span></div></article>`; }).join('')
+            <span class="hrl-act">${isNew && r.state === 'run' ? `<button type="button" class="btn sm gold" data-hrl-open="${esc(r.tag)}">📡 Open live window</button>` : ''}${r.url ? `<a class="btn sm" href="${esc(r.url)}" target="_blank" rel="noopener">GitHub ↗</a>` : ''}</span></div></article>`; }).join('')
         : '<div class="hrl-empty">No cloud runs yet. Start one from Guest enrolment (☁️ Enroll) or Neorcha (☁️ Run in the cloud) — each gets a number here.</div>'}</div></section>`;
     w.classList.add('on');
     const f = w.querySelector('.hrl-run.focus'); if (f) f.scrollIntoView({ block: 'center' });
@@ -204,6 +210,7 @@
 .hrl-h{position:sticky;top:0;display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);background:inherit}.hrl-h div{flex:1;display:flex;flex-direction:column}.hrl-h small{color:var(--text2);font-size:.76rem}
 .hrl-ic{font-size:22px}.hrl-close{width:40px;height:40px;border-radius:50%;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:16px;cursor:pointer}
 .hrl-b{overflow:auto;padding:12px 14px calc(14px + env(safe-area-inset-bottom));display:grid;gap:10px}
+.hrl-section{margin:4px 0 0;font:700 .78rem var(--font);color:var(--text2)}
 .hrl-run{display:grid;grid-template-columns:54px 1fr;gap:12px;padding:12px;border:1px solid var(--border);border-radius:var(--r2,12px);background:var(--card)}
 .hrl-run.focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
 .hrl-no{font:800 1.15rem var(--font);color:var(--accent);text-align:center;padding-top:2px}
@@ -232,3 +239,4 @@
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', () => { css(); paint(); }); else { css(); paint(); }
   W.hoRuns = { start, minimized, closed, label, list, paint, _pure: { fromLive, chipText, liveKey } };
 })();
+

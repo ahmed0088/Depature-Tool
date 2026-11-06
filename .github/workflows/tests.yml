@@ -25,3 +25,5 @@ jobs:
       - name: Mobile chat lifecycle checks
         run: node tests/chat-mobile.test.js
 
+      - name: Run history checks
+        run: node tests/run-history.test.js

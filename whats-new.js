@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 548, items: [
+    { ico: '🗂', title: 'Cloud run history shows what has ended',
+      what: 'Completed, failed and stopped runs now stay in history without an Open live window button or an active run chip.',
+      does: 'Active runs are listed separately. Finished results keep their duration, outcome and GitHub link, and delayed progress cannot make them look active again.' },
+  ] },
   { v: 547, items: [
     { ico: '💬', title: 'Chat works better on phones',
       what: 'The header, messages and typing box fit the visible screen when the keyboard opens. Closing chat also dismisses any open menu.',
