@@ -663,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v548';
+const APP_VERSION = 'v549';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

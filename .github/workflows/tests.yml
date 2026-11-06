@@ -27,3 +27,5 @@ jobs:
 
       - name: Run history checks
         run: node tests/run-history.test.js
+      - name: Opera Departures checks
+        run: node tests/opera-departures.test.js

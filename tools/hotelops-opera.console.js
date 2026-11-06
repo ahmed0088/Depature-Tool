@@ -65,7 +65,7 @@
   'use strict';
   var APP_URL = '__HO_APP_URL__';
   var VERSION = '1';
-  var READER_REV = 2;   // the reader's own revision: stuck reports from before r2 (Opera's menus and layout tables taken for grids) are cleared by HotelOps
+  var READER_REV = 2;   // report layout revision; screen classification fixes use the app release version
 
   // ── pure helpers (tested in Node) ────────────────────────
   var sp = function (s) { return String(s == null ? '' : s).replace(/[   ]/g, ' ').replace(/[​-‏⁦-⁩﻿]/g, ''); };
@@ -490,8 +490,14 @@
   }
   /** parts: [title, ...headings, url] (most trusted first) and the rows read → the kind of screen */
   function pageKind(parts, rows) {
-    for (var j = 0; j < (parts || []).length; j++) { var tk = TAUGHT.s[screenKey(structText(parts[j], 80))] || TAUGHT.s[screenKey(parts[j])]; if (tk) return tk; }   // what the hotel taught first
-    var sk = sigKind(parts); if (sk) return sk;   // then the headings Opera shows together
+    // Opera uses the same browser title and URL for every screen. A saved "OPERA Cloud → other"
+    // (or an old wrong mapping for Departures) must not override an explicit Departures heading.
+    var sk = sigKind(parts); if (sk) return sk;
+    for (var j = 0; j < (parts || []).length; j++) {
+      var part = sp(parts[j]).replace(/\s+/g, ' ').trim();
+      if (/^(?:opera(?:\s*cloud)?|search|dashboard|home)$/i.test(part) || /opera-cloud-index|\/faces\/|^https?:\/\//i.test(part)) continue;
+      var tk = TAUGHT.s[screenKey(structText(part, 80))] || TAUGHT.s[screenKey(part)]; if (tk) return tk;
+    }   // teaching still works for a genuinely unfamiliar screen title
     for (var i = 0; i < (parts || []).length; i++) { var k = kindOfText(String(parts[i] || '').replace(/[\/_#?=&]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')); if (k) return k; }
     var c = {}; (rows || []).forEach(function (r) { if (r.status) c[r.status] = (c[r.status] || 0) + 1; });
     var top = Object.keys(c).sort(function (a, b) { return c[b] - c[a]; })[0];
@@ -2080,3 +2086,4 @@
   setTimeout(scan, 600);
   setTimeout(tick, 1200);
 })();
+

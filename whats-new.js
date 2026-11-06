@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 549, items: [
+    { ico: '📡', title: 'Opera Departures are recognized correctly',
+      what: 'An old learned screen label could call the Departures screen “other”, even after its guest rows were read correctly.',
+      does: 'The explicit Departures heading now wins, so the reader can create and update the departure board. Refresh HotelOps on the desk, then reload the Opera tab to load the updated reader.' },
+  ] },
   { v: 548, items: [
     { ico: '🗂', title: 'Cloud run history shows what has ended',
       what: 'Completed, failed and stopped runs now stay in history without an Open live window button or an active run chip.',
