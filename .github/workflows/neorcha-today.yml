@@ -5,6 +5,9 @@ on:
     paths: ['scripts/neorcha-today.cjs','.github/workflows/neorcha-today.yml']
 permissions:
   contents: read
+concurrency:
+  group: neorcha-today-verification
+  cancel-in-progress: true
 jobs:
   inspect:
     runs-on: ubuntu-latest

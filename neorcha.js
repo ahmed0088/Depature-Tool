@@ -376,6 +376,11 @@ function COLLECTOR(O) {
   // sent by HotelOps through the helper: wait for the login, open Guest Documents, then collect by itself
   async function auto() {
     for (var i = 0; i < 1200 && !stop; i++) {   // up to 20 minutes for the login
+      if(/^\/tweak(?:\/|$)/i.test(location.pathname)){
+        if(sessionStorage.getItem('tweak.tenantContextVersion')&&!document.querySelector('#userPassword'))return collect();
+        if(i%10===0)say('🔑 Log in to the Neorcha Tweak portal — collection starts after sign-in.');
+        await sleep(1000);continue;
+      }
       if (/login/i.test(location.hash) || document.querySelector('#userPassword')) { if (i % 10 === 0) say('🔑 Log in to Neorcha — I start by myself right after.'); await sleep(1000); continue; }
       if (!/guestdocuments/i.test(location.hash)) { location.hash = '#/guestdocuments'; await sleep(1500); continue; }
       if (document.querySelector('[ng-model="searchFromArrivalDate"]') || byClick(/searchGuestDocuments/).length) { await sleep(500); return collect(); }
