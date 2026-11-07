@@ -44,30 +44,25 @@ async function main(){
    return route.abort();
   });
   report.stage='login';await page.goto(ORIGIN,{waitUntil:'domcontentloaded'});
-  // The legacy form briefly appears before the first-party login redirect completes.
-  await page.waitForURL(url=>url.origin==='https://login.app.fpg-ingauge.com',{timeout:15000}).catch(()=>{});
   await page.locator('#email:visible,input[name=username]:visible,#password[type=password]:visible').first().waitFor({state:'visible',timeout:30000});
-  const loginOrigin=new URL(page.url()).origin;
-  report.stage='login-form';
-  if(loginOrigin==='https://login.app.fpg-ingauge.com'){
-   const username=page.locator('input[name=username]');
-   if(await username.isVisible()&&await username.isEditable())await username.fill(process.env.INGAUGE_EMAIL);
-   else if((await username.inputValue()).toLowerCase()!==process.env.INGAUGE_EMAIL.toLowerCase())throw Error('LOGIN_ACCOUNT_MISMATCH');
-   report.stage='login-password';
-   if(!await page.locator('#password[type=password]').isVisible().catch(()=>false))await page.locator('button[type=submit][name=action]').click();
-   await page.locator('#password[type=password]').waitFor({state:'visible',timeout:20000});
-   if(new URL(page.url()).origin!=='https://login.app.fpg-ingauge.com')throw Error('LOGIN_ORIGIN');
-   await page.locator('#password[type=password]').fill(process.env.INGAUGE_PASS);
-   report.stage='login-submit';
-   await page.locator('button[type=submit][name=action]').click();
-   report.stage='login-callback';
-   await page.waitForURL(url=>url.origin===ORIGIN,{timeout:30000});
-  }else if(loginOrigin===ORIGIN){
-   await page.locator('#email').fill(process.env.INGAUGE_EMAIL);
-   if(!await page.locator('#password[type=password]').isVisible().catch(()=>false))await page.locator('button.login-submit').click();
-   await page.locator('#password[type=password]').waitFor({state:'visible',timeout:20000});
-   await page.locator('#password[type=password]').fill(process.env.INGAUGE_PASS);await page.locator('button.login-submit').click();
-  }else throw Error('LOGIN_ORIGIN');
+  function validLoginOrigin(){const o=new URL(page.url()).origin;if(![ORIGIN,'https://login.app.fpg-ingauge.com'].includes(o))throw Error('LOGIN_ORIGIN');return o;}
+  if(!await page.locator('#password[type=password]').isVisible().catch(()=>false)){
+   report.stage='login-identifier';const o=validLoginOrigin();
+   const identifier=page.locator('#email:visible,input[name=username]:visible').first();await identifier.fill(process.env.INGAUGE_EMAIL);
+   await page.locator(o===ORIGIN?'button.login-submit':'button[type=submit][name=action]').click();
+  }
+  report.stage='login-password';
+  await page.locator('#password[type=password]').waitFor({state:'visible',timeout:30000});
+  const passwordOrigin=validLoginOrigin();
+  const username=page.locator('input[name=username]');
+  if(passwordOrigin!==ORIGIN&&await username.count()){
+   const value=await username.inputValue();if(value&&value.toLowerCase()!==process.env.INGAUGE_EMAIL.toLowerCase())throw Error('LOGIN_ACCOUNT_MISMATCH');
+  }
+  await page.locator('#password[type=password]').fill(process.env.INGAUGE_PASS);
+  report.stage='login-submit';
+  await page.locator(passwordOrigin===ORIGIN?'button.login-submit':'button[type=submit][name=action]').click();
+  report.stage='login-callback';
+  await page.waitForURL(url=>url.origin===ORIGIN,{timeout:30000});
   await page.waitForFunction(()=>!document.querySelector('#email')&&!document.querySelector('#password'),{},{timeout:30000});
   console.log('Authentication completed; business writes remain blocked.');
   report.stage='metrics';await page.goto(ORIGIN+'/metrics/productMetrics',{waitUntil:'domcontentloaded'});
