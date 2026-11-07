@@ -61,7 +61,9 @@ class InGaugeAccount {
   }
   data(response){if(response.status!=='SUCCESS')throw new PortalError('IN-Gauge did not confirm the requested data read.');return response.data;}
   async discover(){
-    const roles=this.data(await this.read(API+'userTenantRole/secure/getAccessibleTenantsWithRoleDetails'));
+    const roleResponse=await this.read(API+'userTenantRole/secure/getAccessibleTenantsWithRoleDetails');
+    if(!Array.isArray(roleResponse.data)||(roleResponse.status&&roleResponse.status!=='SUCCESS'))throw new PortalError('The accessible tenant list could not be verified.');
+    const roles=roleResponse.data;
     const tenants=[...new Set((roles||[]).map(r=>C.id(r.tenantId)).filter(Boolean))];if(!tenants.length)throw new PortalError('No accessible tenant was returned.');
     const locations=this.data(await this.read(API+'tenantLocation/secure/getLocationsForUserAndTenants?'+new URLSearchParams({tenantIds:tenants.join(',')})));
     const hotels=[];
@@ -153,4 +155,3 @@ class InGaugeAccount {
   }
 }
 module.exports={InGaugeAccount,PortalError,readAllowed,readQuery,STATUSES};
-
