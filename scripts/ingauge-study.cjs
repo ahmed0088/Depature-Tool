@@ -113,13 +113,14 @@ async function main(){
   const actor=await read('/pulse/api/user/secure/getByToken');
   report.actor=actor.status==='SUCCESS'?pick(actor.data,['id','name','firstName','lastName']):{status:actor.status||actor.error};
   const statusRead=await read('/pulse/api/metricAuditStatus/secure');
-  report.auditStatuses=rows(statusRead).map(x=>pick(x,['id','name','status','auditStatus','code']));
+  report.auditStatuses=rows(statusRead).map(x=>typeof x==='string'?x:pick(x,['id','name','status','auditStatus','code']));
   const loc=await read('/pulse/api/tenantLocation/secure/getLocationsForUserAndTenants?'+new URLSearchParams({tenantIds:String(tenant)}));
   report.locationReadStatus=loc.status||loc.error;
   report.accountCatalog=[];
   for(const hotel of rows(loc)){
    if(!/ibis|adagio|mercure/i.test(hotel.name))continue;
-   const h={...pick(hotel,['id','name','tenantId','hotelMetricsDataType','productMetricsValidationType','maxProductCharge','localCurrency','currency','regionCurrency']),departments:[]};report.accountCatalog.push(h);
+   const h={...pick(hotel,['id','name','tenantId','hotelMetricsDataType','productMetricsValidationType','maxProductCharge','localCurrencyCode','currency','regionCurrency']),departments:[]};report.accountCatalog.push(h);
+   const config=await read('/pulse/api/tenantLocation/secure/'+hotel.id);h.configStatus=config.status||config.error;h.config=config.status==='SUCCESS'?pick(config.data,['id','name','tenantId','hotelMetricsDataType','productMetricsValidationType','maxProductCharge','localCurrencyCode','currency','regionCurrency']):{};
    const deps=await read('/pulse/api/locationGroup/secure/getLocationGroup/'+encodeURIComponent(tenant)+'?'+new URLSearchParams({tenantLocationID:String(hotel.id)}));
    h.departmentReadStatus=deps.status||deps.error;
    for(const department of rows(deps)){
@@ -142,9 +143,9 @@ async function main(){
      if(typeof op.data==='boolean'){
       let first=0;const seen=new Set();
       for(let n=0;n<20;n++){
-       const records=await read('/pulse/api/productMetric/secure/searchProductMetricData?sortBy=updatedOn&orderBy=DESC',{mapTo:'PRODUCTMETRICSEARCH',userId:report.actor.id,isOperator:op.data,searchKeyword:'',industryType:'HOTEL',industryId:Number(headers.industryid||1),tenantLocationId:hotel.id,metricDataType:hotel.hotelMetricsDataType,locationGroupId:department.id,auditStatus:-1,sDate:live.period.from,eDate:live.period.to,first,total:200,isAllRecords:true,isAutoCorrectRecords:false,isManuallyAddedRecords:false,isAdjustedRecord:false});
+       const records=await read('/pulse/api/productMetric/secure/searchProductMetricData?sortBy=updatedOn&orderBy=DESC',{mapTo:'PRODUCTMETRICSEARCH',userId:report.actor.id,isOperator:op.data,searchKeyword:'',industryType:'HOTEL',industryId:Number(headers.industryid||1),tenantLocationId:hotel.id,metricDataType:hotel.hotelMetricsDataType,locationGroupId:department.id,auditStatus:report.auditStatuses.filter(x=>typeof x==='string'),sDate:live.period.from,eDate:live.period.to,first,total:200,isAllRecords:true,isAutoCorrectRecords:false,isManuallyAddedRecords:false,isAdjustedRecord:false});
        live.status=records.status||records.error;
-       if(records.status!=='SUCCESS'||!Array.isArray(records.data?.data))break;
+       if(records.status!=='SUCCESS'||!Array.isArray(records.data?.data)){live.diagnostic=records.data;break;}
        const page=records.data,entries=page.data;live.pages.push(pick(page,['first','total','totalInList']));
        if(Number(page.first)!==first){live.error='PAGINATION_MISMATCH';break;}
        for(const original of entries){
@@ -174,7 +175,7 @@ async function main(){
   }
   console.log('Scoped hotel catalog reads finished; no financial writes.');
   report.stage='metrics';await page.goto(ORIGIN+'/metrics/productMetrics',{waitUntil:'domcontentloaded'});
-  try{view=await findView();}catch(_){report.frames=await Promise.all(page.frames().map(async f=>({origin:new URL(f.url()).origin,path:new URL(f.url()).pathname,selects:await f.locator('select').evaluateAll(ns=>ns.map(n=>({id:n.id,name:n.name,options:n.options.length}))).catch(()=>[])})));report.stage='catalog-read-ui-incomplete';return;}
+  try{view=await findView();}catch(_){report.frames=await Promise.all(page.frames().map(async f=>({origin:new URL(f.url()).origin,path:new URL(f.url()).pathname,selects:await f.locator('select').evaluateAll(ns=>ns.map(n=>({id:n.id,name:n.name,options:n.options.length}))).catch(()=>[])})));report.uiText=await page.locator('body').innerText().then(s=>s.slice(0,16000)).catch(()=>'');report.uiLinks=await page.locator('a[href]').evaluateAll(ns=>ns.map(n=>({label:n.textContent.trim().slice(0,80),href:n.getAttribute('href').split('?')[0]})).filter(n=>/product|metric|audit/i.test(n.label+' '+n.href))).catch(()=>[]);report.stage='catalog-read-ui-incomplete';return;}
   console.log('Authenticated product screen reached; business writes remain blocked.');
   report.locations=await options('select#TenantLocation');
   for(const hotel of report.locations){
