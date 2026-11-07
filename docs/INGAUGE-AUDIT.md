@@ -43,3 +43,9 @@ Connecting, fetching and reviewed operations open a progress window in HotelOps.
 ### Both Changes Log exports (v558)
 
 The automation upload accepts both Opera Changes Log PDFs: **New Reservation** and **Update Reservation**. Select both together or add the second later. It passes the full selection into the original Package Audit loader, which merges events and excludes duplicates. The card lists all loaded files; unreadable files remain errors rather than being marked loaded. Journal and Reservation Detail still have their own upload boxes for manual sales.
+
+### Complete snapshots and readiness (v559)
+
+IN-Gauge returns the overall record count in `data.total`; `data.totalInList` is the number on the current page. The reader follows offsets until the overall total is reached, using unique ID ordering to avoid unstable ordering among identical update timestamps. It checks page lengths, offsets, declared totals and duplicate IDs. A count change or duplicate stops collection instead of certifying a partial snapshot. Snapshots now store pagination verification; older snapshots must be refreshed before report checks or reviewed operations.
+
+Run completion derives readiness/apply mode and reviewed-plan hash from the job report. No caller-local variables are referenced. A browser test runs the actual selection, readiness dispatch, completed readiness, enable-Apply, simulated apply completion and selection-clearing handlers with all network/database calls mocked.

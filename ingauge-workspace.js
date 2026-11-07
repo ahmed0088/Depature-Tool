@@ -15,7 +15,7 @@
   }
   function invalidate(){S.reviewed=false;S.readyHash='';S.readyAt=0;}
   function currentPlan(){const operations=[...S.selected].map(k=>S.drafts.get(k)).filter(Boolean);return C.validatePlan({schema:2,mode:'apply',hotelId:hotel(),binding:S.binding,snapshotId:S.snapshot?.id,operations},S.snapshot);}
-  function hydrate(s){s.records=list(s.records);s.products=list(s.products);s.contributors=list(s.contributors);return s;}
+  function hydrate(s){s.records=list(s.records);s.products=list(s.products);s.contributors=list(s.contributors);if(!s.pagination?.verified||s.pagination.total!==s.records.length||s.pagination.read!==s.records.length)s.complete=false;return s;}
   async function job(plan,test=true){
     if(S.busy)throw Error('Wait for the current cloud job to finish.');if(restoring)throw Error('Restoring your last run. Please wait a moment.');if(!allowed()||!db())throw Error('An owner or manager must start this job.');
     const uid=W.firebase?.auth?.().currentUser?.uid;if(!uid)throw Error('Sign in before starting.');
@@ -36,17 +36,20 @@
     if(S.unwatch)S.unwatch();
     const ref=db().child('ingauge/jobs/'+tag);let finished=false;
     const callback=async snap=>{
-      S.job=snap.val();if(!S.job)return;renderRun();
+      if(S.tag!==tag)return;const report=snap.val();if(!report)return;S.job=report;renderRun();
       if(!finished&&['done','error','stopped'].includes(S.job.state)){
         finished=true;S.busy=false;
         try{
+          const test=report.test,hash=report.hash;
+          if(plan.mode==='apply'&&typeof test!=='boolean')throw Error('The run’s readiness mode is missing. Refresh and check the selection again.');
           if(S.job.state==='done'&&plan.mode==='discover'){S.discovery=hydrateDiscovery(S.job.result);renderConfiguration();}
           if(S.job.state==='done'&&plan.mode==='snapshot'){
             const data=(await db().child('ingauge/snapshots/'+S.job.snapshotId).once('value')).val();if(!data?.complete||!C.sameBinding(data.binding,S.binding))throw Error('The fetched snapshot did not match this hotel.');
             S.snapshot=hydrate(data);S.drafts.clear();S.selected.clear();invalidate();importSnapshot();await db().child('ingauge/latestSnapshot').set(data.id);render();
           }
           if(plan.mode==='apply'&&test&&S.job.state==='done'){
-            const checked=(await db().child('ingauge/tests/'+hash).once('value')).val();S.readyHash=checked?.ready?hash:'';S.readyAt=checked?.at||0;
+            if(!/^[a-f0-9]{64}$/.test(hash||''))throw Error('The run’s reviewed-plan hash is missing. Check readiness again.');
+            const checked=(await db().child('ingauge/tests/'+hash).once('value')).val();if(S.tag!==tag)return;S.readyHash=checked?.ready?hash:'';S.readyAt=checked?.at||0;
           }
           if(plan.mode==='apply'&&!test){invalidate();S.selected.clear();for(const r of list(S.job.results))if(['applied','unchanged'].includes(r.state)){const draft=S.drafts.get(r.key);if(draft)draft.completed=true;}renderProposals();}
         }catch(error){S.error=error.message;}renderConfiguration();renderControls();renderRun();
@@ -71,6 +74,7 @@
     return [head,...snapshot.records.map(r=>[r.id,r.product,r.productId,r.seller||'-',r.contributorId,r.confirmation,r.room,r.unitCents===null?'':r.unitCents/100,r.chargeDays,r.arrival,r.departure,r.businessDate,r.businessDate,r.status,snapshot.settings.currency,snapshot.binding.property,r.isManuallyAddedRecord?'Yes':'No',r.raw?.cByIdentity||''])];
   }
   function importSnapshot(){
+    if(!S.snapshot?.complete)return;
     const rows=tableRows(S.snapshot);
     if(W.ManualUpsells)W.ManualUpsells.useLiveSnapshot(S.snapshot,rows);
     if(typeof _pkgLastRows!=='undefined'&&typeof _pkgParseExcelUnknowns==='function'){
@@ -104,7 +108,7 @@
     S.view='proposals';render();
   }
   async function checkReports(){
-    if(!S.snapshot)throw Error('Fetch the IN-Gauge snapshot first.');
+    if(!S.snapshot?.complete)throw Error('Refresh live IN-Gauge first. This older snapshot does not verify every page.');
     if(W.ManualUpsells?.state.data.journal&&W.ManualUpsells.state.data.reservations)await W.ManualUpsells.run();
     if(typeof pkgRun==='function'&&typeof pkgEvents!=='undefined'&&Object.keys(pkgEvents).length&&pkgUnknowns.length)await pkgRun();
     buildProposals();
@@ -175,8 +179,8 @@
   function renderDepartments(){const h=S.discovery?.hotels.find(h=>h.id===el('igProperty')?.value),field=el('igDepartment');if(field)field.innerHTML='<option value="">Choose department…</option>'+option((h?.departments||[]).filter(d=>!d.retail&&!d.fnb),S.binding?.departmentId||'',g=>g.name);}
   function renderControls(){
     const root=el('igControls');if(!root)return;const snapshot=S.snapshot;
-    root.innerHTML=`<p class="iga-guidance"><b>2. Fetch the records</b> · After linking the hotel, choose dates and fetch IN-Gauge. Then upload your Opera reports and check them.</p><div class="iga-period"><label>From<input id="igFrom" type="date" value="${E(S.from)}"></label><label>Through<input id="igTo" type="date" value="${E(S.to)}"></label><button class="btn" data-ig-fetch ${!S.binding||S.busy?'disabled':''}>${snapshot?'Refresh':'Fetch'} live IN-Gauge</button><button class="btn gold" data-ig-check ${!snapshot||S.busy?'disabled':''}>Check Opera reports</button></div>
-      ${snapshot?`<div class="iga-snapshot"><span>✓ All-status snapshot</span><b>${E(snapshot.binding.property)}</b><small>${snapshot.records.length} records · ${E(snapshot.from)} → ${E(snapshot.to)} · ${E(new Date(snapshot.fetchedAt).toLocaleString())}</small></div>`:'<p class="iga-hint">Fetch the IN-Gauge side directly. Its Excel export is still available as a fallback in Audit and Manual sales.</p>'}
+    root.innerHTML=`<p class="iga-guidance"><b>2. Fetch the records</b> · After linking the hotel, choose dates and fetch IN-Gauge. Then upload your Opera reports and check them.</p><div class="iga-period"><label>From<input id="igFrom" type="date" value="${E(S.from)}"></label><label>Through<input id="igTo" type="date" value="${E(S.to)}"></label><button class="btn" data-ig-fetch ${!S.binding||S.busy?'disabled':''}>${snapshot?'Refresh':'Fetch'} live IN-Gauge</button><button class="btn gold" data-ig-check ${!snapshot?.complete||S.busy?'disabled':''}>Check Opera reports</button></div>
+      ${snapshot?`<div class="iga-snapshot"><span>${snapshot.complete?'✓ All-status snapshot · all pages verified':'Refresh required · older snapshot'}</span><b>${E(snapshot.binding.property)}</b><small>${snapshot.records.length} records · ${E(snapshot.from)} → ${E(snapshot.to)} · ${E(new Date(snapshot.fetchedAt).toLocaleString())}</small></div>`:'<p class="iga-hint">Fetch the IN-Gauge side directly. Its Excel export is still available as a fallback in Audit and Manual sales.</p>'}
       <div class="iga-reviewbar"><div><b>${S.selected.size} selected changes</b><small>Nothing is changed until you review, check readiness, then apply.</small></div><label class="iga-confirm"><input id="igReviewed" type="checkbox" ${S.reviewed?'checked':''} ${!S.selected.size||S.busy?'disabled':''}><span>I checked the hotel, confirmations, sellers, values and resulting statuses.</span></label><div class="iga-actions"><button class="btn" data-ig-test ${!S.reviewed||S.busy?'disabled':''}>Check readiness · no changes</button><button class="btn gold" data-ig-apply ${!S.reviewed||!S.readyHash||Date.now()-S.readyAt>900000||S.busy?'disabled':''}>Apply selected changes</button></div></div>
       ${S.error?`<p class="iga-error" role="alert">${E(S.error)}</p>`:''}`;
   }

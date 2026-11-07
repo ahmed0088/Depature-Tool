@@ -138,7 +138,7 @@
     }catch(error){return error.message;}
   }
   function validatePlan(plan,snapshot){
-    if(!plan||plan.schema!==2||plan.mode!=='apply'||!snapshot||!snapshot.complete||!sameBinding(plan.binding,snapshot.binding)||plan.snapshotId!==snapshot.id||plan.hotelId!==snapshot.hotelId)fail('Fetch a complete snapshot for this hotel before reviewing changes.');
+    if(!plan||plan.schema!==2||plan.mode!=='apply'||!snapshot||!snapshot.complete||!snapshot.pagination?.verified||snapshot.pagination.total!==snapshot.records.length||snapshot.pagination.read!==snapshot.records.length||!sameBinding(plan.binding,snapshot.binding)||plan.snapshotId!==snapshot.id||plan.hotelId!==snapshot.hotelId)fail('Refresh live IN-Gauge to fetch and verify every page for this hotel before reviewing changes.');
     if(!Array.isArray(plan.operations)||!plan.operations.length||plan.operations.length>100)fail('Select between 1 and 100 reviewed operations.');
     const seen=new Set();for(const op of plan.operations){const error=operationError(op,snapshot);if(error)fail(error);const k=op.action==='add'?'new:'+op.transaction:'record:'+op.recordId;if(seen.has(k))fail('A record or Opera transaction appears more than once in this plan.');seen.add(k);}
     return plan;

@@ -122,18 +122,18 @@ class InGaugeAccount {
     if(typeof operator!=='boolean')throw new PortalError('The account’s record scope was not verified.');
     const rows=[],seen=new Set();let first=0,total=null;
     for(let page=0;page<250;page++){
-      const response=await this.read(API+'productMetric/secure/searchProductMetricData?sortBy=updatedOn&orderBy=DESC',{mapTo:'PRODUCTMETRICSEARCH',userId:Number(this.actor.id),isOperator:operator,searchKeyword:confirmation,industryType:'HOTEL',industryId:Number(this.headers.industryid||1),tenantLocationId:Number(b.propertyId),metricDataType:'DAILY',locationGroupId:Number(b.departmentId),auditStatus:STATUSES,sDate:from,eDate:to,first,total:200,isAllRecords:true,isAutoCorrectRecords:false,isManuallyAddedRecords:false,isAdjustedRecord:false});
+      const response=await this.read(API+'productMetric/secure/searchProductMetricData?sortBy=id&orderBy=DESC',{mapTo:'PRODUCTMETRICSEARCH',userId:Number(this.actor.id),isOperator:operator,searchKeyword:confirmation,industryType:'HOTEL',industryId:Number(this.headers.industryid||1),tenantLocationId:Number(b.propertyId),metricDataType:'DAILY',locationGroupId:Number(b.departmentId),auditStatus:STATUSES,sDate:from,eDate:to,first,total:200,isAllRecords:true,isAutoCorrectRecords:false,isManuallyAddedRecords:false,isAdjustedRecord:false});
       const data=this.data(response);
-      if(!Array.isArray(data?.data)||!Number.isSafeInteger(data.totalInList)||Number(data.first)!==first)throw new PortalError('The live record pagination was not verified.');
-      if(total!==null&&total!==data.totalInList)throw new PortalError('IN-Gauge changed while records were being read. Fetch again.');total=data.totalInList;
+      if(!Array.isArray(data?.data)||!Number.isSafeInteger(data.total)||data.total<0||!Number.isSafeInteger(data.totalInList)||data.totalInList!==data.data.length||Number(data.first)!==first)throw new PortalError('The live record pagination was not verified.');
+      if(total!==null&&total!==data.total)throw new PortalError('IN-Gauge changed while records were being read. Fetch again.');total=data.total;
       for(const raw of data.data){const r=C.record(raw);if(r.propertyId!==b.propertyId||r.departmentId!==b.departmentId||seen.has(r.id))throw new PortalError('A record was duplicated or outside the selected hotel.');seen.add(r.id);rows.push(r);}
-      first+=data.data.length;await this.progress('records','Read '+first+' of '+total+' IN-Gauge records');if(first>=total)return confirmation?rows.filter(r=>r.confirmation===confirmation):rows;
+      first+=data.data.length;if(first>total)throw new PortalError('The live record count exceeded the declared total. Fetch again.');await this.progress('records','Read '+first+' of '+total+' IN-Gauge records');if(first>=total)return confirmation?rows.filter(r=>r.confirmation===confirmation):rows;
       if(!data.data.length)throw new PortalError('The live record list ended early.');
     }throw new PortalError('The record list exceeds the verified pagination limit. Narrow the date range.');
   }
   async snapshot(b,from,to,hotelId,snapshotId){
     const scope=await this.scope(b),products=await this.products(scope.binding),contributors=await this.contributors(scope.binding),records=await this.search(scope.binding,from,to);
-    return {schema:1,id:snapshotId,hotelId,...scope,from,to,fetchedAt:Date.now(),complete:true,products,contributors,records,actor:this.actor};
+    return {schema:1,id:snapshotId,hotelId,...scope,from,to,fetchedAt:Date.now(),complete:true,pagination:{verified:true,total:records.length,read:records.length,sort:'id'},products,contributors,records,actor:this.actor};
   }
   async readRecord(id){return C.record(this.data(await this.read(API+'productMetric/secure/'+C.id(id))));}
   async testOperation(op,snapshot){

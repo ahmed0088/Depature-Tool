@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 559, items: [
+    { ico: '✓', title: 'Readiness checks finish correctly',
+      what: 'Fixed “test is not defined” and the related plan-hash reference in the run completion handler. A passed readiness check now enables Apply for the exact reviewed selection.',
+      does: 'The completion handler reads the mode and hash from its own job report, including restored runs. Browser tests exercise completed readiness and simulated apply jobs.' },
+    { ico: '📋', title: 'Fetch every IN-Gauge page',
+      what: 'Snapshots now use the portal’s total record count, rather than its page size, and read all pages in stable ID order.',
+      does: 'Refresh live IN-Gauge before checking your reports again. Older snapshots without verified pagination are blocked. Progress reports the number read against the full total.' },
+  ] },
   { v: 558, items: [
     { ico: '📄', title: 'Upload both Opera Changes Logs',
       what: 'IN-Gauge automation now accepts the New Reservation and Update Reservation Changes Log PDFs together or one after the other, matching the original Package Audit.',

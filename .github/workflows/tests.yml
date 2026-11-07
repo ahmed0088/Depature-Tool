@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: '22'
       - name: Audit parser dependency
-        run: npm install --no-save --no-audit --no-fund graphql@16.11.0
+        run: npm install --no-save --no-audit --no-fund graphql@16.11.0 playwright-core@1.49.1
       - name: Syntax check every script
         run: for f in *.js scripts/*.js tests/*.js; do node --check "$f"; done
       - name: Regression tests
@@ -41,3 +41,6 @@ jobs:
           node tests/ingauge-audit.test.js
           node tests/ingauge-uploads.test.js
           node tests/neorcha-tweak.test.js
+
+      - name: IN-Gauge readiness completion in browser
+        run: node tests/ingauge-readiness.browser.test.js
