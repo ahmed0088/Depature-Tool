@@ -57,7 +57,8 @@ async function main(){
     if(snapshot)for(const field of ['records','products','contributors'])snapshot[field]=Array.isArray(snapshot[field])?snapshot[field]:Object.values(snapshot[field]||{});
     C.validatePlan(plan,snapshot);
     if(Date.now()-snapshot.fetchedAt>21600000)throw Error('Fetch a new IN-Gauge snapshot before applying changes.');
-    if(!test){const ready=await db.get('ingauge/tests/'+hash);if(!ready?.ready||Date.now()-ready.at>900000)throw Error('Check readiness for this exact selection before applying it.');}
+    // The reviewed digest, author, scope and age are verified above. execute() performs
+    // the live preflight itself before sending each selected financial operation.
   }
   const invalidateSnapshot=async results=>{if(snapshot&&!test&&results.some(r=>['applied','uncertain'].includes(r.state)))await db.patch('ingauge/snapshots/'+snapshot.id,{invalidatedAt:Date.now(),invalidatedBy:tag});};
   const run=E.GITHUB_RUN_ID?'https://github.com/ahmed0088/Depature-Tool/actions/runs/'+E.GITHUB_RUN_ID:'';

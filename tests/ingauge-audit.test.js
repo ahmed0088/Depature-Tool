@@ -152,3 +152,10 @@ test('the final summary counts edited, denied, held and unattempted operations e
 });
 
  test('a snapshot invalidated by an applied or uncertain change cannot authorize another plan',()=>{const s=snapshot();s.invalidatedAt=Date.now();assert.throws(()=>C.validatePlan(plan(s,[edit(s)]),s),/Refresh live IN-Gauge/);});
+
+
+test('a directly reviewed apply performs live preflight without requiring a separate test run',async()=>{
+ const s=snapshot(),op=edit(s,{values:{...C.values(s.records[0]),unitCents:11000,totalCents:11000}}),d=deps(s),reads=[];const get=d.db.get;d.db.get=async k=>{reads.push(k);return get(k);};
+ const result=await execute(plan(s,[op]),s,d);assert.equal(result.results[0].state,'applied');assert.equal(d.calls.tests,1);assert.equal(d.calls.sent,1);assert(reads.every(k=>!k.startsWith('ingauge/tests/')));
+ const changed=deps(s,{changed:true});const held=await execute(plan(s,[op]),s,changed);assert.equal(held.results[0].state,'held');assert.equal(changed.calls.sent,0);
+});

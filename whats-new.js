@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 562, items: [
+    { ico: '✓', title: 'Review your list, then apply',
+      what: 'The separate Check selected changes step has been removed. Review your selected hotel, sales, sellers and values, then press Apply selected changes.',
+      does: 'Live safety checks run inside the apply job before each change. Failed checks hold the case; uncertain outcomes stop the batch and stay in history. Development tests run before release.' },
+  ] },
   { v: 561, items: [
     { ico: '⚡', title: 'Reuse packages and sellers between runs',
       what: 'IN-Gauge keeps a private, hotel-specific package catalogue and seller list for up to 24 hours. Later fetches reuse these lists while reading sales live.',
