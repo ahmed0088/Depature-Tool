@@ -21,7 +21,7 @@ function permitted(method,address,body='') {
   if(method==='POST'&&p==='/m-api/login-service/v1/authenticate-with-auth0')return true;
   if(method==='POST'&&/^\/m-api\/(?:account|configuration|product|data)\/[A-Za-z0-9-]+\/gql$/.test(p))return readQuery(body);
   if(/(?:create|update|delete|remove|save|set[A-Z]|send|approve|deny|process|suspend|discontinue|reset|impersonat|logout|signout|track|mark|configure)/i.test(p))return false;
-  if(method==='GET')return /\/(?:get[A-Z][^/]*|find[^/]*|is[A-Z][^/]*|check[A-Z][^/]*)(?:\/[^/]*)*$/.test(p)||/\/secure\/\d+$/.test(p)||/\/(?:logo_base64|checkLogo)\//.test(p);
+  if(method==='GET')return /\/(?:get[A-Z][^/]*|find[^/]*|is[A-Z0-9][^/]*|check[A-Z][^/]*)(?:\/[^/]*)*$/.test(p)||/\/secure\/\d+$/.test(p)||/\/(?:logo_base64|checkLogo)\//.test(p);
   if(method==='POST'&&/\/(?:find|searchProductMetricData|getAllLocaionGroupProduct)$/.test(p))return true;
   return false;
 }
@@ -48,9 +48,10 @@ async function main(){
   }
   page.on('response',response=>{
    const path=new URL(response.url()).pathname;
-   if(['/m-api/account/location/gql','/m-api/account/location-group/gql','/m-api/account/user-tenant-role/gql'].includes(path))responseTasks.push((async()=>{
+   if(['/m-api/account/location/gql','/m-api/account/location-group/gql','/m-api/account/user-tenant-role/gql','/pulse/api/userTenantRole/secure/getAccessibleTenantsWithRoleDetails'].includes(path)||/^\/pulse\/api\/(?:tenantLocation|locationGroup)\/secure\/get/.test(path))responseTasks.push((async()=>{
     try{const req=response.request();if(!permitted(req.method(),req.url(),req.postData()||''))return;report.catalogReads.push({path,http:response.status(),data:catalogProjection(await response.json())});}catch(_){}
    })());
+   if(path==='/pulse/api/user/is2FARequired')responseTasks.push((async()=>{try{const body=await response.json();report.twoFARequired=typeof body.data==='boolean'?body.data:'UNKNOWN';}catch(_){}})());
   });
   let headers=null,tenant=null;
   await context.route('**/*',async route=>{
@@ -118,11 +119,11 @@ async function main(){
      const d={...department};h.departments.push(d);
      try{
       await select('select#LocationGroup',department.id);
-      const product=await read('/m-api/api/locationGroupProduct/secure/getAllLocaionGroupProduct',{first:-1,total:-1,locationGroupId:Number(department.id),filterProducts:false,activeStatus:-1});
+      const product=await read('/pulse/api/locationGroupProduct/secure/getAllLocaionGroupProduct',{first:-1,total:-1,locationGroupId:Number(department.id),filterProducts:false,activeStatus:-1});
       d.productsStatus=product.status||product.error;
       d.products=rows(product).map(x=>pick(x,['id','intId','name','productCode','productSKU','isRecurring','activeStatus','locationGroupId','productCharge','maxProductCharge','type','code']));
       if(tenant){
-       const team=await read('/m-api/api/user/secure/getAvailableUsers/'+encodeURIComponent(tenant)+'?'+new URLSearchParams({tenantLocationID:hotel.id,locationGroupID:department.id,getContributorsOnly:'true',getWithAllStatus:'true',getOperatorsOnly:'false',isWeightWiseUser:'false',allowSameWeightUser:'true',decideContributorOpratorLocationLevel:'true'}));
+       const team=await read('/pulse/api/user/secure/getAvailableUsers/'+encodeURIComponent(tenant)+'?'+new URLSearchParams({tenantLocationID:hotel.id,locationGroupID:department.id,getContributorsOnly:'true',getWithAllStatus:'true',getOperatorsOnly:'false',isWeightWiseUser:'false',allowSameWeightUser:'true',decideContributorOpratorLocationLevel:'true'}));
        d.teamStatus=team.status||team.error;d.team=rows(team).map(x=>pick(x,['id','intId','name','firstName','lastName','pulseId','activeStatus','roleType']));
       }
       const add=page.locator('a[title="Add"],button[title="Add"]').first();d.canOpenAdd=await add.isVisible().catch(()=>false);
