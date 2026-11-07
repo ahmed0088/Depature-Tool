@@ -113,11 +113,11 @@ function linkPlan(rows, guests) {
 // Self-contained: serialized into the helper and cloud browser alongside the legacy collector.
 async function TWEAK_COLLECT(O) {
   O = O || {};
-  if (location.protocol !== 'https:' || location.hostname !== 'ibis.myneorcha.com' || !/^\/tweak(?:\/|$)/.test(location.pathname)) throw Error('The Tweak reader is enabled for Ibis only.');
+  if (location.protocol !== 'https:' || !/(^|\.)myneorcha\.com$/i.test(location.hostname) || !/^\/tweak(?:\/|$)/.test(location.pathname)) throw Error('Open a verified Neorcha Tweak portal.');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(O.from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(O.to || '') || O.from > O.to) throw Error('Choose a valid arrival date range.');
   const version = sessionStorage.getItem('tweak.tenantContextVersion');
   if (!version) throw Error('Sign in to the Ibis Tweak portal before collecting.');
-  const progress = (n, total) => { if (O.progress) O.progress({ n, prog: total ? Math.min(97, Math.round(n / total * 95)) : 3, note: 'Reading Ibis registration cards: ' + n + (total ? ' / ' + total : '') }); };
+  const progress = (n, total) => { if (O.progress) O.progress({ n, prog: total ? Math.min(97, Math.round(n / total * 95)) : 3, note: 'Reading registration cards: ' + n + (total ? ' / ' + total : '') }); };
   async function request(path, body) {
     if (O.stopped && O.stopped()) throw Error('Collection stopped.');
     if (sessionStorage.getItem('tweak.tenantContextVersion') !== version) throw Error('The Neorcha account context changed. Start a fresh run.');
@@ -142,10 +142,11 @@ async function TWEAK_COLLECT(O) {
   const hotels = await request('screens/' + screen + '/filters/lookup-values?key=hotel_id');
   const options = Array.isArray(hotels) ? hotels : hotels.options || hotels.values || [];
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const matches = options.filter(h => O.hotelId ? String(h.value ?? h.id) === String(O.hotelId) : /ibisstyles.*deira/.test(norm(h.label || h.name || h.hotel_name)));
-  if (matches.length !== 1) throw Error('Choose the exact Ibis Styles Dubai Deira hotel. The reader will not use All Hotels.');
+  const brand = location.hostname.split('.')[0].toLowerCase();
+  const matches = options.filter(h => O.hotelId ? String(h.value ?? h.id) === String(O.hotelId) : O.hotelName ? norm(h.label || h.name || h.hotel_name) === norm(O.hotelName) : norm(h.label || h.name || h.hotel_name).startsWith(brand));
+  if (matches.length !== 1) throw Error('The link does not identify one exact hotel. Choose its exact hotel name; All Hotels is never used.');
   const hotel = matches[0], hotelId = hotel.value ?? hotel.id;
-  if (hotelId == null || String(hotelId) === '' || String(hotelId).toLowerCase() === 'all') throw Error('A specific Ibis hotel is required.');
+  if (hotelId == null || String(hotelId) === '' || String(hotelId).toLowerCase() === 'all') throw Error('A specific hotel is required.');
   const filters = [{ key: 'hotel_id', operator: '=', value: hotelId }, { key: 'arrival_date__from', operator: '>=', value: O.from }, { key: 'arrival_date__to', operator: '<=', value: O.to }, { key: 'enum_id', operator: '=', value: 200 }];
   const rows = [], seen = new Set(); let total = null, offset = 0;
   for (;;) {
@@ -161,14 +162,17 @@ async function TWEAK_COLLECT(O) {
       if (String(r.hotel_id) !== String(hotelId) || Number(r.enum_id) !== 200 || String(r.arrival_date || '').slice(0, 10) < O.from || String(r.arrival_date || '').slice(0, 10) > O.to) throw Error('A registration does not match the selected hotel, dates or document type. Nothing was saved.');
       const text = value => value == null ? '' : String(value).slice(0, 200);
       const email = text(r.email).trim();
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Error('Neorcha did not return a readable email. Collection stopped for review.');
+      if ((O.fields===undefined||O.fields.includes('Email')) && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Error('Neorcha did not return a readable email. Collection stopped for review.');
       rows.push({ 'Confirmation Number': text(r.confirmation_number), 'First Name': text(r.first_name), 'Last Name': text(r.last_name), 'Arrival Date': text(r.arrival_date), 'Departure Date': text(r.departure_date), 'Room Number': text(r.room_number), 'Room Type': text(r.room_type_name || r.room_type), 'Nationality': text(r.nationality || r.country), 'Email': email, 'Phone': text(r.phone), 'Title': text(r.salutation), 'Purpose Of Visit': text(r.purpose_of_visit), 'Number of Adults': text(r.number_of_adults), 'Number of Children': text(r.number_of_children), 'Membership Number': text(r.membership_number), 'Membership Type': text(r.membership_type), 'Checked In By': text(r.checked_in_by || r.operator), 'Company Name': text(r.company_name), 'Insertion Date': text(r.insert_date), 'Source': text(r.platform) });
     }
     offset += page.rows.length; progress(offset, total);
     if (offset > total) throw Error('The registration count changed. Nothing was saved.');
     if (offset === total) break;
   }
-  return rows;
+  const required = ["Confirmation Number", "First Name", "Last Name", "Arrival Date", "Departure Date", "Room Number"], allowed = ["Confirmation Number", "First Name", "Last Name", "Arrival Date", "Departure Date", "Room Number", "Nationality", "Purpose Of Visit", "Number of Adults", "Number of Children", "Membership Number", "Membership Type", "Email", "Phone", "Title", "Checked In By", "Company Name", "Room Type", "Insertion Date", "Source"];
+  if(O.fields !== undefined && (!Array.isArray(O.fields) || O.fields.some(k => !allowed.includes(k)))) throw Error('The requested collection fields are not supported.');
+  const selected = new Set(O.fields === undefined ? allowed : required.concat(O.fields));
+  return rows.map(row => Object.fromEntries(Object.entries(row).filter(([key]) => selected.has(key))));
 }
 
 function COLLECTOR(O) {
@@ -300,11 +304,11 @@ function COLLECTOR(O) {
   async function collect() {
     busy = true; stop = false; got = []; seen = {}; log = []; fails = 0; how = -1; prog = 3; say('Searching…');
     window.__hoNxLog = log;
-    if (location.hostname === 'ibis.myneorcha.com' && /^\/tweak(?:\/|$)/.test(location.pathname)) {
-      got = await TWEAK_COLLECT({ from: from, to: to, stopped: function () { return stop; }, progress: function (p) { prog = p.prog; say(p.note); } });
+    if (/(^|\.)myneorcha\.com$/i.test(location.hostname) && /^\/tweak(?:\/|$)/i.test(location.pathname)) {
+      got = await TWEAK_COLLECT({ from: from, to: to, fields: O.fields, hotelName: O.hotelName, stopped: function () { return stop; }, progress: function (p) { prog = p.prog; say(p.note); } });
       busy = false; prog = 100;
-      if (O.send) { O.send(got, from, to); say('✅ ' + got.length + ' Ibis registration cards collected.', 'ok'); }
-      else { say('✅ ' + got.length + ' Ibis registration cards collected. Save the file to import into HotelOps.', 'ok'); if (got.length) save(); }
+      if (O.send) { O.send(got, from, to); say('✅ ' + got.length + ' registration cards collected.', 'ok'); }
+      else { say('✅ ' + got.length + ' registration cards collected. Save the file to import into HotelOps.', 'ok'); if (got.length) save(); }
       return;
     }
     var err = await search();
@@ -343,6 +347,7 @@ function COLLECTOR(O) {
       if (!(await waitFor(function () { var r = listRows()[0]; return r && key(r) !== before; }, 7000))) { L('the list did not change: last page'); break; }
     }
     busy = false; prog = 100; window.__hoNxLog = log;
+    if(Array.isArray(O.fields)){ var required=["Confirmation Number", "First Name", "Last Name", "Arrival Date", "Departure Date", "Room Number"]; got=got.map(function(row){return Object.fromEntries(Object.entries(row).filter(function(pair){return required.includes(pair[0])||O.fields.includes(pair[0]);}));}); }
     if (got.length && O.send) { try { O.send(got, from, to); } catch (_) {} say('✅ ' + got.length + ' guests collected and sent to HotelOps — you can close this tab.', 'ok'); return; }
     say(got.length ? '✅ ' + got.length + ' guests collected. Press 💾 Save file and drop it on HotelOps → Neorcha Registrations.' : '⚠️ Nothing could be read from the cards. Press 📋 Report and send it to HotelOps support.', got.length ? 'ok' : 'err');
     if (got.length) save();
@@ -383,7 +388,7 @@ function COLLECTOR(O) {
 }
 /* eslint-enable */
 const collectorSrc = () => '(function(O){ const TWEAK_COLLECT = ' + TWEAK_COLLECT.toString() + '; return (' + COLLECTOR.toString() + ')(O); })';
-const collectorCode = () => '(' + collectorSrc() + ')();';
+const collectorCode = options => '(' + collectorSrc() + ')(' + (options ? JSON.stringify(options) : '') + ');';
 
 // ── the page ────────────────────────────────────────────────
 let S = null;
@@ -411,12 +416,14 @@ function rowsToAoa(list) {
   return [H].concat((list || []).map(o => H.map(h => (o[h] == null || typeof o[h] === 'object' ? '' : String(o[h]).slice(0, 200)))));
 }
 function fromCollector(list, from, to, at, by, acct) {
+  if(Array.isArray(list)&&list.length===0&&from&&to){S={rows:[],cols:[],skipped:0,at:at||Date.now(),file:'Neorcha · '+from+' → '+to+' · no registration cards'};try{localStorage.setItem(LS,JSON.stringify(S));}catch(_){}ASK_ENROLL=false;return true;}
+
   const R = parseAoa(rowsToAoa(list));
   if (!R || !R.rows.length) { if (!at) toast('Neorcha sent nothing that could be read', 'err'); return false; }
-  S = Object.assign(R, { file: 'Neorcha · ' + (from && to ? dLbl(from) + ' – ' + dLbl(to) : 'collected') + (by === 'cloud' ? ' · ☁️ cloud' : '') + (acct ? ' · ' + acct : ''), at: at || Date.now(), auto: true, by: by || 'helper' });
+  S = Object.assign(R, { collectedRows:list, file: 'Neorcha · ' + (from && to ? dLbl(from) + ' – ' + dLbl(to) : 'collected') + (by === 'cloud' ? ' · ☁️ cloud' : '') + (acct ? ' · ' + acct : ''), at: at || Date.now(), auto: true, by: by || 'helper' });
   try { localStorage.setItem(LS, JSON.stringify(S)); } catch (_) {}
   if (!at) {   // collected here: shared with the team's other devices (the cards as Neorcha's collector sent them — no passport, ID, e-mail or phone)
-    if (typeof fbSet === 'function') try { fbSet('neorcha', { at: S.at, from: from || '', to: to || '', by: 'helper', n: list.length, rows: list }); } catch (_) {}
+    if (typeof fbSet === 'function') try { const card = { at: S.at, from: from || '', to: to || '', by: 'helper', n: list.length, rows: list }; fbSet('neorcha', card); const key='nx'+S.at; fbSet('neorchaCollections/'+key, card); fbSet('neorchaCollectionIndex/'+key, {at:S.at,from:from||'',to:to||'',n:list.length,by:'helper'}); } catch (_) {}
     if (typeof logActivity === 'function') try { logActivity('neorcha_collected', R.rows.length + ' registrations'); } catch (_) {}
   }
   // collected here (not a cloud/background run) and there are guests with an e-mail → ask about ALL enrolment
@@ -486,6 +493,8 @@ function draw() {
   const an = $('ask-no'); if (an) an.onclick = () => { ASK_ENROLL = false; draw(); };
 }
 const CSS = `
+.nx-pull{margin:16px 0;padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--card)}.nx-pull-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.nx-pull-head p{font-size:12px;color:var(--text2);margin:6px 0 14px}.nx-reader{font-size:11px;color:var(--accent);padding:7px 10px;border:1px solid var(--border);border-radius:9px;height:fit-content}.nx-pull-actions{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 16px}.nx-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}.nx-fields label{display:flex;align-items:center;gap:8px;font-size:12px;min-height:30px}.nx-fields input{width:17px;height:17px;accent-color:var(--accent)}.nx-saved{display:flex;align-items:end;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:16px;margin-top:16px}.nx-saved label{display:grid;gap:7px;font-size:12px;flex:1;min-width:200px}.nx-saved select{max-width:100%;width:100%;padding:10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px}
+
 #panel-${PANEL} .nx-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:20px 22px;margin-bottom:14px;border-radius:18px;border:1px solid var(--border);background:radial-gradient(120% 140% at 0% 0%,rgba(99,102,241,.18),transparent 55%),radial-gradient(120% 140% at 100% 0%,rgba(20,184,166,.14),transparent 55%),var(--card)}
 #panel-${PANEL} .nx-hero-ic{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;font-size:28px;background:linear-gradient(135deg,#6366f1,#4338ca);box-shadow:0 10px 26px -8px rgba(67,56,202,.6);flex:none}
 #panel-${PANEL} .nx-hero-t{flex:1;min-width:200px}#panel-${PANEL} .nx-hero h1{margin:0;font-size:1.55rem}#panel-${PANEL} .nx-hero p{margin:4px 0 0;color:var(--text2);font-size:.88rem}
@@ -553,7 +562,14 @@ const CSS = `
 const BRANDS = [['mercure', /\bmercure\b/i], ['novotel', /\bnovotel\b/i], ['pullman', /\bpullman\b/i], ['sofitel', /\bsofitel\b/i], ['swissotel', /swiss[oô]tel/i],
   ['movenpick', /m[oö]venpick/i], ['adagio', /\badagio\b/i], ['mgallery', /\bmgallery\b/i], ['fairmont', /\bfairmont\b/i], ['raffles', /\braffles\b/i], ['ibis', /\bibis\b/i]];
 /** the hotel's Neorcha link from its name ('' when the brand is not known) (pure) */
-function migrateIbisLink(value) { return /^https:\/\/ibis\.myneorcha\.com\/neorchaWEBPlatform\/?(?:#.*)?$/i.test(value || '') ? 'https://ibis.myneorcha.com/tweak/' : value; }
+function migrateIbisLink(value) { return value; }
+function readerFor(value) {
+  const u = new URL(value);
+  if(u.protocol !== 'https:' || u.username || u.password || !/(^|\.)myneorcha\.com$/i.test(u.hostname)) throw Error('Use a Neorcha HTTPS link.');
+  if(/^\/tweak(?:\/|$)/i.test(u.pathname)) return 'tweak';
+  if(/^\/neorchaWEBPlatform(?:\/|$)/i.test(u.pathname)) return 'legacy';
+  throw Error('Use the portal link containing /tweak/ or /neorchaWEBPlatform/.');
+}
 function linkFor(name) { const b = BRANDS.find(([, re]) => re.test(String(name || ''))); return b ? 'https://' + b[0] + '.myneorcha.com/' + (b[0] === 'ibis' ? 'tweak/' : 'neorchaWEBPlatform/#/login') : ''; }
 /** the cloud account for a Neorcha link: its first part in capitals (mercure.myneorcha.com → MERCURE) (pure) */
 function acctOf(url) { const m = String(url || '').match(/^https?:\/\/([a-z0-9-]+)\.myneorcha\.com(\/|$)/i); return m ? m[1].toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 30) : ''; }
@@ -734,6 +750,7 @@ function mount() {
       <div class="nx-hedit" id="nx-hedit" hidden><label class="nx-url">Neorcha link<input type="url" id="nx-url" spellcheck="false"></label><label class="nx-acct">Account on GitHub<input id="nx-acct" spellcheck="false" autocapitalize="characters" maxlength="30"></label><button type="button" class="btn" id="nx-h-auto">↺ Automatic</button></div>
       <div class="nx-run"><label>Arrivals from<input type="date" id="nx-from"></label><label>to<input type="date" id="nx-to"></label>
         <button type="button" class="btn gold" id="nx-start">▶ Start</button></div>
+      <section class="nx-pull" aria-label="Collection options"><div class="nx-pull-head"><div><b>Choose what to collect</b><p>Keep the fields you need for later. Reservation identity is always included.</p></div><span id="nx-reader" class="nx-reader"></span></div><div class="nx-pull-actions"><button type="button" class="btn" id="nx-today">Today only · Dubai</button><button type="button" class="btn" id="nx-contacts">Contacts & enrolment</button><button type="button" class="btn" id="nx-full">Full registration</button></div><div id="nx-fields" class="nx-fields"></div><div class="nx-saved"><label>Saved collections<select id="nx-saved"><option value="">Choose a previous collection…</option></select></label><button type="button" class="btn" id="nx-load-saved">Open saved collection</button><button type="button" class="btn" id="nx-export">Export current collection</button></div></section>
       <div class="nx-live" id="nx-live" hidden></div>
       <div class="nx-cl"><div class="nx-cl-h"><span>☁️</span><div><b>Cloud — no PC needed</b><small>A GitHub computer logs in to Neorcha and collects for you — every night at 3:17 by itself, or now, with the dates above. Works from your phone.</small></div></div>
         <div class="nx-cl-b"><button type="button" class="btn gold" id="nx-cloud">☁️ Run in the cloud</button><button type="button" class="btn" id="nx-cl-show">📡 Show progress</button><span class="nx-cl-st" id="nx-cl-st"></span></div>
@@ -769,7 +786,7 @@ function mount() {
     if (typeof currentProfile !== 'undefined' && currentProfile && typeof applyRole === 'function') applyRole(currentProfile.role); } catch (_) {}
   $('browse').onclick = () => { $('file').value = ''; $('file').click(); };
   const code = collectorCode();
-  $('copycol').onclick = () => { if (typeof copyToClipboard === 'function') copyToClipboard(code, $('copycol'), '📋 Copy the collector'); else navigator.clipboard.writeText(code).then(() => toast('Copied — paste it in Neorcha\'s console', 'ok')); };
+  $('copycol').onclick = () => { if (typeof copyToClipboard === 'function') copyToClipboard(collectorCode(W.__hoNxCollectionOptions?.()), $('copycol'), '📋 Copy the collector'); else navigator.clipboard.writeText(collectorCode(W.__hoNxCollectionOptions?.())).then(() => toast('Copied — paste it in Neorcha\'s console', 'ok')); };
   $('bm').href = 'javascript:' + encodeURIComponent(code); $('bm').onclick = e => { e.preventDefault(); toast('Drag this button to your bookmarks bar, then click the bookmark on Neorcha', 'info'); };
   $('file').onchange = e => load(e.target.files[0]);
   cloudUI();
@@ -779,7 +796,7 @@ function mount() {
   const live = (h, tone, html) => { const L = $('live'); L.hidden = false; L.className = 'nx-live ' + (tone || ''); if (html) L.innerHTML = esc(h) + html; else L.textContent = h; };
   const NX_DEF = 'https://ibis.myneorcha.com/tweak/';
   const urlKey = () => { let h = ''; try { h = typeof _meHotel === 'function' ? _meHotel() : ''; } catch (_) {} return 'ho_neorcha_url_v1:' + String(h || 'hotel').toLowerCase(); };
-  const okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' && /(^|[.])myneorcha[.]com$/i.test(x.hostname); } catch (_) { return false; } };
+  const okUrl = u => { try { readerFor(u); return true; } catch (_) { return false; } };
   const NX = () => { const v = $('url').value.trim(); return okUrl(v) ? v : NX_DEF; };
   // 🏨 each hotel on its own: the Neorcha link and the GitHub account come from the hotel's name (Mercure … → mercure.myneorcha.com,
   // account MERCURE) unless changed here; both are remembered per hotel
@@ -790,6 +807,7 @@ function mount() {
   // 🏨 the list: this hotel (automatic) + the other hotels you collect for (shared with your team) — tap one, then Start or Run in the cloud
   const LK = 'ho_neorcha_hotels_v1', SK = () => 'ho_neorcha_sel_v1:' + String(hotelName() || 'hotel').toLowerCase();
   let LIST = []; try { LIST = (JSON.parse(get(LK) || '[]') || []).filter(h => h && okUrl(h.url) && h.name).slice(0, 20); } catch (_) { LIST = []; }
+  let profilesReady=false;
   let SEL = get(SK()); if (SEL !== '' && !LIST[+SEL]) SEL = '';
   const cur = () => (SEL === '' ? null : LIST[+SEL] || null);
   const saveList = () => { put(LK, LIST.length ? JSON.stringify(LIST) : ''); try { if (typeof fbSet === 'function') fbSet('neorchaHotels', LIST); } catch (_) {} };
@@ -820,6 +838,7 @@ function mount() {
       .join('') + '<button type="button" class="add" data-hadd="1">＋ Add hotel</button>';
   };
   const paintHotel = () => {
+    paintReader();if(profilesReady)loadFields();
     const h = cur(), u = NX(), a = ($('acct').value || '').trim() || autoAcct(), host = u.replace(/^https:\/\//, '').split('/')[0], own = !h && !!(get(urlKey()) || get(acctKey()));
     $('h-t').innerHTML = `<b>${esc(h ? h.name : hotelName())}</b><small>Neorcha <code>${esc(host)}</code> · cloud account <code>${esc(a)}</code>${h ? ' · the cards land in this HotelOps' : own ? ' · set by you' : ' · automatic'}</small>`;
     const sb = $('setup-b'); if (sb) sb.innerHTML = setupHtml(a);
@@ -849,7 +868,22 @@ function mount() {
     const st = $('setup'); if (st) st.open = true;
     toast('🏨 ' + name + ' added — set up its secrets once (below), then Run in the cloud', 'ok');
   };
-  W.__hoNxCloud = () => ({ account: ($('acct').value || '').trim().toUpperCase() || autoAcct(), url: NX(), hid: typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '' });
+  const requiredFields = ["Confirmation Number", "First Name", "Last Name", "Arrival Date", "Departure Date", "Room Number"], optionalFields = ["Nationality", "Purpose Of Visit", "Number of Adults", "Number of Children", "Membership Number", "Membership Type", "Email", "Phone", "Title", "Checked In By", "Company Name", "Room Type", "Insertion Date", "Source"];
+  const selectedFields = () => requiredFields.concat(Array.from($('fields').querySelectorAll('input:checked')).map(i=>i.value));
+  function paintFields(values){ $('fields').innerHTML = optionalFields.map(k=>`<label><input type="checkbox" value="${esc(k)}" ${values.includes(k)?'checked':''}>${esc(k)}</label>`).join(''); }
+  function loadFields(){ let fields=optionalFields;try{const saved=JSON.parse(get(urlKey()+':'+(cur()?.url||'own')+':fields')||'null');if(Array.isArray(saved))fields=saved;}catch(_){}paintFields(fields);paintReader(); }
+  function saveFields(){put(urlKey()+':'+(cur()?.url||'own')+':fields',JSON.stringify(selectedFields()));$('bm').href='javascript:'+encodeURIComponent(collectorCode(W.__hoNxCollectionOptions()));}
+  function paintReader(){try{const kind=readerFor(NX());$('reader').textContent=kind==='tweak'?'Tweak reader · new portal':'Legacy reader · original portal';}catch(error){$('reader').textContent=error.message;}}
+  W.__hoNxCollectionOptions=()=>({fields:selectedFields(),hotelName:cur()?.name||hotelName()});
+  $('fields').onchange=saveFields;
+  $('contacts').onclick=()=>{paintFields(['Email','Phone','Nationality','Title']);saveFields();};
+  $('full').onclick=()=>{paintFields(optionalFields);saveFields();};
+  $('today').onclick=()=>{const d=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dubai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());$('from').value=d;$('to').value=d;};
+  $('export').onclick=()=>{if(!S){toast('Collect or open a saved list first','info');return;}const raw=S.collectedRows;const headers=raw?Object.keys(raw[0]||{}):['conf','name','arr','dep','room','email','phone','nat','purpose','member','by','title'];const cell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';const csv=[headers.join(','),...(raw||S.rows).map(r=>headers.map(k=>cell(r[k])).join(','))].join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='neorcha-collection.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
+  $('load-saved').onclick=async()=>{const key=$('saved').value;if(!/^nx[\w-]+$/.test(key)){toast('Choose a saved collection','info');return;}try{if(typeof _ref==='undefined'||!_ref)throw Error('Sign in to load saved collections');const card=(await _ref.child('neorchaCollections/'+key).once('value')).val();if(!card)throw Error('This saved collection is unavailable');if(!card.rows?.length){S=null;draw();toast('This saved collection contains no cards','info');return;}fromCollector(card.rows,card.from,card.to,card.at,card.by,card.account);draw();}catch(error){toast(error.message,'err');}};
+  const listenSaved=()=>{if(typeof fbListen!=='function')return setTimeout(listenSaved,1500);fbListen('neorchaCollectionIndex',v=>{const items=Object.entries(v||{}).filter(([key])=>/^nx[\w-]+$/.test(key)).sort((a,b)=>(b[1].at||0)-(a[1].at||0));$('saved').innerHTML='<option value="">Choose a previous collection…</option>'+items.slice(0,60).map(([key,c])=>`<option value="${esc(key)}">${esc(c.from)} → ${esc(c.to)} · ${+c.n||0} cards</option>`).join('');});};listenSaved();profilesReady=true;loadFields();
+  $('url').addEventListener('change',paintReader);
+  W.__hoNxCloud = () => ({ fields: JSON.stringify(selectedFields()), hotel_name: cur()?.name || hotelName(), account: ($('acct').value || '').trim().toUpperCase() || autoAcct(), url: NX(), hid: typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '' });
   W.__hoNxHotel = () => (cur() ? cur().name : hotelName());   // the hotel the cloud run reads (run-dock.js shows it)
   panel.addEventListener('click', e => {
     const del = e.target.closest('[data-hdel]');
@@ -875,7 +909,7 @@ function mount() {
       return;
     }
     heard = 0; clearTimeout(waitT);
-    window.postMessage({ source: 'ho-nx-job', from: f, to, url: NX() }, location.origin);
+    window.postMessage({ source: 'ho-nx-job', from: f, to, url: NX(), fields: selectedFields(), hotelName: cur()?.name || hotelName() }, location.origin);
     live('⏳ Opening Neorcha… log in there — everything else is automatic.');
     waitT = setTimeout(() => { if (!heard) live('⚠️ The helper did not answer. In chrome://extensions press ↻ on HotelOps WhatsApp helper, reload this page and press Start again — or open Neorcha yourself: after you log in it starts by itself.', 'err', '<div class="nx-live-b">' + openBtn() + '</div>'); }, 6000);
   };
@@ -892,13 +926,13 @@ function mount() {
   z.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) load(f); });
   // ☁️ the cards saved by another device or by the cloud run: newer than what this device has → shown here
   const listen = () => { if (typeof fbListen !== 'function') return setTimeout(listen, 1500);
-    fbListen('neorcha', v => { if (!v || !Array.isArray(v.rows) || !(+v.at > ((S && +S.at) || 0))) return;
-      if (fromCollector(v.rows.slice(0, 5000), v.from, v.to, +v.at, v.by, v.account)) draw(); }); };
+    fbListen('neorcha', v => { if (!v || (!Array.isArray(v.rows)&&v.n!==0) || !(+v.at > ((S && +S.at) || 0))) return;
+      if (fromCollector((v.rows||[]).slice(0, 5000), v.from, v.to, +v.at, v.by, v.account)) draw(); }); };
   listen();
   // Purpose of Stay changes (loaded later, edited): the link numbers follow
   document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-panel="' + PANEL + '"]')) setTimeout(draw, 50); }, true);
   draw();
 }
-W.hoNeorcha = { tweakCollect: TWEAK_COLLECT, migrateIbisLink, linkFor, acctOf, pipelineTsv, runState, _run: { RUN, paintRun }, rowsToAoa, collectorSrc, collectorCode, parseAoa, summary, linkPlan, purposeOf, isoOf, natName, NEVER };
+W.hoNeorcha = { readerFor, tweakCollect: TWEAK_COLLECT, migrateIbisLink, linkFor, acctOf, pipelineTsv, runState, _run: { RUN, paintRun }, rowsToAoa, collectorSrc, collectorCode, parseAoa, summary, linkPlan, purposeOf, isoOf, natName, NEVER };
 if (typeof document !== 'undefined' && document.addEventListener) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount(); }
 })();

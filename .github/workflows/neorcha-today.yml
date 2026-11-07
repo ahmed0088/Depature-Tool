@@ -1,0 +1,24 @@
+name: Neorcha today-only collection verification
+on:
+  push:
+    branches: ['study/ingauge-20261107-readonly']
+    paths: ['scripts/neorcha-today.cjs','.github/workflows/neorcha-today.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-audit --no-fund playwright-core@1.49.1 graphql@16.11.0
+      - run: node scripts/neorcha-today.cjs
+        env:
+          NEORCHA_USER: ${{ secrets.NEORCHA_USER_IBIS || secrets.NEORCHA_USER }}
+          NEORCHA_PASS: ${{ secrets.NEORCHA_PASS_IBIS || secrets.NEORCHA_PASS }}
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL_IBIS || secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS_IBIS || secrets.HOTELOPS_PASS }}
+          HOTELOPS_HOTEL: ${{ secrets.HOTELOPS_HOTEL_IBIS || secrets.HOTELOPS_HOTEL }}
