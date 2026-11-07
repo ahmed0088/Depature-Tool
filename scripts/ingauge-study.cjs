@@ -14,7 +14,7 @@ function permitted(method,address,body='') {
   if(u.origin!==ORIGIN)return method==='GET'&&!u.pathname.includes('/m-api/');
   const p=u.pathname;
   if(method==='POST'&&p==='/pulse/api/tenantMenu/secure/getTenantMenuSelectedValue')return true;
-  if(method==='GET'&&p==='/pulse/api/currency/secure/list')return true;
+  if(method==='GET'&&['/pulse/api/currency/secure/list','/pulse/api/metricAuditStatus/secure'].includes(p))return true;
   if(method==='GET'&&/^\/m-api\/account\/user\/avatar_base64\/\d+\/\d+$/.test(p))return true;
   if(method==='GET'&&p==='/m-api/login-service/v1/get-auth0-universal-page')return true;
   if(!p.startsWith('/m-api/')&&!p.startsWith('/pulse/api/'))return method==='GET';
@@ -92,22 +92,44 @@ async function main(){
   const exchange=await exchangePromise;
   if(exchange){
    const body=await exchange.json().catch(()=>null);
-   report.authExchange={http:exchange.status(),status:['SUCCESS','FAIL','FAILED','ERROR','FAILURE'].includes(body?.status)?body.status:'OTHER',keys:body?Object.keys(body):[],dataKeys:body?.data&&typeof body.data==='object'?Object.keys(body.data):[],hasAccessToken:!!body?.data?.access_token};
+   report.authExchange={http:exchange.status(),status:['SUCCESS','FAIL','FAILED','ERROR','FAILURE'].includes(body?.status)?body.status:'OTHER',keys:body?Object.keys(body):[],dataKeys:body?.data&&typeof body.data==='object'?Object.keys(body.data):[],hasAccessToken:!!(body?.access_token||body?.data?.access_token)};
   }
   await page.waitForTimeout(7000);
-  report.stage='metrics';await page.goto(ORIGIN+'/metrics/productMetrics',{waitUntil:'domcontentloaded'});
-  await page.locator('select#TenantLocation option').nth(1).waitFor({state:'attached',timeout:30000});
-  console.log('Authenticated product screen reached; business writes remain blocked.');
   async function options(selector){return page.locator(selector+' option').evaluateAll(ns=>ns.map(n=>({id:n.value,name:n.textContent.trim(),attributes:Object.fromEntries([...n.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value]))})).filter(n=>n.id&&!['0','-1','null','undefined',''].includes(n.id)));}
   async function select(selector,id){await page.locator(selector).selectOption(id,{force:true});await page.locator(selector).evaluate((n,v)=>{if(window.jQuery)window.jQuery(n).trigger('change',[{selected:v}]);},id);await page.waitForTimeout(1800);}
   async function read(path,data){
    const method=data?'POST':'GET';if(!permitted(method,ORIGIN+path))throw Error('READ_GUARD');
-   const result=await page.evaluate(async ({path,data,headers})=>{try{const r=await fetch(path,{method:data?'POST':'GET',headers:{...headers,'content-type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});return {status:r.status,body:await r.json()};}catch(_){return {status:0};}}, {path,data,headers});
-   if(result.status!==200)return {error:'HTTP_'+result.status};return result.body;
+   if(!headers||!tenant)return {error:'AUTH_CONTEXT_UNAVAILABLE'};
+   const response=method==='POST'?await context.request.post(ORIGIN+path,{headers,data}):await context.request.get(ORIGIN+path,{headers});
+   if(!response.ok())return {error:'HTTP_'+response.status()};return await response.json();
   }
   function rows(x){return Array.isArray(x?.data)?x.data:Array.isArray(x?.data?.data)?x.data.data:[];}
   function pick(x,keys){return Object.fromEntries(keys.filter(k=>x[k]!==undefined).map(k=>[k,x[k]]));}
   async function schema(){return page.locator('#fastAddModal input,#fastAddModal select,#fastAddModal textarea').evaluateAll(ns=>ns.map(n=>({id:n.id,name:n.name,type:n.type,required:n.required,disabled:n.disabled,readonly:n.readOnly,min:n.min,max:n.max,options:n.tagName==='SELECT'?[...n.options].map(o=>({id:o.value,name:o.textContent.trim()})):undefined})));}
+  report.stage='catalog';
+  for(let n=0;n<50&&(!headers||!tenant);n++)await page.waitForTimeout(200);
+  const loc=await read('/pulse/api/tenantLocation/secure/getLocationsForUserAndTenants?'+new URLSearchParams({tenantIds:String(tenant)}));
+  report.locationReadStatus=loc.status||loc.error;
+  report.accountCatalog=[];
+  for(const hotel of rows(loc)){
+   if(!/ibis|adagio|mercure/i.test(hotel.name))continue;
+   const h={...pick(hotel,['id','name','tenantId','hotelMetricsDataType','productMetricsValidationType','maxProductCharge','localCurrency','currency','regionCurrency']),departments:[]};report.accountCatalog.push(h);
+   const deps=await read('/pulse/api/locationGroup/secure/getLocationGroup/'+encodeURIComponent(tenant)+'?'+new URLSearchParams({tenantLocationID:String(hotel.id)}));
+   h.departmentReadStatus=deps.status||deps.error;
+   for(const department of rows(deps)){
+    const d={...pick(department,['id','name','activeStatus','tenantLocationId','isRetail','isFnB']),products:[],team:[]};h.departments.push(d);
+    const products=await read('/pulse/api/locationGroupProduct/secure/getAllLocaionGroupProduct',{first:-1,total:-1,locationGroupId:department.id,filterProducts:false,activeStatus:-1});
+    d.productsStatus=products.status||products.error;
+    d.products=rows(products).map(x=>pick(x,['id','intId','name','productCode','productSKU','isRecurring','activeStatus','locationGroupId','productCharge','maxProductCharge','type','code']));
+    const team=await read('/pulse/api/user/secure/getAvailableUsers/'+encodeURIComponent(tenant)+'?'+new URLSearchParams({tenantLocationID:String(hotel.id),locationGroupID:String(department.id),getContributorsOnly:'true',getWithAllStatus:'true',getOperatorsOnly:'false',isWeightWiseUser:'false',allowSameWeightUser:'true',decideContributorOpratorLocationLevel:'true'}));
+    d.teamStatus=team.status||team.error;
+    d.team=rows(team).map(x=>pick(x,['id','intId','name','firstName','lastName','pulseId','employeeId','activeStatus','roleType']));
+   }
+  }
+  console.log('Scoped hotel catalog reads finished; no financial writes.');
+  report.stage='metrics';await page.goto(ORIGIN+'/metrics/productMetrics',{waitUntil:'domcontentloaded'});
+  try{await page.locator('select#TenantLocation option').nth(1).waitFor({state:'attached',timeout:20000});}catch(_){report.stage='catalog-read-ui-incomplete';return;}
+  console.log('Authenticated product screen reached; business writes remain blocked.');
   report.locations=await options('select#TenantLocation');
   for(const hotel of report.locations){
    // Scope the requested study to the three hotel brands; retain visible location names for coverage.
