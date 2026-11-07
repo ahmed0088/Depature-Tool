@@ -13,11 +13,13 @@ function permitted(method,address,body='') {
   if(u.origin==='https://login.app.fpg-ingauge.com'&&method==='POST'&&['/u/login/password','/u/login/identifier'].includes(u.pathname))return true;
   if(u.origin!==ORIGIN)return method==='GET'&&!u.pathname.includes('/m-api/');
   const p=u.pathname;
+  if(method==='POST'&&p==='/pulse/api/tenantMenu/secure/getTenantMenuSelectedValue')return true;
+  if(method==='GET'&&/^\/m-api\/account\/user\/avatar_base64\/\d+\/\d+$/.test(p))return true;
   if(method==='GET'&&p==='/m-api/login-service/v1/get-auth0-universal-page')return true;
-  if(!p.startsWith('/m-api/'))return method==='GET';
+  if(!p.startsWith('/m-api/')&&!p.startsWith('/pulse/api/'))return method==='GET';
   if(method==='POST'&&p==='/m-api/api/user/authenticateUserUsingLDAP')return true;
   if(method==='POST'&&p==='/m-api/login-service/v1/authenticate-with-auth0')return true;
-  if(method==='POST'&&/^\/m-api\/(?:account|configuration|product|data)\/[a-z0-9-]+\/gql$/.test(p))return readQuery(body);
+  if(method==='POST'&&/^\/m-api\/(?:account|configuration|product|data)\/[A-Za-z0-9-]+\/gql$/.test(p))return readQuery(body);
   if(/(?:create|update|delete|remove|save|set[A-Z]|send|approve|deny|process|suspend|discontinue|reset|impersonat|logout|signout|track|mark|configure)/i.test(p))return false;
   if(method==='GET')return /\/(?:get[A-Z][^/]*|find[^/]*|is[A-Z][^/]*|check[A-Z][^/]*)(?:\/[^/]*)*$/.test(p)||/\/secure\/\d+$/.test(p)||/\/(?:logo_base64|checkLogo)\//.test(p);
   if(method==='POST'&&/\/(?:find|searchProductMetricData|getAllLocaionGroupProduct)$/.test(p))return true;
@@ -30,17 +32,30 @@ function envelope(report,key) {
 }
 async function main(){
  const report={version:1,started:new Date().toISOString(),stage:'initial',blocked:[],requests:[],hotels:[],failures:[]};
- let browser,page;
+ let browser,page;const responseTasks=[];
  try {
   if(!process.env.INGAUGE_EMAIL||!process.env.INGAUGE_PASS)throw Error('MISSING_CREDENTIALS');
   const {chromium}=require('playwright-core');
   browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'/usr/bin/google-chrome',args:['--no-sandbox']});
   const context=await browser.newContext({serviceWorkers:'block'});page=await context.newPage();
   page.setDefaultTimeout(15000);
+  report.catalogReads=[];
+  function catalogProjection(value){
+   if(Array.isArray(value))return value.map(catalogProjection);
+   if(!value||typeof value!=='object')return undefined;
+   const keys=new Set(['id','intId','name','firstName','lastName','activeStatus','tenantId','tenantLocationId','locationGroupId','locationId','productCode','productSKU','isRecurring','roleType','pulseId','currency','code','url','moduleCode','productMetricsValidationType','hotelMetricsDataType','maxProductCharge']);
+   return Object.fromEntries(Object.entries(value).flatMap(([k,v])=>v&&typeof v==='object'?[[k,catalogProjection(v)]]:keys.has(k)?[[k,v]]:[]));
+  }
+  page.on('response',response=>{
+   const path=new URL(response.url()).pathname;
+   if(['/m-api/account/location/gql','/m-api/account/location-group/gql','/m-api/account/user-tenant-role/gql'].includes(path))responseTasks.push((async()=>{
+    try{const req=response.request();if(!permitted(req.method(),req.url(),req.postData()||''))return;report.catalogReads.push({path,http:response.status(),data:catalogProjection(await response.json())});}catch(_){}
+   })());
+  });
   let headers=null,tenant=null;
   await context.route('**/*',async route=>{
    const r=route.request(),u=new URL(r.url());
-   if(u.origin===ORIGIN&&u.pathname.startsWith('/m-api/')){
+   if(u.origin===ORIGIN&&(u.pathname.startsWith('/m-api/')||u.pathname.startsWith('/pulse/api/'))){
     const h=r.headers();if(h.authorization&&h.tenantid){headers=Object.fromEntries(Object.entries(h).filter(([k])=>['authorization','industryid','tenantid','platform','content-type'].includes(k)));tenant=h.tenantid;}
     const item={method:r.method(),path:u.pathname.replace(/\/\d+(?=\/|$)/g,'/:id')};
     if(u.pathname.endsWith('/gql'))try{item.queryFields=require('graphql').parse(JSON.parse(r.postData()).query).definitions.flatMap(d=>d.selectionSet?.selections.map(f=>f.name?.value)||[]).filter(Boolean);}catch(_){}
@@ -133,6 +148,7 @@ async function main(){
   if(page)try{report.page={origin:new URL(page.url()).origin,path:new URL(page.url()).pathname,title:await page.title(),fields:await page.locator('input,button').evaluateAll(ns=>ns.map(n=>({tag:n.tagName,id:n.id,name:n.name,type:n.type,label:n.tagName==='BUTTON'?n.textContent.trim().slice(0,80):n.getAttribute('placeholder')})))};}catch(_){}
  }
  finally{
+  await Promise.allSettled(responseTasks);
   if(browser)await browser.close().catch(()=>{});
   report.finished=new Date().toISOString();
   const result=envelope(report,fs.readFileSync('scripts/study-public.pem'));
