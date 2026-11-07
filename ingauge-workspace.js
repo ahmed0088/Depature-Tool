@@ -49,7 +49,7 @@
             const checked=(await db().child('ingauge/tests/'+hash).once('value')).val();S.readyHash=checked?.ready?hash:'';S.readyAt=checked?.at||0;
           }
           if(plan.mode==='apply'&&!test){invalidate();S.selected.clear();for(const r of list(S.job.results))if(['applied','unchanged'].includes(r.state)){const draft=S.drafts.get(r.key);if(draft)draft.completed=true;}renderProposals();}
-        }catch(error){S.error=error.message;}renderControls();renderRun();
+        }catch(error){S.error=error.message;}renderConfiguration();renderControls();renderRun();
       }
     };
     ref.on('value',callback);S.unwatch=()=>ref.off('value',callback);
@@ -220,7 +220,7 @@
       if(job){let plan;try{plan=JSON.parse(job.planJson);}catch(_){}if(plan?.hotelId===hid){S.tag=latestTag;S.job=job;S.runMode=plan.mode;S.busy=['queued','running'].includes(job.state);if(plan.mode==='discover'&&job.state==='done'&&job.result)S.discovery=hydrateDiscovery(job.result);if(S.busy)watchJob(latestTag,plan);}}
       if(snapshot?.complete&&snapshot.hotelId===hid&&C.sameBinding(snapshot.binding,binding)){S.snapshot=hydrate(snapshot);importSnapshot();}
       restoredHotel=hid;render();
-    }finally{restoring=false;}
+    }finally{restoring=false;renderConfiguration();}
   }
   function mount(){
     const tabs=el('pkgTabs'),main=el('pkgMainView');if(!tabs||!main)return false;if(el('igWorkspace'))return true;
