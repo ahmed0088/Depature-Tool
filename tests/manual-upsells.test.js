@@ -169,7 +169,7 @@ test('UI: upload, analyze, numeric search, evidence, copy and export use the rea
   const view=nodes.get('manualUpsellView'),click=b=>view.listeners.click.forEach(fn=>fn({target:b}));
   const search=nodes.get('msuSearch');search.value='9999';view.listeners.input[0]({target:search});assert.match(nodes.get('msuResults').innerHTML,/No matching sales/);
   nodes.get('msuSearch').value='0318';view.listeners.input[0]({target:nodes.get('msuSearch')});assert.match(nodes.get('msuResults').innerHTML,/12345678/);
-  const evidence=new Element('button');evidence.dataset.msEvidence='123';click(evidence);assert.match(nodes.get('msuResults').innerHTML,/Original Opera note/);
+  const evidence=new Element('button');evidence.dataset.msEvidence='123';click(evidence);assert.match(nodes.get('msuResults').innerHTML,/What Opera posted/);
   const copy=new Element('button');copy.attrs['data-ms-entry']='0';copy.dataset.msEntry='0';click(copy);assert.match(sb.copied[0],/Seller explanation: Credit Lina/);
   M.exportWorkbook();assert.equal(sb.exports.length,1);assert.ok(sb.exports[0].wb.sheets.some(s=>s.name==='What to add'));
   M.hide();assert.equal(nodes.get('manualUpsellView').hidden,true);assert.equal(nodes.get('pkgClearReports').hidden,false);
@@ -181,4 +181,18 @@ test('UI: a failed replacement clears stale results and blocks analysis',async()
   await M.run();assert.ok(M.state.result);
   await M.load('journal',{name:'wrong.txt',text:async()=> 'wrong report'});
   assert.equal(M.state.result,null);assert.equal(M.state.data.journal,undefined);assert.equal(nodes.get('msuRun').disabled,true);assert.match(nodes.get('msuError').textContent,/Wrong report/);
+});
+test('cards lead with a copyable confirmation and separate entry values from reservation dates',()=>{
+ const f=fixtures(),row=run(f).rows[0],html=M.card(row,0);
+ assert.ok(html.indexOf('Confirmation number')<html.indexOf('Room 0318'));
+ assert.match(html,/Copy number/);assert.match(html,/How to add this sale/);assert.match(html,/Why this sale/);
+ const fields=Object.fromEntries(M.additionFields(row));assert.equal(fields['Daily date'],'2026-11-01');assert.equal(fields['Charge days'],'1');assert.equal(fields['Product charge · net'],'122.45');
+ assert.ok(!('Reservation arrival' in fields));assert.match(M.additionText(row),/Confirmation number: 12345678/);
+});
+test('unresolved cards never present a possible confirmation as a confirmed entry',()=>{
+ const f=fixtures(),row=run(f,{reservations:[]}).rows[0],html=M.card(row,0);assert.match(html,/Confirmation not resolved/);assert.doesNotMatch(html,/Copy IN-Gauge details/);
+});
+test('the evidence explains note priority and safely displays guest-entered markup',()=>{
+ const f=fixtures();f.j.REFERENCE='Upsell ** Jordan';const row=run(f).rows[0];row.note='<img src=x onerror=alert(1)>';
+ const html=M.evidenceHtml(row);assert.match(html,/posted by RIVERA Lina/);assert.ok(html.includes('&lt;img'));assert.ok(!html.includes('<img'));
 });

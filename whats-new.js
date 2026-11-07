@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 554, items: [
+    { ico: '↗', title: 'Manual sales: confirmation first',
+      what: 'Every manual sale has a prominent confirmation number, copyable entry fields, reservation details, numbered evidence and instructions for what to do in IN-Gauge.',
+      does: 'Open Package Audit → Manual sales. Why this sale explains the posting, reservation match, seller credit and existing requests.' },
+    { ico: '☁️', title: 'Review, test, then submit selected sales',
+      what: 'Owners and managers can select verified early check-in and late-checkout additions, test the live portal without submitting, then submit the reviewed selection as Pending requests.',
+      does: 'First add INGAUGE_EMAIL and INGAUGE_PASS to GitHub Actions secrets. The runner rechecks existing requests before each addition and stops on ambiguous results. Breakfast quantity remains a manual check. Run progress and ended runs stay in Cloud run history.' },
+  ] },
   { v: 553, items: [
     { ico: '↗', title: 'Find missing manual sales',
       what: 'Package Audit → Manual sales: upload your Opera journal, Reservation Detail and IN-Gauge product export. See proposed additions, existing requests, uncertain matches and dates needing a newer export.',

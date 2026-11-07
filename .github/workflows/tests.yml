@@ -31,3 +31,5 @@ jobs:
         run: node tests/opera-departures.test.js
       - name: Manual sales and seller requests
         run: node tests/manual-upsells.test.js
+      - name: Reviewed sales automation guards
+        run: node tests/manual-sales-automation.test.js

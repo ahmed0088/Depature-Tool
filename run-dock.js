@@ -11,6 +11,7 @@
   const W = window, D = document;
   const KINDS = {
     enrol:   { ic: '✍️', name: 'Guest enrolment', live: 'enrollLive', win: 'gpAccorRunModal', open: () => { if (typeof W.gpAccorRunWin === 'function') W.gpAccorRunWin(true); else if (typeof gpAccorRunWin === 'function') gpAccorRunWin(true); } },
+    manual: { ic: '↗', name: 'Manual sales', live: 'manualSalesLive', win: 'msuRunWindow', open: () => { if (W.ManualSalesAutomation) W.ManualSalesAutomation.openRun(); } },
     neorcha: { ic: '🪪', name: 'Neorcha cards', live: 'neorchaLive', win: 'nxRun', open: () => { if (W.hoNxRunOpen) W.hoNxRunOpen(); } },
   };
   const DISMISS_KEY = 'ho_run_dock_hide_v1';
@@ -30,7 +31,8 @@
   function fromLive(kind, v) {
     if (!v) return {};
     const o = { at: +v.at || Date.now(), state: v.state === 'done' ? 'done' : v.state === 'error' ? 'error' : v.state === 'stopped' || v.step === 'stopped' ? 'stopped' : 'run', note: clean(v.note, 140) };
-    if (kind === 'enrol') { o.n = +v.n || 0; o.done = Math.min(+v.done || 0, o.n || Infinity); if (v.tally) o.tally = { enrolled: +v.tally.enrolled || 0, already: +v.tally.already || 0, skipped: +v.tally.skipped || 0, errors: +v.tally.errors || 0 }; }
+    if (kind === 'manual') { o.n = +v.n || 0; o.done = +v.done || 0; o.tally = v.tally || {}; }
+    else if (kind === 'enrol') { o.n = +v.n || 0; o.done = Math.min(+v.done || 0, o.n || Infinity); if (v.tally) o.tally = { enrolled: +v.tally.enrolled || 0, already: +v.tally.already || 0, skipped: +v.tally.skipped || 0, errors: +v.tally.errors || 0 }; }
     else { o.n = +v.n || 0; o.prog = +v.prog || 0; o.step = clean(v.step, 20); }
     if (v.run && /^https:\/\/github\.com\//.test(v.run)) o.url = String(v.run).slice(0, 200);
     if (v.test) o.test = true;
@@ -39,7 +41,7 @@
   /** the chip's words (pure) */
   function chipText(r) {
     const K = KINDS[r.kind] || { ic: '☁️', name: 'Cloud run' };
-    const far = r.kind === 'enrol' ? (r.n ? (r.done || 0) + '/' + r.n : '') : (r.n ? r.n + ' cards' : '');
+    const far = r.kind === 'manual' ? `${r.done || 0}/${r.n || 0} sales` : r.kind === 'enrol' ? (r.n ? (r.done || 0) + '/' + r.n : '') : (r.n ? r.n + ' cards' : '');
     const st = { run: '⏳', done: '✅', error: '⛔', stopped: '⏹' }[r.state] || '⏳';
     return { title: '#' + (r.no || '?') + ' ' + K.ic + ' ' + K.name + (r.test ? ' · 🧪 test' : ''), sub: [r.hotel, far].filter(Boolean).join(' · '), st };
   }
@@ -152,7 +154,7 @@
     dock._hrdKey = key;
     dock.innerHTML = L.map(r => {
       const t = chipText(r), sec = ((r.state === 'run' ? Date.now() : r.at || Date.now()) - r.started) / 1000;
-      const pct = r.state === 'done' ? 100 : r.kind === 'enrol' ? (r.n ? Math.round((r.done || 0) / r.n * 100) : 5) : Math.max(5, Math.min(97, r.prog || 10));
+      const pct = r.state === 'done' ? 100 : ['enrol','manual'].includes(r.kind) ? (r.n ? Math.round((r.done || 0) / r.n * 100) : 5) : Math.max(5, Math.min(97, r.prog || 10));
       return `<div class="hrd-chip ${esc(r.state)}" role="button" tabindex="0" data-hrd-open="${esc(r.tag)}" title="Open the live window of run #${esc(r.no)}">
         <span class="hrd-st">${t.st}</span><span class="hrd-t"><b>${esc(t.title)}</b><small>${esc(t.sub || r.note || '')}${t.sub || r.note ? ' · ' : ''}<time data-hrd-time="${esc(r.tag)}" aria-live="off">${dur(sec)}</time></small></span>
         <button type="button" class="hrd-x" data-hrd-x="${esc(r.tag)}" aria-label="Close this chip" title="Close${r.state === 'run' ? ' — the run keeps going;' : ' —'} it stays in 🗂 Runs">×</button>
@@ -187,7 +189,7 @@
     const sorted = Object.values(RUNS).sort((a, b) => b.started - a.started);
     const active = sorted.filter(r => r.state === 'run'), history = sorted.filter(r => r.state !== 'run');
     const all = active.concat(history);
-    const res = r => r.kind === 'enrol' ? (r.tally ? `✅ ${r.tally.enrolled} ${r.test ? 'checked' : 'enrolled'} · 👤 ${r.tally.already} already · ⏭ ${r.tally.skipped} skipped · ⚠️ ${r.tally.errors} errors` : r.n ? `${r.done || 0} of ${r.n} guests` : '')
+    const res = r => r.kind === 'manual' ? `${r.tally?.submitted || 0} submitted · ${r.tally?.already_exists || 0} already submitted · ${r.tally?.tested || 0} tested · ${r.tally?.needs_review || 0} need review${r.tally?.unclear ? ' · ' + r.tally.unclear + ' uncertain' : ''}` : r.kind === 'enrol' ? (r.tally ? `✅ ${r.tally.enrolled} ${r.test ? 'checked' : 'enrolled'} · 👤 ${r.tally.already} already · ⏭ ${r.tally.skipped} skipped · ⚠️ ${r.tally.errors} errors` : r.n ? `${r.done || 0} of ${r.n} guests` : '')
       : (r.n ? `🪪 ${r.n} card${r.n === 1 ? '' : 's'} read` : '') + (r.from ? ` · arrivals ${r.from}${r.to && r.to !== r.from ? ' → ' + r.to : ''}` : '');
     w.innerHTML = `<div class="hrl-bg" data-hrl-x="1"></div><section class="hrl-card" role="dialog" aria-modal="true" aria-label="Cloud run history">
       <header class="hrl-h"><span class="hrl-ic">🗂</span><div><b>Cloud run history</b><small>Finished runs are saved here. Active runs are listed separately.</small></div><button type="button" class="hrl-close" data-hrl-x="1" aria-label="Close">✕</button></header>

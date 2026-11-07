@@ -166,7 +166,7 @@
       const weak = ig.filter(g => g.day === day && productKey(g.product) === productKey(product) && Math.abs(g.cents - cents) <= 2 && norm(g.employee) === norm(seller.name));
       if (weak.length) { r.matches = weak; return decide('review', 'A request with the same seller, product, day and amount exists on another confirmation.', 'Check whether this is the same sale across an extension before adding.'); }
       if (seller.basis !== 'Opera note' || seller.warning) return decide('review', 'Not found in this export, but seller credit needs confirmation. ' + seller.warning, 'Confirm the seller and employee mapping before adding.');
-      return decide('add', 'Unique reservation and note-identified seller; no corresponding IN-Gauge entry in this export.', 'Add one manual request in IN-Gauge with the details below, after checking the export is complete.');
+      return decide('add', 'Unique reservation and note-identified seller; no corresponding IN-Gauge entry in this export.', 'Add one manual request in IN-Gauge using this card’s details, after checking the export is complete.');
     });
     const groups = new Map();
     result.filter(r => r.bucket !== 'package').forEach(r => { const key = (r.conf || norm(r.guest) + '|' + room(r.room)) + '|' + r.code + '|' + r.day; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(r); });
@@ -177,7 +177,7 @@
   const state = { files: {}, data: {}, shared: {}, result: null, filter: 'add', search: '', busy: false, error: '', open: new Set(), limit: 60 };
   const el = id => document.getElementById(id);
   const toast = (message, tone) => { if (typeof global.showToast === 'function') global.showToast(message, tone); };
-  function invalidate() { state.result = null; state.error = ''; state.open.clear(); state.limit = 60; }
+  function invalidate() { if (global.ManualSalesAutomation) global.ManualSalesAutomation.resetSelection(); state.result = null; state.error = ''; state.open.clear(); state.limit = 60; }
   async function readFile(kind, file, sharedOnly) {
     if (!file) return;
     const parsed = kind === 'ingauge' ? readWorkbook(await file.arrayBuffer()) : kind === 'journal' ? parseJournal(await file.text()) : parseReservations(await file.text());
@@ -235,18 +235,68 @@
     X.writeFile(wb, 'Manual-Sales-Review-' + new Date().toISOString().slice(0, 10) + '.xlsx');
   }
   const entryText = r => Object.entries(rowValues(r)).filter(([, v]) => v !== '').map(([k, v]) => `${k}: ${v}`).join('\n');
-  function chip(label, value) { return `<div class="msu-value"><span>${esc(label)}</span><strong>${esc(value || '—')}</strong>${value ? `<button type="button" data-ms-copy="${esc(value)}" aria-label="Copy ${esc(label)}">Copy</button>` : ''}</div>`; }
+  const sourceCurrency = r => r.currency || 'Currency not supplied';
+  function additionFields(r) {
+    return [
+      ['Confirmation number', r.conf], ['Product', r.product], ['Seller', r.seller.name],
+      ['Daily date', r.day], ['Product charge · net', (r.cents / 100).toFixed(2)], ['Currency', r.currency],
+      ['Charge days', ['1061','1062'].includes(r.code) ? '1' : ''], ['Employee ID', r.seller.employeeId || '']
+    ].filter(([, value]) => value !== '');
+  }
+  function additionText(r) {
+    if (r.bucket !== 'add' || !r.conf) return entryText(r);
+    return [...additionFields(r).map(([label, value]) => `${label}: ${value}`), `Room: ${r.room}`, `Guest: ${r.guest}`, `Opera transaction: ${r.transaction}`, `Opera note: ${r.note || 'No note supplied'}`, 'Amount basis: net posted charge; check IN-Gauge uses the same basis.'].join('\n');
+  }
+  function howSteps(r) {
+    if (r.bucket === 'add') return [
+      `Search confirmation ${r.conf} in IN-Gauge and verify the guest and room.`,
+      'Check its current product list, including Pending requests. If this sale already exists, use that entry instead of adding another.',
+      `Create one manual request for ${r.product}, credit ${r.seller.name}, and use daily date ${r.day}. Copy the values above.`,
+      ['1061','1062'].includes(r.code) ? 'Use 1 charge day for this one-off sale. The amount shown is the net journal charge; confirm the amount basis in IN-Gauge.' : 'Check breakfast quantity and the amount basis against the billing. The journal amount is the total net posting; no quantity or tax multiplier is inferred.',
+      'After submission, upload a fresh IN-Gauge export. A Pending request is already submitted; approve or reject that existing request in IN-Gauge.'
+    ];
+    if (r.bucket === 'existing') return [
+      `Search confirmation ${r.conf} in IN-Gauge and open the existing entry shown under Why.`,
+      r.matches.some(g => g.status === 'PENDING') ? 'The seller already submitted this request. Review it and approve or reject that entry in IN-Gauge; do not create another.' : 'This sale is already represented in IN-Gauge. Nothing needs adding.',
+      'Upload a fresh IN-Gauge export after any status or seller change.'
+    ];
+    if (r.bucket === 'coverage') return ['Export the complete IN-Gauge product list covering this posting date, with all employees and statuses.', 'Replace the IN-Gauge report here and run the check again. Do not add a sale based only on an uncovered date.'];
+    if (r.bucket === 'package') return ['Open the Audit tab for automatic package corrections.', 'Use its Changes Log evidence and existing seller rules. Do not create a manual request from this automatic posting.'];
+    return [r.action, 'Use the original note, possible confirmations and existing entries under Why to resolve the uncertainty.', 'Load the corrected or wider reports and run the check again. This card is a review case, not a confirmed addition.'];
+  }
+  function chip(label, value) {
+    const present = value !== '' && value != null;
+    return `<div class="msu-value"><span>${esc(label)}</span><strong>${present ? esc(value) : 'Not resolved'}</strong>${present ? `<button type="button" data-ms-copy="${esc(value)}" aria-label="Copy ${esc(label)}">Copy</button>` : ''}</div>`;
+  }
+  function evidenceHtml(r) {
+    const candidates = r.candidates || [], matches = r.matches || [];
+    const step = (n, title, body) => `<li><span class="msu-proof-number">${n}</span><div><h4>${title}</h4>${body}</div></li>`;
+    const reservation = candidates.length ? candidates.map(c => `<div class="msu-proof-record">${chip('Confirmation', c.CONFIRMATION_NO)}<p><b>${esc(c.FULL_NAME)}</b> · room ${esc(c.ROOM_NO || c.DISP_ROOM_NO || '—')}<br>Reservation stay: ${esc(c.TRUNC_BEGIN)} → ${esc(c.TRUNC_END)}</p></div>`).join('') : '<p>No room + full guest name + stay-date match was found in the supplied Reservation Detail. A wider report may provide the missing confirmation.</p>';
+    const entries = matches.length ? matches.map(g => `<div class="msu-proof-record"><span class="msu-proof-status">${esc(g.status || 'Status not supplied')}${!r.conf || g.conf !== r.conf ? ' · possible match' : ''}</span>${chip('IN-Gauge confirmation', g.conf)}<p>Record ${esc(id(g.ID) || 'ID not supplied')} · ${esc(g.product)}<br>${esc(g.employee)} · ${esc(g.day)} · ${esc(g.currency || 'Currency not supplied')} ${money(g.cents)}${clean(g['Manually Added Record']) ? '<br>Manually added: ' + esc(g['Manually Added Record']) : ''}</p></div>`).join('') : '<p>No corresponding entry was found in the uploaded export. This is an export comparison, not a live IN-Gauge check.</p>';
+    return `<ol class="msu-proof">${step(1, 'What Opera posted', `<p>${esc(r.product)} · ${esc(r.day || 'Date not supplied')} · room ${esc(r.room || '—')} · ${esc(sourceCurrency(r))} ${money(r.cents)} net</p><blockquote>${esc(r.note || 'No seller note supplied')}</blockquote><p>Transaction ${esc(r.transaction)} · code ${esc(r.code)} · journal line ${r.line}</p>`)}${step(2, r.conf ? 'How the confirmation was matched' : 'Why the confirmation needs checking', `<p>${r.conf ? 'One confirmation matched the room, normalized full guest name and posting date within the stay.' : candidates.length ? 'Several confirmations overlap this posting date. None was chosen automatically.' : 'The supplied reservation report does not establish a confirmed booking.'}</p>${reservation}`)}${step(3, 'Who should receive seller credit', `<p>${esc(r.seller.explanation)}</p><p>Evidence: ${esc(r.seller.basis)}${r.seller.employeeId ? ' · employee ID ' + esc(r.seller.employeeId) : ''}</p><p>Posted by ${esc(r.cashier || 'Cashier not supplied')} · ${esc(r.username || r.userId || 'Login not supplied')}</p>${r.seller.warning ? `<p class="msu-proof-warning">${esc(r.seller.warning)}</p>` : ''}`)}${step(4, 'What IN-Gauge already contains', entries)}${step(5, 'Why this result', `<p>${esc(r.reason)}</p>`)}</ol>`;
+  }
   function card(r, index) {
     const expanded = state.open.has(r.transaction);
     const badge = r.bucket === 'existing' && r.matches.some(g => g.status === 'PENDING') ? 'Pending · already requested' : labels[r.bucket];
-    return `<article class="msu-sale msu-${r.bucket}">
-      <div class="msu-sale-head"><div class="msu-room"><small>Room</small><b>${esc(r.room || '—')}</b></div><div class="msu-sale-title"><h3>${esc(r.product)}</h3><p>${esc(r.guest || 'Guest not named')} · ${esc(r.day || 'Date unknown')}</p></div><div class="msu-price"><strong>AED ${money(r.cents)}</strong><small>Net posted charge</small></div></div>
-      <div class="msu-badge">${esc(badge)}</div><p class="msu-reason">${esc(r.reason)}</p>
-      <div class="msu-credit"><span class="msu-credit-icon" aria-hidden="true">↳</span><div><b>${esc(r.seller.explanation)}</b>${r.seller.warning ? `<small>${esc(r.seller.warning)}</small>` : ''}</div></div>
-      <div class="msu-values">${chip(r.conf ? 'Confirmation' : r.matches.length ? 'Possible IN-Gauge confirmation' : 'Confirmation', r.conf || [...new Set(r.matches.map(g => g.conf))].join(', '))}${chip(r.seller.basis === 'Opera note' ? 'Seller from note' : 'Suggested seller', r.seller.name)}${chip('Posting date', r.day)}${chip('Net amount · AED', (r.cents / 100).toFixed(2))}</div>
+    const heading = r.conf ? 'Confirmation number' : 'Confirmation not resolved';
+    const stay = r.candidates.length === 1 ? r.candidates[0] : null;
+    const fields = r.bucket === 'add' ? additionFields(r) : [
+      ['Product', r.product], [r.seller.basis === 'Opera note' ? 'Seller from note' : 'Suggested seller', r.seller.name],
+      ['Posting date', r.day], ['Net posted charge', `${sourceCurrency(r)} ${(r.cents / 100).toFixed(2)}`]
+    ];
+    return `<article class="msu-sale msu-${r.bucket}" data-ms-transaction="${esc(r.transaction)}" aria-label="${esc(r.conf ? 'Confirmation ' + r.conf : 'Unresolved confirmation')}: ${esc(r.product)}">
+      <div class="msu-sale-head"><div class="msu-booking"><span class="msu-eyebrow">${heading}</span><div class="msu-confirmation"><h3>${esc(r.conf || 'Needs matching')}</h3>${r.conf ? `<button type="button" class="msu-copy-conf" data-ms-copy="${esc(r.conf)}" aria-label="Copy confirmation ${esc(r.conf)}">Copy number</button>` : ''}</div><p class="msu-booking-guest"><span class="msu-room-tag">Room ${esc(r.room || '—')}</span><span>${esc(r.guest || 'Guest not named')}</span></p></div><div class="msu-price"><strong>${esc(sourceCurrency(r))} ${money(r.cents)}</strong><small>Net posted charge · ${esc(r.day || 'Date unknown')}</small></div></div>
+      <div class="msu-decision"><span class="msu-badge">${esc(badge)}</span><strong>${esc(r.product)}</strong></div><p class="msu-reason">${esc(r.reason)}</p>
+      <div class="msu-credit"><span class="msu-credit-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 4v8a4 4 0 0 0 4 4h8m-4-4 4 4-4 4"/></svg></span><div><b>${esc(r.seller.explanation)}</b>${r.seller.warning ? `<small>${esc(r.seller.warning)}</small>` : ''}</div></div>
+      <div class="msu-fields-heading"><h4>${r.bucket === 'add' ? 'Values for the manual request' : 'Details for your review'}</h4><small>${r.bucket === 'add' ? 'Copy each value into IN-Gauge' : 'Resolve the checks before adding anything'}</small></div>
+      <div class="msu-values">${fields.map(([label, value]) => chip(label, value)).join('')}</div>
+      <div class="msu-stay-details">${chip('Guest', r.guest)}${chip('Room', r.room)}${stay ? chip('Reservation arrival', date(stay.TRUNC_BEGIN)) + chip('Reservation departure', date(stay.TRUNC_END)) : ''}</div>
+      ${stay ? '<p class="msu-stay-note">Reservation dates identify the stay. Use the daily posting date for this sale.</p>' : ''}
+      ${!r.conf && r.matches.length ? `<div class="msu-possible"><b>Possible existing request · confirm its identity first</b>${[...new Set(r.matches.map(g => g.conf))].map(conf => chip('Possible IN-Gauge confirmation', conf)).join('')}</div>` : ''}
       <div class="msu-next"><b>Next step</b><span>${esc(r.action)}</span></div>
-      <div class="msu-card-actions"><button type="button" class="btn" data-ms-entry="${index}">${r.bucket === 'add' ? 'Copy addition details' : 'Copy review details'}</button><button type="button" class="msu-link" data-ms-evidence="${esc(r.transaction)}" aria-expanded="${expanded}">${expanded ? 'Hide evidence' : 'Why this result?'} <span aria-hidden="true">${expanded ? '−' : '+'}</span></button></div>
-      ${expanded ? `<div class="msu-evidence"><div><b>Original Opera note</b><p>${esc(r.note || 'No note supplied')}</p></div><div><b>Posted by</b><p>${esc(r.cashier || 'Not provided')} · ${esc(r.username || r.userId || 'No login provided')}</p></div><div><b>Reservation match</b><p>${r.candidates.length ? r.candidates.map(c => `Confirmation ${esc(c.CONFIRMATION_NO)} · ${esc(c.ROOM_NO || c.DISP_ROOM_NO)} · ${esc(c.FULL_NAME)} · ${esc(c.TRUNC_BEGIN)} → ${esc(c.TRUNC_END)}`).join('<br>') : 'No room + full guest name + stay-date match in this report.'}</p></div><div><b>Existing IN-Gauge entries</b><p>${r.matches.length ? r.matches.map(g => `${esc(g.status || 'Status missing')} · ID ${esc(id(g.ID) || 'not supplied')} · confirmation ${esc(g.conf)} · ${esc(g.employee)} · ${esc(g.day)} · ${esc(g.currency)} ${money(g.cents)}${clean(g['Manually Added Record']) ? ' · manually added: ' + esc(g['Manually Added Record']) : ''}`).join('<br>') : 'No corresponding entry in the uploaded export.'}</p></div><p class="msu-fine">Journal transaction ${esc(r.transaction)} · source line ${r.line} · code ${esc(r.code)}${r.seller.employeeId ? ' · employee ID ' + esc(r.seller.employeeId) : ''}</p></div>` : ''}
+      <details class="msu-how"${r.bucket === 'add' ? ' open' : ''}><summary>${r.bucket === 'add' ? 'How to add this sale' : 'What to do with this result'}</summary><ol>${howSteps(r).map(s => `<li>${esc(s)}</li>`).join('')}</ol></details>
+      <div class="msu-card-actions"><button type="button" class="btn${r.bucket === 'add' ? ' gold' : ''}" ${r.bucket === 'add' ? 'data-ms-addition' : 'data-ms-entry'}="${index}">${r.bucket === 'add' ? 'Copy IN-Gauge details' : 'Copy review details'}</button><button type="button" class="msu-link" data-ms-evidence="${esc(r.transaction)}" aria-expanded="${expanded}" aria-controls="msuProof-${index}">${expanded ? 'Hide explanation' : 'Why this sale?'} <span aria-hidden="true">${expanded ? '−' : '+'}</span></button></div>
+      ${expanded ? `<div class="msu-evidence" id="msuProof-${index}">${evidenceHtml(r)}</div>` : ''}
     </article>`;
   }
   function renderResults() {
@@ -261,6 +311,7 @@
       ${matches.length > state.limit ? `<button type="button" class="btn msu-more" data-ms-more>Show more · ${matches.length - state.limit} remaining</button>` : ''}
       ${warnings.length ? `<details class="msu-quality"><summary>Report checks · ${warnings.length} note${warnings.length === 1 ? '' : 's'}</summary><ul>${warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></details>` : ''}
       <p class="msu-fine">Net charge = debit minus credit. No tax conversion or breakfast quantity is inferred. Verified codes: 1061, 1062 and 2090. Unsupported codes require review.</p>`;
+    if (global.ManualSalesAutomation) global.ManualSalesAutomation.render();
   }
   function render() {
     if (!el('manualUpsellView')) return;
@@ -295,7 +346,7 @@
     tabs.insertBefore(tab, tabs.querySelector('[data-v="rules"]'));
     tabs.addEventListener('click', e => { const t = e.target.closest('[data-v]'); if (t && t.dataset.v !== 'manual') hide(); }, true);
     const view = document.createElement('section'); view.id = 'manualUpsellView'; view.className = 'msu'; view.hidden = true; view.setAttribute('aria-label', 'Manual sales reconciliation');
-    view.innerHTML = `<div class="msu-hero"><div><span class="msu-eyebrow">MONTHLY RECONCILIATION</span><h2>Every manual sale.<br><span>Accounted for.</span></h2><p>Find Opera upsells missing from IN-Gauge, with the right reservation, seller and evidence.</p></div><div class="msu-hero-aside"><span aria-hidden="true">↗</span><b>Notes say who sold it.<br>Posting user says who entered it.</b><p>Pending requests count as already submitted.</p></div></div>
+    view.innerHTML = `<div class="msu-hero"><div><span class="msu-eyebrow">MONTHLY RECONCILIATION</span><h2>Every manual sale.<br><span>Accounted for.</span></h2><p>Find Opera upsells missing from IN-Gauge, with the right reservation, seller and evidence.</p></div><div class="msu-hero-aside"><span aria-hidden="true">↗</span><b>Notes say who sold it.<br> Posting user says who entered it.</b><p>Pending requests count as already submitted.</p></div></div>
       <div class="msu-upload-heading"><h3>Start with your three reports</h3><button type="button" class="msu-link" id="msuUseAudit">Use reports loaded in Audit ↙</button></div>
       <div class="msu-uploads">${[['journal','01','Opera journal','Journal by Transaction Code · finjrnlbytrans','The manual charges and original seller notes.','.txt,.tsv'],['reservations','02','Reservation Detail','Opera · res_detail text export','Rooms, guests, stay dates and confirmations.','.txt,.tsv'],['ingauge','03','IN-Gauge product list','Complete product export · .xlsx or .xls','Include all staff and statuses, including Pending.','.xlsx,.xls']].map(([kind, step, title, sub, hint, accept]) => `<label class="msu-file" id="msuFile-${kind}"><input type="file" id="msuInput-${kind}" data-ms-kind="${kind}" accept="${accept}"><span class="msu-step">${step}</span><b>${title}</b><span class="msu-file-sub">${sub}</span><p>${hint}</p><span class="msu-file-status">Choose file or drop it here</span></label>`).join('')}</div>
       <div class="msu-runbar"><div><button type="button" class="btn gold" id="msuRun" disabled>Check manual sales</button><button type="button" class="msu-link" id="msuClear">Clear reports</button></div><span>Reports are processed on this device.</span></div>
@@ -309,6 +360,7 @@
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.msFilter) { state.filter = b.dataset.msFilter; state.limit = 60; renderResults(); }
       else if (b.hasAttribute('data-ms-copy')) copy(b.dataset.msCopy, b);
+      else if (b.hasAttribute('data-ms-addition')) copy(additionText(state.result.rows[Number(b.dataset.msAddition)]), b);
       else if (b.hasAttribute('data-ms-entry')) copy(entryText(state.result.rows[Number(b.dataset.msEntry)]), b);
       else if (b.dataset.msEvidence) { const key = b.dataset.msEvidence; if (state.open.has(key)) state.open.delete(key); else state.open.add(key); renderResults(); const target = [...view.querySelectorAll('[data-ms-evidence]')].find(x => x.dataset.msEvidence === key); target?.focus({ preventScroll: true }); }
       else if (b.hasAttribute('data-ms-export')) exportWorkbook();
@@ -344,7 +396,7 @@
     for (const [inputId, kind] of [['pkgExcelFileInput','ingauge'],['pkgGuestFileInput','reservations']]) el(inputId)?.addEventListener('change', e => { const file = e.target.files?.[0]; if (file) readFile(kind, file, true).catch(() => { delete state.shared[kind]; }); });
     render(); return true;
   }
-  const api = { parseJournal, parseReservations, parseIngauge, reconcile, sellerOf, amount, date, rowValues, show, hide, mount, state, readWorkbook, exportWorkbook, run, load };
+  const api = { parseJournal, parseReservations, parseIngauge, reconcile, sellerOf, amount, date, rowValues, additionFields, additionText, howSteps, card, evidenceHtml, show, hide, mount, state, readWorkbook, exportWorkbook, run, load };
   global.ManualUpsells = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof document !== 'undefined') {

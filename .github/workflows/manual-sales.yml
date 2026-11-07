@@ -1,0 +1,52 @@
+name: Manual sales (reviewed selections)
+run-name: Manual sales · ${{ inputs.tag }}
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'HotelOps reviewed run tag'
+        required: true
+      hid:
+        description: 'HotelOps hotel ID'
+        required: true
+      plan_hash:
+        description: 'SHA-256 digest of the reviewed selection; no guest data'
+        required: true
+      test:
+        description: '1 checks the live portal without submitting; 0 submits the reviewed selection'
+        required: true
+        default: '1'
+permissions:
+  contents: read
+concurrency:
+  group: manual-sales-${{ inputs.hid }}
+  cancel-in-progress: false
+jobs:
+  sales:
+    if: github.repository == 'ahmed0088/Depature-Tool'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Browser driver
+        run: |
+          npm install --no-save --no-audit --no-fund playwright-core@1.49.1
+          if [ -x /usr/bin/google-chrome ]; then
+            echo "CHROME_PATH=/usr/bin/google-chrome" >> "$GITHUB_ENV"
+          else
+            npx playwright-core install --with-deps chromium
+          fi
+      - name: Check or submit the reviewed sales
+        run: node scripts/manual-sales-cloud.js
+        env:
+          TAG: ${{ inputs.tag }}
+          PLAN_HASH: ${{ inputs.plan_hash }}
+          TEST: ${{ inputs.test }}
+          HOTELOPS_HOTEL: ${{ inputs.hid }}
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
+          INGAUGE_EMAIL: ${{ secrets.INGAUGE_EMAIL }}
+          INGAUGE_PASS: ${{ secrets.INGAUGE_PASS }}
