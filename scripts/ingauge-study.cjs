@@ -44,6 +44,8 @@ async function main(){
    return route.abort();
   });
   report.stage='login';await page.goto(ORIGIN,{waitUntil:'domcontentloaded'});
+  // The legacy form briefly appears before the first-party login redirect completes.
+  await page.waitForURL(url=>url.origin==='https://login.app.fpg-ingauge.com',{timeout:15000}).catch(()=>{});
   await page.locator('#email:visible,input[name=username]:visible,#password[type=password]:visible').first().waitFor({state:'visible',timeout:30000});
   const loginOrigin=new URL(page.url()).origin;
   report.stage='login-form';
