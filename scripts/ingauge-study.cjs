@@ -95,17 +95,19 @@ async function main(){
    report.authExchange={http:exchange.status(),status:['SUCCESS','FAIL','FAILED','ERROR','FAILURE'].includes(body?.status)?body.status:'OTHER',keys:body?Object.keys(body):[],dataKeys:body?.data&&typeof body.data==='object'?Object.keys(body.data):[],hasAccessToken:!!(body?.access_token||body?.data?.access_token)};
   }
   await page.waitForTimeout(7000);
-  async function options(selector){return page.locator(selector+' option').evaluateAll(ns=>ns.map(n=>({id:n.value,name:n.textContent.trim(),attributes:Object.fromEntries([...n.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value]))})).filter(n=>n.id&&!['0','-1','null','undefined',''].includes(n.id)));}
-  async function select(selector,id){await page.locator(selector).selectOption(id,{force:true});await page.locator(selector).evaluate((n,v)=>{if(window.jQuery)window.jQuery(n).trigger('change',[{selected:v}]);},id);await page.waitForTimeout(1800);}
+  let view=page;
+  async function findView(){for(let n=0;n<30;n++){for(const f of page.frames())if(await f.locator('select#TenantLocation option').count().catch(()=>0)>1)return f;await page.waitForTimeout(500);}throw Error('PRODUCT_VIEW_UNAVAILABLE');}
+  async function options(selector){return view.locator(selector+' option').evaluateAll(ns=>ns.map(n=>({id:n.value,name:n.textContent.trim(),attributes:Object.fromEntries([...n.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value]))})).filter(n=>n.id&&!['0','-1','null','undefined',''].includes(n.id)));}
+  async function select(selector,id){await view.locator(selector).selectOption(id,{force:true});await view.locator(selector).evaluate((n,v)=>{if(window.jQuery)window.jQuery(n).trigger('change',[{selected:v}]);},id);await page.waitForTimeout(1800);}
   async function read(path,data){
-   const method=data?'POST':'GET';if(!permitted(method,ORIGIN+path))throw Error('READ_GUARD');
+   const method=data?'POST':'GET';if(!permitted(method,ORIGIN+path,JSON.stringify(data||{})))throw Error('READ_GUARD');
    if(!headers||!tenant)return {error:'AUTH_CONTEXT_UNAVAILABLE'};
    const response=method==='POST'?await context.request.post(ORIGIN+path,{headers,data}):await context.request.get(ORIGIN+path,{headers});
    if(!response.ok())return {error:'HTTP_'+response.status()};return await response.json();
   }
   function rows(x){return Array.isArray(x?.data)?x.data:Array.isArray(x?.data?.data)?x.data.data:[];}
   function pick(x,keys){return Object.fromEntries(keys.filter(k=>x[k]!==undefined).map(k=>[k,x[k]]));}
-  async function schema(){return page.locator('#fastAddModal input,#fastAddModal select,#fastAddModal textarea').evaluateAll(ns=>ns.map(n=>({id:n.id,name:n.name,type:n.type,required:n.required,disabled:n.disabled,readonly:n.readOnly,min:n.min,max:n.max,options:n.tagName==='SELECT'?[...n.options].map(o=>({id:o.value,name:o.textContent.trim()})):undefined})));}
+  async function schema(){return view.locator('#fastAddModal input,#fastAddModal select,#fastAddModal textarea').evaluateAll(ns=>ns.map(n=>({id:n.id,name:n.name,type:n.type,required:n.required,disabled:n.disabled,readonly:n.readOnly,min:n.min,max:n.max,options:n.tagName==='SELECT'?[...n.options].map(o=>({id:o.value,name:o.textContent.trim()})):undefined})));}
   report.stage='catalog';
   for(let n=0;n<50&&(!headers||!tenant);n++)await page.waitForTimeout(200);
   const loc=await read('/pulse/api/tenantLocation/secure/getLocationsForUserAndTenants?'+new URLSearchParams({tenantIds:String(tenant)}));
@@ -118,8 +120,12 @@ async function main(){
    h.departmentReadStatus=deps.status||deps.error;
    for(const department of rows(deps)){
     const d={...pick(department,['id','name','activeStatus','tenantLocationId','isRetail','isFnB']),products:[],team:[]};h.departments.push(d);
-    const products=await read('/pulse/api/locationGroupProduct/secure/getAllLocaionGroupProduct',{first:-1,total:-1,locationGroupId:department.id,filterProducts:false,activeStatus:-1});
+    const products=await read('/pulse/api/locationGroupProduct/secure/getAllLocaionGroupProduct?industryId='+encodeURIComponent(headers.industryid||'1'),{first:-1,total:-1,locationGroupId:department.id,filterProducts:true,activeStatus:"NORMAL"});
     d.productsStatus=products.status||products.error;
+    d.activeProducts=products.status==='SUCCESS'?rows(products).map(x=>pick(x,['id','name','productCode','productSKU','isRecurring','activeStatus'])):[];
+    const full=await read('/m-api/product/product/gql',{query:'query { findAllByLocationGroupIntId(locationGroupIntId:'+department.id+') {intId,name,locationGroupIntId,isRecurring,productCode,productSKU} }'});
+    d.allProductsStatus=Array.isArray(full.data?.findAllByLocationGroupIntId)?'SUCCESS':(full.error||'FAIL');
+    d.allProducts=Array.isArray(full.data?.findAllByLocationGroupIntId)?full.data.findAllByLocationGroupIntId:[];
     d.products=rows(products).map(x=>pick(x,['id','intId','name','productCode','productSKU','isRecurring','activeStatus','locationGroupId','productCharge','maxProductCharge','type','code']));
     const team=await read('/pulse/api/user/secure/getAvailableUsers/'+encodeURIComponent(tenant)+'?'+new URLSearchParams({tenantLocationID:String(hotel.id),locationGroupID:String(department.id),getContributorsOnly:'true',getWithAllStatus:'true',getOperatorsOnly:'false',isWeightWiseUser:'false',allowSameWeightUser:'true',decideContributorOpratorLocationLevel:'true'}));
     d.teamStatus=team.status||team.error;
@@ -128,7 +134,7 @@ async function main(){
   }
   console.log('Scoped hotel catalog reads finished; no financial writes.');
   report.stage='metrics';await page.goto(ORIGIN+'/metrics/productMetrics',{waitUntil:'domcontentloaded'});
-  try{await page.locator('select#TenantLocation option').nth(1).waitFor({state:'attached',timeout:20000});}catch(_){report.stage='catalog-read-ui-incomplete';return;}
+  try{view=await findView();}catch(_){report.frames=await Promise.all(page.frames().map(async f=>({origin:new URL(f.url()).origin,path:new URL(f.url()).pathname,selects:await f.locator('select').evaluateAll(ns=>ns.map(n=>({id:n.id,name:n.name,options:n.options.length}))).catch(()=>[])})));report.stage='catalog-read-ui-incomplete';return;}
   console.log('Authenticated product screen reached; business writes remain blocked.');
   report.locations=await options('select#TenantLocation');
   for(const hotel of report.locations){
@@ -142,17 +148,17 @@ async function main(){
      const d={...department};h.departments.push(d);
      try{
       await select('select#LocationGroup',department.id);
-      const product=await read('/pulse/api/locationGroupProduct/secure/getAllLocaionGroupProduct',{first:-1,total:-1,locationGroupId:Number(department.id),filterProducts:false,activeStatus:-1});
+      const product=await read('/pulse/api/locationGroupProduct/secure/getAllLocaionGroupProduct?industryId='+encodeURIComponent(headers.industryid||'1'),{first:-1,total:-1,locationGroupId:Number(department.id),filterProducts:true,activeStatus:"NORMAL"});
       d.productsStatus=product.status||product.error;
       d.products=rows(product).map(x=>pick(x,['id','intId','name','productCode','productSKU','isRecurring','activeStatus','locationGroupId','productCharge','maxProductCharge','type','code']));
       if(tenant){
        const team=await read('/pulse/api/user/secure/getAvailableUsers/'+encodeURIComponent(tenant)+'?'+new URLSearchParams({tenantLocationID:hotel.id,locationGroupID:department.id,getContributorsOnly:'true',getWithAllStatus:'true',getOperatorsOnly:'false',isWeightWiseUser:'false',allowSameWeightUser:'true',decideContributorOpratorLocationLevel:'true'}));
        d.teamStatus=team.status||team.error;d.team=rows(team).map(x=>pick(x,['id','intId','name','firstName','lastName','pulseId','activeStatus','roleType']));
       }
-      const add=page.locator('a[title="Add"],button[title="Add"]').first();d.canOpenAdd=await add.isVisible().catch(()=>false);
-      d.actionLabels=await page.locator('a[title],button[title]').evaluateAll(ns=>[...new Set(ns.map(n=>n.title).filter(s=>/edit|approv|deny|lock|delet|adjust|add|review/i.test(s)))]);
+      const add=view.locator('a[title="Add"],button[title="Add"]').first();d.canOpenAdd=await add.isVisible().catch(()=>false);
+      d.actionLabels=await view.locator('a[title],button[title]').evaluateAll(ns=>[...new Set(ns.map(n=>n.title).filter(s=>/edit|approv|deny|lock|delet|adjust|add|review/i.test(s)))]);
       if(d.canOpenAdd){
-       await add.click();await page.locator('#fastAddModal').waitFor({state:'visible'});
+       await add.click();await view.locator('#fastAddModal').waitFor({state:'visible'});
        await select('select#TenantLocationSel',hotel.id);await select('select#LocationGroupSel',department.id);
        d.formProducts=await options('select#Product');d.formTeam=await options('select#User');d.schemas=[];
        for(const p of d.formProducts){
@@ -160,7 +166,7 @@ async function main(){
        }
        // Navigation discards the untouched form; no submit/confirmation buttons are clicked.
        await page.goto(ORIGIN+'/metrics/productMetrics',{waitUntil:'domcontentloaded'});
-       await page.locator('select#TenantLocation option').nth(1).waitFor({state:'attached'});
+       view=await findView();
        await select('select#TenantLocation',hotel.id);
       }
      }catch(_){d.error='DEPARTMENT_INSPECTION_INCOMPLETE';}
