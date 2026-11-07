@@ -1,0 +1,27 @@
+name: IN-Gauge read-only study
+on:
+  push:
+    branches: ['study/ingauge-20261107-readonly']
+    paths: ['scripts/ingauge-study.cjs', '.github/workflows/ingauge-study.yml']
+permissions:
+  contents: read
+concurrency:
+  group: ingauge-readonly-study
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Browser driver
+        run: npm install --no-save --no-audit --no-fund playwright-core@1.49.1
+      - name: Inspect without business writes
+        run: node scripts/ingauge-study.cjs
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          INGAUGE_EMAIL: ${{ secrets.INGAUGE_EMAIL }}
+          INGAUGE_PASS: ${{ secrets.INGAUGE_PASS }}
