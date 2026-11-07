@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 555, items: [
+    { ico: '↗', title: 'One IN-Gauge review workspace',
+      what: 'Package Audit → IN-Gauge automation reads live records, products and contributors for your linked hotel. Upload Opera reports, review missing sales and package fixes, and choose exactly what to apply.',
+      does: 'Owners and managers link the exact property and department. Review assignments, run readiness checks, then apply selected additions, edits, replacements, approvals, denials or removals. Uncertain outcomes and locked periods are held for review.' },
+    { ico: '🪪', title: 'Ibis supports the new Neorcha Tweak portal',
+      what: 'Ibis now uses ibis.myneorcha.com/tweak. Cloud collection, the helper and the copied email extractor recognize the new design and read complete registration-card lists.',
+      does: 'The legacy reader and links remain for Mercure and Adagio. The Ibis reader verifies its exact hotel, arrival dates, document type and page counts before saving.' },
+  ] },
   { v: 554, items: [
     { ico: '↗', title: 'Manual sales: confirmation first',
       what: 'Every manual sale has a prominent confirmation number, copyable entry fields, reservation details, numbered evidence and instructions for what to do in IN-Gauge.',

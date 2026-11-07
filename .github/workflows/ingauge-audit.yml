@@ -1,0 +1,52 @@
+name: IN-Gauge audit automation
+run-name: IN-Gauge · ${{ inputs.tag }}
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Private reviewed HotelOps job
+        required: true
+      hid:
+        description: HotelOps hotel ID
+        required: true
+      plan_hash:
+        description: SHA-256 of the exact reviewed job
+        required: true
+      target_key:
+        description: Verified property queue key
+        required: true
+      test:
+        description: '1 checks readiness without changing financial records; 0 applies reviewed selections'
+        required: true
+        default: '1'
+permissions:
+  contents: read
+concurrency:
+  group: ingauge-${{ inputs.target_key }}
+  cancel-in-progress: false
+jobs:
+  audit:
+    if: github.repository == 'ahmed0088/Depature-Tool'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Browser and query parser
+        run: |
+          npm install --no-save --no-audit --no-fund playwright-core@1.49.1 graphql@16.11.0
+          echo "CHROME_PATH=/usr/bin/google-chrome" >> "$GITHUB_ENV"
+      - name: Read or apply the reviewed plan
+        run: node scripts/ingauge-audit-cloud.js
+        env:
+          TAG: ${{ inputs.tag }}
+          HOTELOPS_HOTEL: ${{ inputs.hid }}
+          PLAN_HASH: ${{ inputs.plan_hash }}
+          TARGET_KEY: ${{ inputs.target_key }}
+          TEST: ${{ inputs.test }}
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
+          INGAUGE_EMAIL: ${{ secrets.INGAUGE_EMAIL }}
+          INGAUGE_PASS: ${{ secrets.INGAUGE_PASS }}

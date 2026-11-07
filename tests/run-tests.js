@@ -230,7 +230,7 @@ const nxAsync = (async () => { const ctx = vm.createContext({ window: {}, docume
     [R.rows[0].email, R.rows[0].phone, R.rows[1].email, N.pipelineTsv(R.rows).split('\n')], ['a@b.c', '+971000', '', ['Confirmation_Number\tName\tEmail\tPhone\tNationality', '617001234\tTest Alpha\ta@b.c\t+971000\tIndia', '617001235\tTest Beta\tNo email\tNo phone\tUnited Kingdom']]);
   check('Neorcha for several hotels: the hotel\'s name gives its Neorcha link and cloud account (Mercure → mercure.myneorcha.com, MERCURE; unknown brand → none)',
     [N.linkFor('Mercure Dubai Barsha Heights'), N.linkFor('Ibis Styles Dubai Deira'), N.linkFor('Grand Mercure Hotel'), N.linkFor('Some Hotel'), N.acctOf('https://mercure.myneorcha.com/neorchaWEBPlatform/#/login'), N.acctOf('nonsense')],
-    ['https://mercure.myneorcha.com/neorchaWEBPlatform/#/login', 'https://ibis.myneorcha.com/neorchaWEBPlatform/#/login', 'https://mercure.myneorcha.com/neorchaWEBPlatform/#/login', '', 'MERCURE', '']);
+    ['https://mercure.myneorcha.com/neorchaWEBPlatform/#/login', 'https://ibis.myneorcha.com/tweak/', 'https://mercure.myneorcha.com/neorchaWEBPlatform/#/login', '', 'MERCURE', '']);
   check('Neorcha cloud window: with its own run label, a run that just finished is never taken for the new one',
     [N.runState({ started: 1e12, tag: 'old', step: 'done', state: 'done' }, null, 1e12 + 20e3, 'new').k, N.runState({ started: 1e12, tag: 'new', step: 'login', state: 'run' }, null, 1e12 - 5e3, 'new').k], [0, 2]);
   const T0 = 1e12, rs = (l, g, at) => { const r = N.runState(l, g, at); return [r.k, r.state, r.n]; };

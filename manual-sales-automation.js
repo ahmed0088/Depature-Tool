@@ -19,6 +19,7 @@
     if(!response.ok)throw new Error('GitHub could not start or read this run ('+response.status+'). Check the start key has Actions read/write access.');return response.status===204?null:response.json();
   }
   function render(){
+    if(W.InGaugeWorkspace){const root=el('msuResults');let box=el('msuAutomation');if(root&&M()?.state.result){if(!box){box=document.createElement('div');box.id='msuAutomation';root.prepend(box);}box.className='msu-automation';box.innerHTML='<div><span class="msu-eyebrow">LIVE IN-GAUGE AUTOMATION</span><h3>Review these sales with the live account</h3><p>Use the hotel’s product and contributor IDs, review assignments, then check and apply selected changes.</p></div><button type="button" class="btn gold" onclick="InGaugeWorkspace.open()">Open IN-Gauge automation →</button>';}return;}
     const root=el('msuResults');if(!root)return;
     let box=el('msuAutomation');
     if(!M()?.state.result){if(box)box.remove();return;}

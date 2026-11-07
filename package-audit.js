@@ -259,7 +259,8 @@ function _pkgDayLabel(n) {
 function _pkgCodeFamilyFor(product) {
   const p = String(product || '').trim().toLowerCase();
   if (!p) return null;
-  const k = PKG_KINDS.find(e => e.ig && e.ig.toLowerCase() === p);
+  const modern = typeof InGaugeAuditCore !== 'undefined' && InGaugeAuditCore.kind(product);
+  const k = PKG_KINDS.find(e => e.ig && e.ig.toLowerCase() === p) || (modern && PKG_KINDS.find(e => e[0] === (modern === 'ROOM' ? 'USS' : modern)));
   return k ? k[2] : null;   // UPS30BB, BBSUM, BBWIN, MBREAK… for Breakfast
 }
 
@@ -288,6 +289,9 @@ const PKG_IG_FIELDS = [
   ['manual',   'Manually added request', ['Manually Added Record']],
   ['creator',  'Request created by', ['Created By']],
   ['recordId', 'IN-Gauge record ID', ['ID']],
+  ['employeeId', 'IN-Gauge contributor ID', ['Employee ID']],
+  ['property', 'IN-Gauge property', ['Tenant Location']],
+  ['productId', 'IN-Gauge product ID', ['Product ID']],
 ];
 const PKG_GUEST_FIELDS = [
   ['conf', 'Confirmation no.',   ['Confirmation Number', 'Confirmation No', 'Confirmation no'], true],
@@ -366,6 +370,7 @@ function _pkgParseExcelUnknowns(rows) {
       manualAdded: C.manual >= 0 && /^(yes|true|1)$/i.test(String(r[C.manual] || '').trim()),
       requestedBy: C.creator >= 0 ? String(r[C.creator] || '').trim() : '',
       recordId: C.recordId >= 0 ? String(r[C.recordId] || '').trim().replace(/\.0+$/, '') : '',
+      employeeId:C.employeeId>=0?String(r[C.employeeId]||'').trim():'', property:C.property>=0?String(r[C.property]||'').trim():'', productId:C.productId>=0?String(r[C.productId]||'').trim():'',
       product, employee, needsProduct, needsEmployee,
     });
   }
@@ -686,7 +691,7 @@ function _pkgDayNum(s) {
 function _pkgFamilyName(r) {
   const p = String(r.product || '');
   const pl = p.trim().toLowerCase();
-  if (pl && PKG_KINDS.some(e => e.ig && e.ig.toLowerCase() === pl)) return p;
+  if (pl && _pkgCodeFamilyFor(p)) return p;
   const c = String(r.code || '');
   const k = c && PKG_KINDS.find(e => e.ig && e.nameTest(c));
   if (k) return k.ig;
@@ -698,7 +703,7 @@ function _pkgKnownNames() { return PKG_KINDS.filter(e => e.ig).map(e => e.ig.toL
 // Early check-in and late checkout are charged ONCE per stay. Breakfast and
 // the board packages are per-night, so IN-Gauge listing one row per day is
 // expected for those and only for those. ("Once per stay" is a switch per kind in Settings.)
-function _pkgIsOneTime(name) { const n = String(name || '').toLowerCase(); return !!n && PKG_KINDS.some(e => e.once && e.ig && e.ig.toLowerCase() === n); }
+function _pkgIsOneTime(name) { const family=_pkgCodeFamilyFor(name);return !!family && PKG_KINDS.some(e=>e.once && e[2]===family); }
 
 // Find the Opera event backing this charge. Price identifies the exact
 // package when a stay has several (e.g. breakfast switched tiers mid-stay);
@@ -727,6 +732,7 @@ function _pkgMatchEvent(u, cands) {
     return _pkgPickOriginator(matches) || (added.length === 1 ? added[0] : null);
   }
   const family = _pkgCodeFamilyFor(u.product);
+  if(!family&&typeof InGaugeAuditCore!=='undefined')return null;
   const pool = family ? cands.filter(c => family.test(c.code)) : cands;
   return _pkgPickOriginator(priced(pool)) || _pkgPickOriginator(pool);
 }
@@ -745,12 +751,28 @@ function _pkgFamilyPart(key) {
   return w.length ? w[w.length - 1] : '';
 }
 
+function _pkgIdentityPeople() {
+  const live=typeof window!=='undefined'&&window.InGaugeWorkspace?.state?.snapshot;
+  if(live?.contributors)return live.contributors;
+  const names=[...new Set([...PKG_STAFF,..._pkgReportNames()])].sort();
+  return names.map((name,i)=>({id:String(i+1),name,activeStatus:PKG_STAFF_LEFT[name]?'DEACTIVATED':'NORMAL'}));
+}
+function _pkgResolveIdentity(u) {
+  if(typeof InGaugeAuditCore==='undefined')return null;
+  const aliases=typeof pkgStaffDb!=='undefined'?Object.values(pkgStaffDb).map(s=>({name:s.name,logins:s.logins||[],contributorId:s.contributorId||''})):Object.entries(PKG_STAFF_ALIASES).map(([name,logins])=>({name,logins}));
+  for(const [name,olds] of Object.entries(PKG_STAFF_FORMER))aliases.push({name,logins:olds});
+  return InGaugeAuditCore.resolveSeller(u,_pkgIdentityPeople(),aliases);
+}
 function _pkgSameUser(a, b) {
   const x = _pkgUserKey(a), y = _pkgUserKey(b);
   if (!x || !y) return false;
   if (x === y) return true;
+  const rx=_pkgResolveIdentity(a),ry=_pkgResolveIdentity(b);
+  if([rx,ry].some(r=>r&&['ambiguous','suggested'].includes(r.state)))return false;
+  if(rx?.state==='matched'&&ry?.state==='matched')return rx.person.id===ry.person.id;
+  if(typeof window!=='undefined'&&window.InGaugeWorkspace?.state?.snapshot&&[rx,ry].some(r=>r?.state==='matched'))return false;
   for (const [name, al] of Object.entries(typeof PKG_STAFF_ALIASES !== 'undefined' ? PKG_STAFF_ALIASES : {})) {
-    const is = k => _pkgUserKey(name) === k || al.some(t => k.split('-').pop() === t || k.split('-').pop().endsWith(t) || k.includes(t));
+    const is = k => _pkgUserKey(name) === k || al.some(t => k.split('-').pop() === t);
     if (is(x) && is(y)) return true;
   }
   // A renamed colleague: the old name (as IN-Gauge still shows it on old rows) is the same person.
@@ -772,6 +794,10 @@ function _pkgSameUserPlain(x, y) {
   x = _pkgUserKey(x); y = _pkgUserKey(y);
   if (!x || !y) return false;
   if (x === y) return true;
+  if(typeof InGaugeAuditCore!=='undefined'){
+    if(InGaugeAuditCore.humanLoginMatch(x,y)||InGaugeAuditCore.humanLoginMatch(y,x))return true;
+    if(/\s/.test(x)&&/\s/.test(y))return false;
+  }
   const fx = _pkgFamilyPart(x), fy = _pkgFamilyPart(y);
   if (fx.length < 3 || fy.length < 3) return false;
   const [long, short] = fx.length >= fy.length ? [fx, fy] : [fy, fx];
@@ -799,6 +825,9 @@ let PKG_STAFF_FORMER = {};
 let PKG_STAFF_LEFT = {};
 
 function _pkgStaffFor(u) {
+  const resolved=_pkgResolveIdentity(u);
+  if(resolved?.state==='matched')return resolved.person.name;
+  if(resolved&&['ambiguous','suggested'].includes(resolved.state))return null;
   const key = _pkgUserKey(u);
   if (!key) return null;
   const login = key.split('-').pop();
@@ -1417,6 +1446,8 @@ function _pkgCompute() {
   _pkgDropNoOpReassigns(normal);  // nothing that needs no change stays on the list
   _pkgApplyPins(normal);          // last: a person's pinned decision beats the log
   _pkgFlagRequestedOverlaps(results);
+  results.forEach(r=>{if(r.requestedSale||r.pin||!['credit','review'].includes(r.verdict)||!(r.reassign||r.needsEmployee))return;const identity=_pkgResolveIdentity(r.originEvent?.user||r.user);if(identity&&['ambiguous','suggested'].includes(identity.state)){r.identityReview=true;r.verdict='review';r.alreadyComplete=false;r.note=identity.reason+' Candidates: '+identity.candidates.map(p=>p.name).join(' / ');}});
+  if(window.InGaugeWorkspace?.state.snapshot)results.forEach(r=>{if(r.pin||r.requestedSale||r.needsProduct||_pkgCodeFamilyFor(r.product))return;r.mappingReview=true;r.verdict='review';r.alreadyComplete=false;r.note='This live product has no verified Opera package family. Confirm its mapping before changing its seller or status.';});
   return results;
 }
 
@@ -1658,6 +1689,7 @@ function _pkgActionText(r) {
   if (r.verdict === 'deny')    return seen ? 'Reviewed, but still remove this charge' : 'Remove this charge';
   if (r.verdict === 'outside') return 'Not in this log';
   if (r.verdict === 'review') {
+    if(r.identityReview)return 'Confirm seller identity';
     if (r.splitSeller) return seen ? 'Reviewed, but still split between two sellers' : 'Split: pick one seller';
     return seen ? 'Reviewed, but still needs checking in Opera' : 'Check in Opera';
   }
@@ -2074,6 +2106,7 @@ function _pkgCardHtml(g, inFixed) {
     ${need.length && !inFixed ? _pkgSellerLine(need) : ''}
     ${short && !inFixed ? `<div class="pa-short">${escapeHtml(short)}</div>` : ''}
     ${_pkgChipsHtml(rows, need)}
+    ${need.length&&!inFixed&&typeof window!=='undefined'&&window.InGaugeWorkspace ? `<button type="button" class="pa-btn" onclick="InGaugeWorkspace.fromAudit('${String(r0.recordId||'').replace(/[^0-9]/g,'')}')">Review in IN-Gauge automation →</button>` : ''}
     <div class="pa-foot">
       ${fixBtn}
       <button type="button" class="pa-btn${whyOpen ? ' on' : ''}" aria-expanded="${whyOpen}" onclick="pkgWhy(${J(g.key)})">Why?</button>
@@ -2305,6 +2338,8 @@ function _pkgCanEdit() {
   return r === 'supervisor';
 }
 function pkgShowView(v) {
+  if(v==='ingauge'&&window.InGaugeWorkspace){window.InGaugeWorkspace.open();return;}
+  if(document.getElementById('igWorkspace'))document.getElementById('igWorkspace').hidden=true;
   if (v === 'manual' && window.ManualUpsells) { window.ManualUpsells.show(); return; }
   if (window.ManualUpsells) window.ManualUpsells.hide();
   _pkgMountViews();

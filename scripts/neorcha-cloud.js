@@ -129,11 +129,11 @@ async function steps(page) {
 /** whose Neorcha login and link (pure): the account's own secrets; the main ones for no account or the main hotel's brand
  *  (the brand = the first part of the main link, ibis when there is none); anything else must have its own */
 function resolveLogin(acct, env) {
-  const DEF = 'https://ibis.myneorcha.com/neorchaWEBPlatform/#/login', t = v => String(v || '').trim();
+  const DEF = 'https://ibis.myneorcha.com/tweak/', t = v => String(v || '').trim();
   const sub = u => { try { return new URL(u).hostname.split('.')[0].toUpperCase(); } catch (_) { return ''; } };
   const mainUrl = t(env.NEORCHA_URL) || DEF, mainBrand = sub(mainUrl), urlIn = t(env.URL_IN);
   if (acct && t(env.NEORCHA_USER_ACC) && t(env.NEORCHA_PASS_ACC))
-    return { user: env.NEORCHA_USER_ACC, pass: env.NEORCHA_PASS_ACC, url: urlIn || t(env.NEORCHA_URL_ACC) || 'https://' + acct.toLowerCase().replace(/_.*$/, '') + '.myneorcha.com/neorchaWEBPlatform/#/login', who: acct };
+    return { user: env.NEORCHA_USER_ACC, pass: env.NEORCHA_PASS_ACC, url: urlIn || t(env.NEORCHA_URL_ACC) || 'https://' + acct.toLowerCase().replace(/_.*$/, '') + '.myneorcha.com/' + (acct.replace(/_.*$/, '') === 'IBIS' ? 'tweak/' : 'neorchaWEBPlatform/#/login'), who: acct };
   if (!acct || acct === mainBrand) return { user: env.NEORCHA_USER || '', pass: env.NEORCHA_PASS || '', url: urlIn || mainUrl, who: 'main' };
   return { err: 'The ' + acct + ' hotel is not set up on GitHub yet — add the secrets NEORCHA_USER_' + acct + ' and NEORCHA_PASS_' + acct + ' (Settings → Secrets and variables → Actions → New repository secret).' };
 }
@@ -152,7 +152,8 @@ async function main() {
   const { from, to } = datesOf(E.FROM, E.TO);
   const url0 = String(E.NEORCHA_URL || '').trim(), okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' && /(^|\.)myneorcha\.com$/i.test(x.hostname) || (!!E.FB_DB_URL && x.hostname === 'localhost'); } catch (_) { return false; } };
   if (url0 && !okUrl(url0)) await fail('That Neorcha link is not a myneorcha.com address.');
-  const url = url0 || 'https://ibis.myneorcha.com/neorchaWEBPlatform/#/login';
+  const url = /^https:\/\/ibis\.myneorcha\.com\/neorchaWEBPlatform\/?(?:#.*)?$/i.test(url0) ? 'https://ibis.myneorcha.com/tweak/' : url0 || 'https://ibis.myneorcha.com/tweak/';
+  const tweak = new URL(url).hostname === 'ibis.myneorcha.com' && /^\/tweak(?:\/|$)/.test(new URL(url).pathname);
   say('Neorcha account: ' + (R.who === 'main' ? 'main' + (acct ? ' (' + acct + ')' : '') : acct) + ' · ' + new URL(url).hostname);
   const runUrl = E.GITHUB_RUN_ID ? (E.GITHUB_SERVER_URL || 'https://github.com') + '/' + E.GITHUB_REPOSITORY + '/actions/runs/' + E.GITHUB_RUN_ID : '';
   const nice = d => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -171,6 +172,18 @@ async function main() {
   page.setDefaultTimeout(30000);
   try {
     say('Opening Neorcha…');
+    if (tweak) {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      const user = page.locator('input[formcontrolname=username]:visible');
+      await user.waitFor({ state: 'visible', timeout: 60000 });
+      await live({ step: 'login', note: 'Signing in to the Ibis Tweak portal…' });
+      try {
+        await user.fill(String(E.NEORCHA_USER).trim());
+        await page.locator('#userPassword').fill(String(E.NEORCHA_PASS));
+        await page.locator('button.login-btn[type=submit]').click();
+        await page.waitForURL(u => /^\/tweak\/dashboard(?:\/|$)/.test(u.pathname), { timeout: 45000 });
+      } catch (_) { throw Error('The Ibis Tweak sign-in did not complete. Check the Neorcha account or any verification prompt.'); }
+    } else {
     // the login box can be slow or Neorcha can be down: try twice, and say what the page showed (no guessing)
     const openLogin = async n => {
       let st = 0; const resp = await (n ? page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 }) : page.goto(url.replace(/#.*$/, '') + '#/login', { waitUntil: 'domcontentloaded', timeout: 60000 })).catch(e => { tlog('NET', 'Opening Neorcha failed: ' + String(e && e.message || e).split('\n')[0].slice(0, 140)); return null; });
@@ -189,6 +202,7 @@ async function main() {
       : 'Neorcha\'s login page did not open. What it showed: ' + lg.why);
     say('Logging in…'); tlog('AUTH', 'Login form found · typing username (' + String(E.NEORCHA_USER).trim().length + ' chars) · password ●●●●●●●● → Login'); await live({ step: 'login', note: 'Logging in to Neorcha…' });
     await login(page, String(E.NEORCHA_USER), String(E.NEORCHA_PASS));
+    }
     tlog('AUTH', '✓ Session open · ' + (await page.evaluate(() => location.hash)).slice(0, 40));
     say('Logged in. Collecting…'); tlog('BOT', 'Collector injected (HotelOps ' + (fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8').match(/APP_VERSION = '([^']+)'/) || [, '?'])[1] + ') · arrivals ' + from + ' → ' + to);
     await live({ step: 'search', note: 'Logged in — searching the dates…' });

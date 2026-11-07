@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  NEORCHA GUEST DOCUMENTS — Email + Phone Extractor  ·  v10.0
+//  NEORCHA GUEST DOCUMENTS — Email + Phone Extractor  ·  v10.1
 // ═══════════════════════════════════════════════════════════════════════════
 //
 //  v10 (on top of v9.0 PRO)
@@ -18,7 +18,87 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 (async function NeorchaProScraper() {
-  const VERSION = '10.0';
+  if (location.hostname === 'ibis.myneorcha.com' && /^\/tweak(?:\/|$)/.test(location.pathname)) {
+    async function TWEAK_COLLECT(O) {
+  O = O || {};
+  if (location.protocol !== 'https:' || location.hostname !== 'ibis.myneorcha.com' || !/^\/tweak(?:\/|$)/.test(location.pathname)) throw Error('The Tweak reader is enabled for Ibis only.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(O.from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(O.to || '') || O.from > O.to) throw Error('Choose a valid arrival date range.');
+  const version = sessionStorage.getItem('tweak.tenantContextVersion');
+  if (!version) throw Error('Sign in to the Ibis Tweak portal before collecting.');
+  const progress = (n, total) => { if (O.progress) O.progress({ n, prog: total ? Math.min(97, Math.round(n / total * 95)) : 3, note: 'Reading Ibis registration cards: ' + n + (total ? ' / ' + total : '') }); };
+  async function request(path, body) {
+    if (O.stopped && O.stopped()) throw Error('Collection stopped.');
+    if (sessionStorage.getItem('tweak.tenantContextVersion') !== version) throw Error('The Neorcha account context changed. Start a fresh run.');
+    const headers = { 'X-Tweak-Context-Version': version };
+    if (body) {
+      headers['Content-Type'] = 'application/json';
+      const cookie = document.cookie.split(';').map(x => x.trim()).find(x => x.startsWith('XSRF-TOKEN='));
+      if (cookie) headers['X-XSRF-TOKEN'] = decodeURIComponent(cookie.slice(11));
+    }
+    const response = await fetch('/tweak/api/' + path, { method: body ? 'POST' : 'GET', credentials: 'same-origin', headers, ...(body ? { body: JSON.stringify(body) } : {}) });
+    if (!response.ok) throw Error(response.status === 409 ? 'The Neorcha account context changed. Start a fresh run.' : 'Neorcha could not read registration cards (HTTP ' + response.status + ').');
+    return response.json();
+  }
+  const menu = await request('screens/my'), screens = [];
+  function walk(value) { if (Array.isArray(value)) value.forEach(walk); else if (value && typeof value === 'object') { if (value.screenId && value.href === 'guest-documents') screens.push(value); Object.values(value).filter(x => x && typeof x === 'object').forEach(walk); } }
+  walk(menu);
+  const ids = [...new Set(screens.map(x => String(x.screenId)))];
+  if (ids.length !== 1 || !/^\d+$/.test(ids[0])) throw Error('The Guest Documents screen could not be identified for this account.');
+  const screen = ids[0], definition = await request('screens/' + screen + '/definition');
+  const filterDefs = Array.isArray(definition.filters) ? definition.filters : definition.filters && definition.filters.filters || [];
+  if (!['hotel_id', 'arrival_date', 'enum_id'].every(k => filterDefs.some(f => f.key === k))) throw Error('The Guest Documents filters changed. Collection stopped for review.');
+  const hotels = await request('screens/' + screen + '/filters/lookup-values?key=hotel_id');
+  const options = Array.isArray(hotels) ? hotels : hotels.options || hotels.values || [];
+  const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const matches = options.filter(h => O.hotelId ? String(h.value ?? h.id) === String(O.hotelId) : /ibisstyles.*deira/.test(norm(h.label || h.name || h.hotel_name)));
+  if (matches.length !== 1) throw Error('Choose the exact Ibis Styles Dubai Deira hotel. The reader will not use All Hotels.');
+  const hotel = matches[0], hotelId = hotel.value ?? hotel.id;
+  if (hotelId == null || String(hotelId) === '' || String(hotelId).toLowerCase() === 'all') throw Error('A specific Ibis hotel is required.');
+  const filters = [{ key: 'hotel_id', operator: '=', value: hotelId }, { key: 'arrival_date__from', operator: '>=', value: O.from }, { key: 'arrival_date__to', operator: '<=', value: O.to }, { key: 'enum_id', operator: '=', value: 200 }];
+  const rows = [], seen = new Set(); let total = null, offset = 0;
+  for (;;) {
+    const page = await request('screens/' + screen + '/datasets/execute', { featureKey: 'dataset.spec', filters, limit: 200, offset });
+    if (!Array.isArray(page.rows)) throw Error('Neorcha returned an unexpected registration list.');
+    const count = Number(page.meta && page.meta.totalCount);
+    if (!Number.isSafeInteger(count) || count < 0 || count > 5000 || (total !== null && count !== total)) throw Error('The registration list changed or is too large. Use a smaller date range and collect again.');
+    total = count;
+    if (!page.rows.length && offset < total) throw Error('Neorcha returned an incomplete registration list. Nothing was saved.');
+    for (const r of page.rows) {
+      if (r.id == null || seen.has(String(r.id))) throw Error('Neorcha repeated a registration card. Nothing was saved.');
+      seen.add(String(r.id));
+      if (String(r.hotel_id) !== String(hotelId) || Number(r.enum_id) !== 200 || String(r.arrival_date || '').slice(0, 10) < O.from || String(r.arrival_date || '').slice(0, 10) > O.to) throw Error('A registration does not match the selected hotel, dates or document type. Nothing was saved.');
+      const text = value => value == null ? '' : String(value).slice(0, 200);
+      const email = text(r.email).trim();
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Error('Neorcha did not return a readable email. Collection stopped for review.');
+      rows.push({ 'Confirmation Number': text(r.confirmation_number), 'First Name': text(r.first_name), 'Last Name': text(r.last_name), 'Arrival Date': text(r.arrival_date), 'Departure Date': text(r.departure_date), 'Room Number': text(r.room_number), 'Room Type': text(r.room_type_name || r.room_type), 'Nationality': text(r.nationality || r.country), 'Email': email, 'Phone': text(r.phone), 'Title': text(r.salutation), 'Purpose Of Visit': text(r.purpose_of_visit), 'Number of Adults': text(r.number_of_adults), 'Number of Children': text(r.number_of_children), 'Membership Number': text(r.membership_number), 'Membership Type': text(r.membership_type), 'Checked In By': text(r.checked_in_by || r.operator), 'Company Name': text(r.company_name), 'Insertion Date': text(r.insert_date), 'Source': text(r.platform) });
+    }
+    offset += page.rows.length; progress(offset, total);
+    if (offset > total) throw Error('The registration count changed. Nothing was saved.');
+    if (offset === total) break;
+  }
+  return rows;
+}
+
+    const now = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Dubai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    const from = prompt('Ibis registration arrivals from (YYYY-MM-DD)', now.slice(0,7)+'-01'); if (!from) return;
+    const to = prompt('Ibis registration arrivals to (YYYY-MM-DD)', now); if (!to) return;
+    try {
+      const rows = await TWEAK_COLLECT({from,to,progress:p=>console.log('[Neorcha] '+p.note)});
+      const clean = v => String(v || '').replace(/[\t\r\n]/g,' ');
+      const relay = email => /(?:^|\.)(?:trip\.com|booking\.com|expedia(?:partnercentral)?\.com|airbnb\.com|hotels\.com|agoda\.com)$/i.test(String(email).split('@')[1] || '');
+      const output = ['Confirmation_Number\tName\tEmail\tPhone\tNationality', ...rows.map(r=>[r['Confirmation Number'],[r['First Name'],r['Last Name']].filter(Boolean).join(' '),relay(r.Email)?'No@email.com':r.Email||'No email',r.Phone||'No phone',/united arab emirates|^u[ .]*a[ .]*e$/i.test(r.Nationality)?'UAE':r.Nationality].map(clean).join('\t'))].join('\n');
+      const box = document.createElement('section');box.style.cssText='position:fixed;inset:5vh 5vw;z-index:2147483647;background:#fff;color:#172033;padding:20px;border:1px solid #cdd3df;border-radius:16px;box-shadow:0 20px 80px #0005;display:flex;flex-direction:column;gap:12px;font:14px system-ui';
+      const header = document.createElement('b');header.textContent=rows.length+' Ibis registrations — copy into HotelOps Guest Pipeline';
+      const close = document.createElement('button');close.textContent='Close';close.style.alignSelf='end';close.onclick=()=>box.remove();
+      const area = document.createElement('textarea');area.value=output;area.readOnly=true;area.style.cssText='flex:1;min-height:0;width:100%;font:12px monospace';
+      const copy = document.createElement('button');copy.textContent='Copy registration list';copy.onclick=async()=>{area.select();try{await navigator.clipboard.writeText(output);copy.textContent='Copied';}catch(_){copy.textContent='Select and copy the text above';}};
+      box.append(close,header,area,copy);document.body.appendChild(box);
+      console.log('[Neorcha] '+rows.length+' cards read. The result is in the on-screen panel.');
+    }catch(error){console.error('[Neorcha] '+error.message);}
+    return;
+  }
+
+  const VERSION = '10.1';
   const NS = '__neorcha_pro';
   const SAVE_KEY = '__neorcha_pro_progress';
 

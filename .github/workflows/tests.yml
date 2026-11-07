@@ -18,6 +18,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
+      - name: Audit parser dependency
+        run: npm install --no-save --no-audit --no-fund graphql@16.11.0
       - name: Syntax check every script
         run: for f in *.js scripts/*.js tests/*.js; do node --check "$f"; done
       - name: Regression tests
@@ -33,3 +35,8 @@ jobs:
         run: node tests/manual-upsells.test.js
       - name: Reviewed sales automation guards
         run: node tests/manual-sales-automation.test.js
+
+      - name: IN-Gauge review and Neorcha reader checks
+        run: |
+          node tests/ingauge-audit.test.js
+          node tests/neorcha-tweak.test.js

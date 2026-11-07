@@ -107,6 +107,9 @@
     if (names.length > 1) return { name: names.join(' / '), basis: 'Conflicting notes', mapped: false, warning: 'The notes name different sellers. Confirm who made the sale.', explanation: `Notes name ${names.join(' and ')}; posted by ${posted}. Seller credit needs confirmation.`, employeeId: '' };
     if (names.length) {
       const name = names[0], tokens = norm(name).split(' '), hits = employees.filter(e => tokens.every(t => norm(e.name).split(' ').includes(t)));
+      const identity = global.InGaugeAuditCore?.resolveSeller(name, employees);
+      if(identity?.state === 'matched'){hits.splice(0,hits.length,identity.person);}
+      else if(identity && ['ambiguous','suggested'].includes(identity.state)){hits.splice(0,hits.length);}
       const seller = hits.length === 1 ? hits[0].name : name;
       const conflict = !tokens.every(t => norm(posted).split(' ').includes(t));
       return { name: seller, basis: 'Opera note', mapped: hits.length === 1, employeeId: hits.length === 1 ? hits[0].id : '', warning: [conflict ? 'The named seller differs from the posting user.' : '', hits.length !== 1 ? 'Seller is not uniquely mapped to an IN-Gauge employee in this export.' : ''].filter(Boolean).join(' '), explanation: `Credit ${seller}: the Opera note names this seller; posted by ${posted}.` };
@@ -115,10 +118,11 @@
     const hits = employees.filter(e => norm(e.name) === norm(posted));
     return { name: hits.length === 1 ? hits[0].name : posted, basis: system ? 'Unresolved posting user' : 'Posting user fallback', mapped: false, employeeId: '', warning: system ? 'A system/night-audit posting account does not establish the seller.' : 'No seller named in notes: confirm seller credit before adding.', explanation: `No seller identified in the note. Posted by ${posted}; ${system ? 'the seller is unknown.' : 'this is only a suggested seller, requiring confirmation.'}` };
   }
-  function reconcile(journal, reservations, ig) {
-    const employees = [...new Map(ig.map(g => [(id(g['Employee ID']) ? 'id:' + id(g['Employee ID']) : 'name:' + norm(g.employee)), { name: g.employee, id: id(g['Employee ID']) }])).values()].filter(e => e.name && !/^[-—]$/.test(e.name));
+  function reconcile(journal, reservations, ig, context = {}) {
+    const employees = context.contributors || [...new Map(ig.map(g => [(id(g['Employee ID']) ? 'id:' + id(g['Employee ID']) : 'name:' + norm(g.employee)), { name: g.employee, id: id(g['Employee ID']) }])).values()].filter(e => e.name && !/^[-—]$/.test(e.name));
     const dates = [...new Set(ig.map(g => g.day).filter(Boolean))].sort(), dateSet = new Set(dates), guestIndex = new Map(), exactIndex = new Map(), confIndex = new Map();
-    const productKey = v => clean(v).toLowerCase().replace(/[-\s]+/g, ' ');
+    if(context.coverage?.complete){ for(let d=new Date(context.coverage.from+'T00:00:00Z'); d.toISOString().slice(0,10)<=context.coverage.to; d.setUTCDate(d.getUTCDate()+1)) dateSet.add(d.toISOString().slice(0,10)); dates.splice(0,dates.length,...[...dateSet].sort()); }
+    const productKey = v => global.InGaugeAuditCore?.kind(v) || clean(v).toLowerCase().replace(/[^a-z0-9]+/g, '');
     for (const r of reservations) {
       const key = room(r.ROOM_NO || r.DISP_ROOM_NO) + '|' + norm(r.FULL_NAME);
       if (!guestIndex.has(key)) guestIndex.set(key, []); guestIndex.get(key).push(r);
@@ -183,7 +187,7 @@
     const parsed = kind === 'ingauge' ? readWorkbook(await file.arrayBuffer()) : kind === 'journal' ? parseJournal(await file.text()) : parseReservations(await file.text());
     const entry = { parsed, name: file.name, file };
     if (sharedOnly) { state.shared[kind] = entry; return; }
-    state.data[kind] = parsed; state.files[kind] = entry; invalidate();
+    state.data[kind] = parsed; state.files[kind] = entry; if(kind==='ingauge')state.liveContext=null; invalidate();
   }
   function readWorkbook(buffer) {
     if (!global.XLSX) throw new Error('The Excel reader is still loading. Try again when the app has loaded.');
@@ -207,7 +211,7 @@
     if (state.busy || !['journal','reservations','ingauge'].every(k => state.data[k])) return;
     state.busy = true; state.error = ''; render();
     await new Promise(resolve => setTimeout(resolve, 20));
-    try { state.result = reconcile(state.data.journal.rows, state.data.reservations.rows, state.data.ingauge.rows); state.filter = 'add'; state.limit = 60; state.open.clear(); }
+    try { state.result = reconcile(state.data.journal.rows, state.data.reservations.rows, state.data.ingauge.rows, state.liveContext || {}); state.filter = 'add'; state.limit = 60; state.open.clear(); }
     catch (error) { state.result = null; state.error = error.message; }
     finally { state.busy = false; render(); }
   }
@@ -304,7 +308,7 @@
     if (!state.result) { root.innerHTML = '<div class="msu-empty"><span aria-hidden="true">✓</span><h3>Your monthly add list, with the proof</h3><p>Upload all three reports and check manual sales. You’ll see what to add, who earned it, and which requests already exist.</p></div>'; return; }
     const result = state.result, warnings = Object.values(state.data).flatMap(d => d.warnings);
     const matches = result.rows.map((r, i) => ({ r, i })).filter(({ r }) => r.bucket === state.filter && (!state.search || searchNorm([r.room, r.guest, r.conf, r.product, r.seller.name, r.transaction, r.note, ...r.matches.map(g => g.conf)].join(' ')).includes(searchNorm(state.search)) || [r.room, r.conf, r.transaction, ...r.matches.map(g => g.conf)].some(v => clean(v).includes(state.search))));
-    root.innerHTML = `<div class="msu-report-coverage"><div><b>IN-Gauge daily dates: ${esc(result.dates[0])} → ${esc(result.dates.at(-1))}</b><p>Results use your uploaded export. A newer approval appears after you upload a newer report.</p></div><button type="button" class="btn" data-ms-export>Export review</button></div>
+    root.innerHTML = `<div class="msu-report-coverage"><div><b>IN-Gauge daily dates: ${esc(result.dates[0])} → ${esc(result.dates.at(-1))}</b><p>${state.liveContext ? 'Live snapshot. Refresh IN-Gauge before reviewing a changed request.' : 'Results use your uploaded export. A newer approval appears after you upload a newer report.'}</p></div><button type="button" class="btn" data-ms-export>Export review</button></div>
       <div class="msu-stats" aria-label="Results">${Object.entries(labels).map(([k, label]) => `<button type="button" class="msu-stat ${k}${state.filter === k ? ' selected' : ''}" data-ms-filter="${k}" aria-pressed="${state.filter === k}"><strong>${result.summary[k]}</strong><span>${label}</span>${k === 'add' ? `<small>AED ${money(result.rows.filter(r => r.bucket === 'add').reduce((s, r) => s + r.cents, 0))} net</small>` : ''}</button>`).join('')}</div>
       <div class="msu-list-head"><div><h2>${labels[state.filter]}</h2><p>${state.filter === 'add' ? 'Proposed additions missing from this export. Use a complete, unfiltered report before adding.' : state.filter === 'package' ? 'Automatic package charges stay with Package Audit’s existing correction workflow.' : state.filter === 'existing' ? 'Pending and approved requests are already submitted. Do not create another.' : state.filter === 'coverage' ? 'These dates need a newer or wider IN-Gauge export before a missing sale can be confirmed.' : 'Identity, seller, amount or status needs checking before another request is created.'}</p></div><label class="msu-search"><span class="sr-only">Search sales</span><input id="msuSearch" type="search" value="${esc(state.search)}" placeholder="Room, seller, guest or confirmation…"></label></div>
       <div class="msu-list">${matches.length ? matches.slice(0, state.limit).map(({ r, i }) => card(r, i)).join('') : `<div class="msu-empty"><h3>${state.search ? 'No matching sales' : 'Nothing in this list'}</h3><p>${state.search ? 'Try another room, seller or confirmation.' : 'Choose another result above to see its details.'}</p></div>`}</div>
@@ -347,7 +351,7 @@
     tabs.addEventListener('click', e => { const t = e.target.closest('[data-v]'); if (t && t.dataset.v !== 'manual') hide(); }, true);
     const view = document.createElement('section'); view.id = 'manualUpsellView'; view.className = 'msu'; view.hidden = true; view.setAttribute('aria-label', 'Manual sales reconciliation');
     view.innerHTML = `<div class="msu-hero"><div><span class="msu-eyebrow">MONTHLY RECONCILIATION</span><h2>Every manual sale.<br><span>Accounted for.</span></h2><p>Find Opera upsells missing from IN-Gauge, with the right reservation, seller and evidence.</p></div><div class="msu-hero-aside"><span aria-hidden="true">↗</span><b>Notes say who sold it.<br> Posting user says who entered it.</b><p>Pending requests count as already submitted.</p></div></div>
-      <div class="msu-upload-heading"><h3>Start with your three reports</h3><button type="button" class="msu-link" id="msuUseAudit">Use reports loaded in Audit ↙</button></div>
+      <div class="msu-upload-heading"><h3>Upload Opera reports, then fetch IN-Gauge</h3><button type="button" class="msu-link" id="msuUseAudit">Use reports loaded in Audit ↙</button></div>
       <div class="msu-uploads">${[['journal','01','Opera journal','Journal by Transaction Code · finjrnlbytrans','The manual charges and original seller notes.','.txt,.tsv'],['reservations','02','Reservation Detail','Opera · res_detail text export','Rooms, guests, stay dates and confirmations.','.txt,.tsv'],['ingauge','03','IN-Gauge product list','Complete product export · .xlsx or .xls','Include all staff and statuses, including Pending.','.xlsx,.xls']].map(([kind, step, title, sub, hint, accept]) => `<label class="msu-file" id="msuFile-${kind}"><input type="file" id="msuInput-${kind}" data-ms-kind="${kind}" accept="${accept}"><span class="msu-step">${step}</span><b>${title}</b><span class="msu-file-sub">${sub}</span><p>${hint}</p><span class="msu-file-status">Choose file or drop it here</span></label>`).join('')}</div>
       <div class="msu-runbar"><div><button type="button" class="btn gold" id="msuRun" disabled>Check manual sales</button><button type="button" class="msu-link" id="msuClear">Clear reports</button></div><span>Reports are processed on this device.</span></div>
       <div class="msu-error" id="msuError" role="alert" hidden></div>
@@ -373,7 +377,7 @@
       box.addEventListener('drop', e => { e.preventDefault(); box.classList.remove('drag'); const file = e.dataTransfer?.files[0]; if (file) load(box.querySelector('input').dataset.msKind, file); });
     });
     el('msuRun').onclick = run;
-    el('msuClear').onclick = () => { state.data = {}; state.files = {}; state.search = ''; invalidate(); view.querySelectorAll('input[type="file"]').forEach(i => { i.value = ''; }); render(); };
+    el('msuClear').onclick = () => { state.data = {}; state.files = {}; state.liveContext = null; state.search = ''; invalidate(); view.querySelectorAll('input[type="file"]').forEach(i => { i.value = ''; }); render(); };
     el('msuUseAudit').onclick = () => {
       if (state.busy) return;
       try {
@@ -396,7 +400,13 @@
     for (const [inputId, kind] of [['pkgExcelFileInput','ingauge'],['pkgGuestFileInput','reservations']]) el(inputId)?.addEventListener('change', e => { const file = e.target.files?.[0]; if (file) readFile(kind, file, true).catch(() => { delete state.shared[kind]; }); });
     render(); return true;
   }
-  const api = { parseJournal, parseReservations, parseIngauge, reconcile, sellerOf, amount, date, rowValues, additionFields, additionText, howSteps, card, evidenceHtml, show, hide, mount, state, readWorkbook, exportWorkbook, run, load };
+  function useLiveSnapshot(snapshot, tableRows) {
+    const parsed = snapshot.records.length ? parseIngauge(tableRows) : {rows:[],warnings:[]};
+    state.data.ingauge=parsed;state.files.ingauge={name:'Live '+snapshot.binding.property+' · '+new Date(snapshot.fetchedAt).toLocaleString(),parsed};
+    state.liveContext={coverage:{complete:snapshot.complete,from:snapshot.from,to:snapshot.to},contributors:snapshot.contributors};
+    invalidate();render();
+  }
+  const api = { parseJournal, parseReservations, parseIngauge, reconcile, sellerOf, amount, date, rowValues, additionFields, additionText, howSteps, card, evidenceHtml, show, hide, mount, state, readWorkbook, exportWorkbook, run, load, useLiveSnapshot };
   global.ManualUpsells = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof document !== 'undefined') {

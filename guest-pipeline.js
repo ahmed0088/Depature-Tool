@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const GP_SCRIPTS = {
-  neorcha: { file: 'scripts/neorcha-extractor.js', name: 'Neorcha Extractor', version: 'v10.0' },
+  neorcha: { file: 'scripts/neorcha-extractor.js', name: 'Neorcha Extractor', version: 'v10.1' },
   enroll:  { file: 'scripts/all-enroll.js',        name: 'ALL Enroll',        version: 'v19' }
 };
 
