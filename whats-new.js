@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 564, items: [
+    { ico: '1', title: 'Everything laid out in six steps',
+      what: 'IN-Gauge automation now guides you through Hotel, What to fix, Reports, Review, Run, and Results. The numbered overview lets you jump to each section and shows your current stage.',
+      does: 'The review list appears before Apply. The live run window also shows numbered sign-in, hotel, data, check, apply and result stages. Detailed activity can be expanded; close/cancel controls remain visible. No separate user test step is added.' },
+  ] },
   { v: 563, items: [
     { ico: '⏹', title: 'Close or cancel an IN-Gauge run',
       what: 'Running automation has separate Close window and Cancel automation buttons. They stay visible while the activity log scrolls, including on phones.',

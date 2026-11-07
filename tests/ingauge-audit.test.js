@@ -178,3 +178,7 @@ test('portal cancellation interrupts reads before transport, but never interrupt
  stop=false;portal.stopSeen=false;portal.lastStopCheck=0;portal.preflight={key:C.stable(op),binding:C.stable(s.binding),at:Date.now(),checked:{current:s.records[0],payload:{fixture:true}}};
  const result=await portal.apply(op,s);assert.equal(result.recordId,'100');assert.equal(sends,1);assert.equal(reads,2);assert.equal(portal.finishingWrite,false);await assert.rejects(portal.checkCancelled(true),AutomationCancelled);
 });
+
+test('run stages report preflight before applying, with no apply stage for held or read-only operations',async()=>{
+ const s=snapshot(),p=plan(s,[edit(s,{action:'approve'})]);for(const options of [{},{changed:true},{readOnly:true}]){const d=deps(s,options),stages=[];d.test=!!options.readOnly;d.portal.progress=async(stage,note)=>stages.push({stage,note});await execute(p,s,d);assert.equal(stages[0].stage,'preflight');assert.equal(stages.some(x=>x.stage==='apply'),!options.changed&&!options.readOnly);if(!options.changed&&!options.readOnly)assert(stages.at(-1).note.includes('verifying change 1 of 1'));}
+});

@@ -9,17 +9,19 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
 const targetKey=(b,hid)=>b?'ig-'+sha(C.stable(C.binding(b))).slice(0,32):'discover-'+hid;
 async function execute(plan,snapshot,{portal,db,test,publish,stop}){
   C.validatePlan(plan,snapshot);const results=[];const save=async(op,result)=>{const before=snapshot.records.find(r=>r.id===op.recordId),product=snapshot.products.find(p=>p.id===op.productId),person=snapshot.contributors.find(p=>p.id===op.contributorId);results.push({...result,action:op.action,at:Date.now(),hotel:snapshot.binding.property,currency:snapshot.settings.currency,before:before?{...C.values(before),status:before.status,product:before.product,seller:before.seller}:null,requested:{...op.values,status:op.statusAfter||({approve:'APPROVED',deny:'DENIED',delete:'PURGED'})[op.action],product:product?.name||'',seller:person?.name||''},reason:op.reason||op.evidence||''});await publish(results);};
-  for(const op of plan.operations){
+  for(const [index,op] of plan.operations.entries()){
     if(await stop())return {results,stopped:true};
     const ledgerKey=sha(C.stable(C.binding(plan.binding))+'|'+(op.action==='add'?'transaction:'+op.transaction:'record:'+op.recordId+'|'+op.expected+'|'+op.action));
     let attempted=false;
     try{
       const old=await db.get('ingauge/ledger/'+ledgerKey);
       if(!test&&old&&['intent','uncertain','applied'].includes(old.state))throw Error('A prior operation may already have been sent. Refresh IN-Gauge and verify its outcome before retrying.');
+      await portal.progress?.('preflight','Checking change '+(index+1)+' of '+plan.operations.length);
       const checked=await portal.testOperation(op,snapshot);
       if(op.action==='edit'&&C.matches(op,checked.current)){await save(op,{key:op.key,confirmation:op.confirmation,state:'unchanged',note:'The selected record already has the reviewed values.',recordId:op.recordId});continue;}
       if(test){if(await stop())return {results,stopped:true};await save(op,{key:op.key,confirmation:op.confirmation,state:'tested',note:'Hotel, permissions, product, contributor, record version, duplicates and period lock checked. No financial change sent.'});continue;}
       if(await stop())return {results,stopped:true};
+      await portal.progress?.('apply','Applying and verifying change '+(index+1)+' of '+plan.operations.length);
       await db.put('ingauge/ledger/'+ledgerKey,{state:'intent',at:Date.now(),job:plan.jobTag||'',action:op.action,recordId:op.recordId||'',confirmation:op.confirmation});
       if(await stop()){await db.patch('ingauge/ledger/'+ledgerKey,{state:'cancelled_before_send'});return {results,stopped:true};}
       attempted=true;const outcome=await portal.apply(op,snapshot);
