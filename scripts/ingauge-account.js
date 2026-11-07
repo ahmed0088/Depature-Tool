@@ -54,7 +54,7 @@ class InGaugeAccount {
     if(!this.headers?.authorization)throw new PortalError('The authenticated portal connection is unavailable.');
     const method=data===undefined?'GET':'POST',url=this.origin+path;
     if(!readAllowed(method,url,this.origin,JSON.stringify(data||{})))throw new PortalError('A read attempted an unverified endpoint.');
-    const options={headers:this.headers,timeout:30000};if(data!==undefined)options.data=data;
+    const options={headers:{...this.headers,...(this.scopeTenant?{tenantid:this.scopeTenant}:{})},timeout:30000};if(data!==undefined)options.data=data;
     const r=await this.context.request[method==='POST'?'post':'get'](url,options);
     if(!r.ok())throw new PortalError('IN-Gauge read failed ('+r.status()+').');
     try{return await r.json();}catch(_){throw new PortalError('IN-Gauge returned an unreadable response.');}
@@ -69,6 +69,7 @@ class InGaugeAccount {
     const hotels=[];
     for(const h of locations||[]){
       if(!tenants.includes(C.id(h.tenantId)))throw new PortalError('A location had an unverified tenant.');
+      this.scopeTenant=C.id(h.tenantId);
       const groupData=this.data(await this.read(API+'locationGroup/secure/getLocationGroup/'+h.tenantId+'?'+new URLSearchParams({tenantLocationID:String(h.id)})));
       hotels.push({id:C.id(h.id),name:C.text(h.name),tenantId:C.id(h.tenantId),departments:(groupData||[]).filter(g=>g.activeStatus==='NORMAL').map(g=>({id:C.id(g.id),name:C.text(g.name),retail:!!g.isRetail,fnb:!!g.isFoodAndBeverage}))});
     }
@@ -79,7 +80,7 @@ class InGaugeAccount {
     const discovery=await this.discover(),hotel=discovery.hotels.find(h=>h.id===b.propertyId&&h.tenantId===b.tenantId),group=hotel?.departments.find(d=>d.id===b.departmentId);
     if(!hotel||!group||hotel.name!==b.property||group.name!==b.department)throw new PortalError('The exact reviewed hotel and department were not verified in this account.');
     if(group.retail||group.fnb)throw new PortalError('This automation requires the hotel Front Desk workflow. Retail and F&B need their own quantity model.');
-    this.headers={...this.headers,tenantid:b.tenantId};this.tenantId=b.tenantId;
+    this.scopeTenant=b.tenantId;this.headers={...this.headers,tenantid:b.tenantId};this.tenantId=b.tenantId;
     const config=this.data(await this.read(API+'tenantLocation/secure/'+b.propertyId));
     if(C.id(config.id)!==b.propertyId||C.id(config.tenantId)!==b.tenantId)throw new PortalError('The live property configuration differs from the reviewed binding.');
     const query='query{respData:findUserTenantRoleWithOpenRoutes(userTenantRoleSearchForm:{industryId:'+Number(this.headers.industryid||1)+',tenantId:'+b.tenantId+',userId:'+this.actor.id+',locationId:'+b.propertyId+',departmentId:'+b.departmentId+'}){role{rolePermissions{name} roleIndustryRoute{url}}}}';
@@ -145,7 +146,7 @@ class InGaugeAccount {
     else{path=API+'auditTrail/secure?'+new URLSearchParams(C.auditParams(op));method='post';data={};}
     // All browser traffic remains read-only. This single request is built from the validated reviewed operation.
     this.sent=true;let response;
-    try{const r=await this.context.request[method](this.origin+path,{headers:this.headers,data,timeout:30000});response=await r.json();if(!r.ok()||response.status!=='SUCCESS')throw new PortalError('IN-Gauge did not confirm this change. Check the record before retrying.',true);}
+    try{const r=await this.context.request[method](this.origin+path,{headers:{...this.headers,tenantid:snapshot.binding.tenantId},data,timeout:30000});response=await r.json();if(!r.ok()||response.status!=='SUCCESS')throw new PortalError('IN-Gauge did not confirm this change. Check the record before retrying.',true);}
     catch(error){throw new PortalError(error instanceof PortalError?error.message:'The outcome of the request is uncertain. Check IN-Gauge before retrying.',true);}
     const recordId=op.action==='add'?C.id(response.data?.id):C.id(op.recordId);
     if(!recordId)throw new PortalError('IN-Gauge did not return the new record identifier. Check the outcome before retrying.',true);
@@ -155,3 +156,5 @@ class InGaugeAccount {
   }
 }
 module.exports={InGaugeAccount,PortalError,readAllowed,readQuery,STATUSES};
+
+

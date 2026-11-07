@@ -7,3 +7,5 @@ const fs=require('fs'),{envelope}=require('./ingauge-study.cjs'),{InGaugeAccount
  }
  out.stage='complete';
  }catch(e){out.error=e.message;out.name=e.name;}finally{if(browser)await browser.close().catch(()=>{});const b=Buffer.from(JSON.stringify(envelope(out,fs.readFileSync('scripts/study-public.pem')))).toString('base64');for(let i=0;i<b.length;i+=2000)console.log('STUDY_CHUNK '+b.slice(i,i+2000));console.log('Read-only adapter verification ended.');}})();
+
+
