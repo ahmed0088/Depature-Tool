@@ -17,7 +17,7 @@ function permitted(method,address,body='') {
   if(!p.startsWith('/m-api/'))return method==='GET';
   if(method==='POST'&&p==='/m-api/api/user/authenticateUserUsingLDAP')return true;
   if(method==='POST'&&p==='/m-api/login-service/v1/authenticate-with-auth0')return true;
-  if(method==='POST'&&['/m-api/account/user/gql','/m-api/account/user-tenant-role/gql'].includes(p))return readQuery(body);
+  if(method==='POST'&&/^\/m-api\/(?:account|configuration|product|data)\/[a-z0-9-]+\/gql$/.test(p))return readQuery(body);
   if(/(?:create|update|delete|remove|save|set[A-Z]|send|approve|deny|process|suspend|discontinue|reset|impersonat|logout|signout|track|mark|configure)/i.test(p))return false;
   if(method==='GET')return /\/(?:get[A-Z][^/]*|find[^/]*|is[A-Z][^/]*|check[A-Z][^/]*)(?:\/[^/]*)*$/.test(p)||/\/secure\/\d+$/.test(p)||/\/(?:logo_base64|checkLogo)\//.test(p);
   if(method==='POST'&&/\/(?:find|searchProductMetricData|getAllLocaionGroupProduct)$/.test(p))return true;
