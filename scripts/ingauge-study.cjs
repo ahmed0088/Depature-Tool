@@ -44,17 +44,21 @@ async function main(){
    return route.abort();
   });
   report.stage='login';await page.goto(ORIGIN,{waitUntil:'domcontentloaded'});
-  await page.locator('#email,input[name=username]').first().waitFor({state:'visible',timeout:30000});
+  await page.locator('#email:visible,input[name=username]:visible,#password[type=password]:visible').first().waitFor({state:'visible',timeout:30000});
   const loginOrigin=new URL(page.url()).origin;
+  report.stage='login-form';
   if(loginOrigin==='https://login.app.fpg-ingauge.com'){
    const username=page.locator('input[name=username]');
-   if(await username.isEditable())await username.fill(process.env.INGAUGE_EMAIL);
+   if(await username.isVisible()&&await username.isEditable())await username.fill(process.env.INGAUGE_EMAIL);
    else if((await username.inputValue()).toLowerCase()!==process.env.INGAUGE_EMAIL.toLowerCase())throw Error('LOGIN_ACCOUNT_MISMATCH');
+   report.stage='login-password';
    if(!await page.locator('#password[type=password]').isVisible().catch(()=>false))await page.locator('button[type=submit][name=action]').click();
    await page.locator('#password[type=password]').waitFor({state:'visible',timeout:20000});
    if(new URL(page.url()).origin!=='https://login.app.fpg-ingauge.com')throw Error('LOGIN_ORIGIN');
    await page.locator('#password[type=password]').fill(process.env.INGAUGE_PASS);
+   report.stage='login-submit';
    await page.locator('button[type=submit][name=action]').click();
+   report.stage='login-callback';
    await page.waitForURL(url=>url.origin===ORIGIN,{timeout:30000});
   }else if(loginOrigin===ORIGIN){
    await page.locator('#email').fill(process.env.INGAUGE_EMAIL);
@@ -114,7 +118,7 @@ async function main(){
    }catch(_){h.error='HOTEL_INSPECTION_INCOMPLETE';}
   }
   report.stage='complete';
- }catch(e){report.failure=['MISSING_CREDENTIALS','READ_GUARD'].includes(e.message)?e.message:'INSPECTION_STOPPED';
+ }catch(e){report.failure=['MISSING_CREDENTIALS','READ_GUARD','LOGIN_ACCOUNT_MISMATCH','LOGIN_ORIGIN'].includes(e.message)?e.message:'INSPECTION_STOPPED';
   if(page)try{report.page={origin:new URL(page.url()).origin,path:new URL(page.url()).pathname,title:await page.title(),fields:await page.locator('input,button').evaluateAll(ns=>ns.map(n=>({tag:n.tagName,id:n.id,name:n.name,type:n.type,label:n.tagName==='BUTTON'?n.textContent.trim().slice(0,80):n.getAttribute('placeholder')})))};}catch(_){}
  }
  finally{
