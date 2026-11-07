@@ -1,0 +1,21 @@
+name: IN-Gauge pagination verification
+on:
+  push:
+    branches: ['study/ingauge-20261107-readonly']
+    paths: ['scripts/ingauge-pagination-check.cjs','.github/workflows/ingauge-pagination-check.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-audit --no-fund playwright-core@1.49.1 graphql@16.11.0
+      - run: node scripts/ingauge-pagination-check.cjs
+        env:
+          INGAUGE_EMAIL: ${{ secrets.INGAUGE_EMAIL }}
+          INGAUGE_PASS: ${{ secrets.INGAUGE_PASS }}

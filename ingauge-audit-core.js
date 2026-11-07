@@ -112,6 +112,11 @@
         if(op.action==='approve'&&before.status!=='PENDING')fail('Only an existing Pending request can be approved here.');
         if(op.confirmation!==before.confirmation)fail('A reviewed operation cannot change its reservation identity.');
       }else if(!/^\d+$/.test(text(op.confirmation))||!text(op.transaction))fail('A missing sale needs its confirmation and Opera transaction.');
+      if(op.action==='approve'){
+        const p=snapshot.products.find(p=>p.id===before.productId),person=snapshot.contributors.find(p=>p.id===before.contributorId);
+        if(!p||p.activeStatus!=='NORMAL'||/UNKNOWN|UNMAPPED/.test(key(p.code+' '+p.name))||!person)fail('Identify the product and contributor before approving this request.');
+        if(before.totalCents!==amountTotal(values(before),p,snapshot.settings))fail('Review this request’s configured charge calculation before approval.');
+      }
       if(['deny','delete'].includes(op.action)&&text(op.reason).length<5)fail('Enter a clear reason for this denial or removal.');
       if(['add','edit'].includes(op.action)){
         const p=snapshot.products.find(p=>p.id===id(op.productId));if(!p||p.activeStatus!=='NORMAL'||/UNKNOWN|UNMAPPED/.test(key(p.code+' '+p.name)))fail('Choose an active, identified product from this hotel.');
@@ -155,7 +160,14 @@
     const product=products.find(p=>p.id===id(op.productId)),once=product&&['EC','LC'].includes(kind(product.code)||kind(product.name));
     return records.filter(r=>r.confirmation===op.confirmation&&(r.productId===id(op.productId)||!r.productId||/UNKNOWN|UNMAPPED/.test(key(r.product)))&&(once||r.businessDate===op.values?.businessDate));
   }
-  function matches(op,r){if(r.confirmation!==op.confirmation)return false;if(op.action==='approve')return r.status==='APPROVED';if(op.action==='deny')return r.status==='DENIED';if(op.action==='delete')return r.status==='PURGED';return r.productId===id(op.productId)&&r.contributorId===id(op.contributorId)&&r.status===op.statusAfter&&stable(values(r))===stable(op.values);}
+  function matches(op,r){
+    if(r.confirmation!==op.confirmation)return false;
+    const fields=r.productId===id(op.productId)&&r.contributorId===id(op.contributorId)&&stable(values(r))===stable(op.values);
+    if(op.action==='approve')return fields&&r.status==='APPROVED';
+    if(op.action==='deny')return fields&&r.status==='DENIED';
+    if(op.action==='delete')return fields&&r.status==='PURGED';
+    return fields&&r.status===op.statusAfter;
+  }
   const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,kind,flatten,record,fingerprint,amountTotal,operationError,validatePlan,values,payload,auditParams,duplicates,matches,terminal};
   root.InGaugeAuditCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
