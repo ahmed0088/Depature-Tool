@@ -14,14 +14,14 @@ function fixture(change={}){
  return {ok:change.http!==409,status:change.http||200,json:async()=>data};
  }};
  Object.assign(sandbox.location,change.location);vm.createContext(sandbox);vm.runInContext(collector+';globalThis.collect=TWEAK_COLLECT;',sandbox);
- return {calls,run:()=>sandbox.collect({from:'2026-11-06',to:'2026-11-07'}),switchContext:()=>version='v2'};
+ return {calls,run:(options={})=>sandbox.collect({from:'2026-11-06',to:'2026-11-07',...options}),switchContext:()=>version='v2'};
 }
 test('Tweak discovers Guest Documents and uses exact hotel/date/type filters and CSRF',async()=>{
  const f=fixture(),rows=await f.run();assert.equal(rows.length,1);assert.equal(rows[0].Email,'guest@example.test');assert.equal(rows[0]['Purpose Of Visit'],'Business');assert(!JSON.stringify(rows).includes('MUST_NOT_EXPORT'));
  const post=f.calls.find(c=>c.options.method==='POST'),body=JSON.parse(post.options.body);assert(post.path.includes('/screens/2/'));assert.equal(post.options.headers['X-XSRF-TOKEN'],'test token');assert.equal(post.options.headers['X-Tweak-Context-Version'],'v1');assert.deepEqual(body.filters.map(f=>f.key),['hotel_id','arrival_date__from','arrival_date__to','enum_id']);assert.equal(body.filters[0].value,'1001');assert.equal(body.filters[3].value,200);
  assert(f.calls.every(c=>c.options.method==='GET'||c.path.endsWith('/datasets/execute')));
 });
-test('Tweak remains Ibis-only and does not request another hotel',async()=>{
+test('Tweak uses the link brand and does not request a different hotel',async()=>{
  for(const change of [{location:{hostname:'mercure.myneorcha.com'}},{respond:(p,d)=>p.includes('lookup-values')?{options:[{label:'Mercure Dubai Deira',value:'2'}]}:d}]){const f=fixture(change);await assert.rejects(f.run());assert(!f.calls.some(c=>c.options.method==='POST'));}
 });
 test('mixed hotel, wrong document, wrong dates, duplicate cards and unreadable email stop collection',async()=>{
@@ -38,6 +38,19 @@ test('changed context fails before saving; unexpected filter layouts are held',a
  await assert.rejects(fixture({respond:(p,d)=>p.endsWith('/definition')?{filters:[]}:d}).run(),/filters changed/);
 });
 test('serialized collector carries both implementations for cloud, console and helper',()=>{
- const a=source.indexOf('const collectorSrc = '),b=source.indexOf('//',a);assert(source.slice(a,b).includes('TWEAK_COLLECT.toString()'));assert(source.includes("location.hostname === 'ibis.myneorcha.com'"));
+ const a=source.indexOf('const collectorSrc = '),b=source.indexOf('//',a);assert(source.slice(a,b).includes('TWEAK_COLLECT.toString()'));assert(source.includes('sessionStorage.getItem(\'tweak.tenantContextVersion\')&&!document.querySelector'));
  const cloud=fs.readFileSync('scripts/neorcha-cloud.js','utf8');assert(cloud.includes('input[formcontrolname=username]:visible'));assert(cloud.includes('await login(page, String(E.NEORCHA_USER)'));assert(cloud.includes("'neorchaWEBPlatform/#/login'"));
+});
+
+test('selection keeps reservation identity and excludes unselected data',async()=>{
+ const result=await fixture().run({fields:['Email']});assert(result[0].Email);assert(result[0]['Confirmation Number']);assert(result[0]['Arrival Date']);assert(!('Nationality' in result[0]));assert(!('Purpose Of Visit' in result[0]));
+ const empty=await fixture().run({fields:[]});assert(!('Email' in empty[0]));assert.equal(Object.keys(empty[0]).length,6);
+ await assert.rejects(fixture().run({fields:['passport_number']}),/not supported/);
+});
+test('explicit hotel names resolve within the linked portal and ambiguous hotels are held',async()=>{
+ const good=fixture({location:{hostname:'mercure.myneorcha.com'},respond:(p,d)=>p.includes('/lookup-values')?{options:[{label:'Mercure Dubai Deira',value:'1001'}]}:d});assert.equal((await good.run({hotelName:'Mercure Dubai Deira'})).length,1);
+ await assert.rejects(fixture().run({hotelName:'Other Ibis Hotel'}),/exact hotel/);
+});
+test('cloud URL selection preserves explicit legacy links and recognizes Tweak links',()=>{
+ const cloud=require('../scripts/neorcha-cloud.js');assert.equal(cloud.readerFor('https://ibis.myneorcha.com/neorchaWEBPlatform/#/login'),'legacy');assert.equal(cloud.readerFor('https://mercure.myneorcha.com/tweak/'),'tweak');assert.throws(()=>cloud.readerFor('https://evil.test/tweak/'));assert.throws(()=>cloud.readerFor('https://ibis.myneorcha.com/unknown'));
 });

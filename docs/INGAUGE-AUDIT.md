@@ -27,3 +27,11 @@ The worker uses existing `INGAUGE_EMAIL`, `INGAUGE_PASS`, `HOTELOPS_EMAIL` and `
 Ibis uses `https://ibis.myneorcha.com/tweak/`. Its new reader discovers Guest Documents, resolves the exact Ibis property and reads registration cards by the selected arrival dates. It validates hotel/document/date scope and total page counts before saving. It retains registration/contact fields used by HotelOps and excludes passport, document, birth and payment fields. A changed tenant context or incomplete result stops the run.
 
 The cloud runner, helper/console collector and copied Guest Pipeline extractor support the Ibis design. Other hotels retain their legacy URLs, login and AngularJS card reader. No credentials need to be placed in browser code or repository files.
+
+### Neorcha collection settings (v556)
+
+The saved URL now selects the reader directly: `/tweak/` selects Tweak, while `/neorchaWEBPlatform/` selects the legacy reader. Explicit legacy URLs remain unchanged. The exact property name is checked inside the authenticated new portal. Only Ibis has been verified against a live Tweak account; other links must provide the expected portal and hotel access.
+
+Choose optional fields or use Contacts & enrolment / Full registration presets. Confirmation, guest names, room and stay dates remain included for matching. Today only uses the Dubai calendar date for both arrival boundaries. These are arrival-date collections, not a list of everyone currently staying in the hotel.
+
+Cloud collections are saved under private `neorchaCollections` and a small `neorchaCollectionIndex`. The previous current collection is archived before replacement. Reopen an archived list from Saved collections, or export the current selected-field collection as CSV. Guest Pipeline and Purpose of Stay continue to use the chosen fields. No enrollment or Neorcha business edits are made by collection.

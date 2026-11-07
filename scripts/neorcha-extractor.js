@@ -18,14 +18,17 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 (async function NeorchaProScraper() {
-  if (location.hostname === 'ibis.myneorcha.com' && /^\/tweak(?:\/|$)/.test(location.pathname)) {
+  if (/(^|\.)myneorcha\.com$/i.test(location.hostname) && /^\/tweak(?:\/|$)/.test(location.pathname)) {
     async function TWEAK_COLLECT(O) {
   O = O || {};
-  if (location.protocol !== 'https:' || location.hostname !== 'ibis.myneorcha.com' || !/^\/tweak(?:\/|$)/.test(location.pathname)) throw Error('The Tweak reader is enabled for Ibis only.');
+  const required = ["Confirmation Number", "First Name", "Last Name", "Arrival Date", "Departure Date", "Room Number"], allowed = ["Confirmation Number", "First Name", "Last Name", "Arrival Date", "Departure Date", "Room Number", "Nationality", "Purpose Of Visit", "Number of Adults", "Number of Children", "Membership Number", "Membership Type", "Email", "Phone", "Title", "Checked In By", "Company Name", "Room Type", "Insertion Date", "Source"];
+  if(O.fields !== undefined && (!Array.isArray(O.fields) || O.fields.some(k => !allowed.includes(k)))) throw Error('The requested collection fields are not supported.');
+
+  if (location.protocol !== 'https:' || !/(^|\.)myneorcha\.com$/i.test(location.hostname) || !/^\/tweak(?:\/|$)/.test(location.pathname)) throw Error('Open a verified Neorcha Tweak portal.');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(O.from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(O.to || '') || O.from > O.to) throw Error('Choose a valid arrival date range.');
   const version = sessionStorage.getItem('tweak.tenantContextVersion');
   if (!version) throw Error('Sign in to the Ibis Tweak portal before collecting.');
-  const progress = (n, total) => { if (O.progress) O.progress({ n, prog: total ? Math.min(97, Math.round(n / total * 95)) : 3, note: 'Reading Ibis registration cards: ' + n + (total ? ' / ' + total : '') }); };
+  const progress = (n, total) => { if (O.progress) O.progress({ n, prog: total ? Math.min(97, Math.round(n / total * 95)) : 3, note: 'Reading registration cards: ' + n + (total ? ' / ' + total : '') }); };
   async function request(path, body) {
     if (O.stopped && O.stopped()) throw Error('Collection stopped.');
     if (sessionStorage.getItem('tweak.tenantContextVersion') !== version) throw Error('The Neorcha account context changed. Start a fresh run.');
@@ -50,10 +53,11 @@
   const hotels = await request('screens/' + screen + '/filters/lookup-values?key=hotel_id');
   const options = Array.isArray(hotels) ? hotels : hotels.options || hotels.values || [];
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const matches = options.filter(h => O.hotelId ? String(h.value ?? h.id) === String(O.hotelId) : /ibisstyles.*deira/.test(norm(h.label || h.name || h.hotel_name)));
-  if (matches.length !== 1) throw Error('Choose the exact Ibis Styles Dubai Deira hotel. The reader will not use All Hotels.');
+  const brand = location.hostname.split('.')[0].toLowerCase();
+  const matches = options.filter(h => O.hotelId ? String(h.value ?? h.id) === String(O.hotelId) : O.hotelName ? norm(h.label || h.name || h.hotel_name) === norm(O.hotelName) : norm(h.label || h.name || h.hotel_name).startsWith(brand));
+  if (matches.length !== 1) throw Error('The link does not identify one exact hotel. Choose its exact hotel name; All Hotels is never used.');
   const hotel = matches[0], hotelId = hotel.value ?? hotel.id;
-  if (hotelId == null || String(hotelId) === '' || String(hotelId).toLowerCase() === 'all') throw Error('A specific Ibis hotel is required.');
+  if (hotelId == null || String(hotelId) === '' || String(hotelId).toLowerCase() === 'all') throw Error('A specific hotel is required.');
   const filters = [{ key: 'hotel_id', operator: '=', value: hotelId }, { key: 'arrival_date__from', operator: '>=', value: O.from }, { key: 'arrival_date__to', operator: '<=', value: O.to }, { key: 'enum_id', operator: '=', value: 200 }];
   const rows = [], seen = new Set(); let total = null, offset = 0;
   for (;;) {
@@ -69,14 +73,15 @@
       if (String(r.hotel_id) !== String(hotelId) || Number(r.enum_id) !== 200 || String(r.arrival_date || '').slice(0, 10) < O.from || String(r.arrival_date || '').slice(0, 10) > O.to) throw Error('A registration does not match the selected hotel, dates or document type. Nothing was saved.');
       const text = value => value == null ? '' : String(value).slice(0, 200);
       const email = text(r.email).trim();
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Error('Neorcha did not return a readable email. Collection stopped for review.');
+      if ((O.fields===undefined||O.fields.includes('Email')) && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Error('Neorcha did not return a readable email. Collection stopped for review.');
       rows.push({ 'Confirmation Number': text(r.confirmation_number), 'First Name': text(r.first_name), 'Last Name': text(r.last_name), 'Arrival Date': text(r.arrival_date), 'Departure Date': text(r.departure_date), 'Room Number': text(r.room_number), 'Room Type': text(r.room_type_name || r.room_type), 'Nationality': text(r.nationality || r.country), 'Email': email, 'Phone': text(r.phone), 'Title': text(r.salutation), 'Purpose Of Visit': text(r.purpose_of_visit), 'Number of Adults': text(r.number_of_adults), 'Number of Children': text(r.number_of_children), 'Membership Number': text(r.membership_number), 'Membership Type': text(r.membership_type), 'Checked In By': text(r.checked_in_by || r.operator), 'Company Name': text(r.company_name), 'Insertion Date': text(r.insert_date), 'Source': text(r.platform) });
     }
     offset += page.rows.length; progress(offset, total);
     if (offset > total) throw Error('The registration count changed. Nothing was saved.');
     if (offset === total) break;
   }
-  return rows;
+  const selected = new Set(O.fields === undefined ? allowed : required.concat(O.fields));
+  return rows.map(row => Object.fromEntries(Object.entries(row).filter(([key]) => selected.has(key))));
 }
 
     const now = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Dubai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());

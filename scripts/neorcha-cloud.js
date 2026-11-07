@@ -6,7 +6,7 @@
 //  (neorcha.js → COLLECTOR: Guest Documents, the dates, every confirmation's card, every page) and
 //  saves the cards in HotelOps' database (hotels/<hotel>/neorcha), so every device sees them.
 //
-//  Never read: passport, ID number, birth date, e-mail, phone (the collector skips them).
+//  Retains selected registration/contact fields; never exports passport, ID or birth details.
 //  Never printed: guest data or passwords — the log shows counts and steps only (the repo is public).
 //
 //  Secrets (Settings → Secrets and variables → Actions):
@@ -69,7 +69,18 @@ async function fbOpen() {
   return {
     live: async patch => { patch = Object.assign({ con: CON.slice(-60) }, patch); try { await fetch(at('neorchaLive'), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ at: Date.now() }, patch)) }); } catch (_) {} },
     start: async o => { try { await fetch(at('neorchaLive'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ at: Date.now(), started: Date.now() }, o)) }); } catch (_) {} },
-    save: async card => { const w = await fetch(at('neorcha'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(card) });
+    save: async card => {
+      const previous = await (await fetch(at('neorcha'))).json().catch(()=>null);
+      const archive = async value => {
+        const key='nx'+Number(value.at), payload={at:value.at,from:value.from||'',to:value.to||'',n:+value.n||0,reader:value.reader||'legacy',hotelName:value.hotelName||'',fields:value.fields||[]};
+        for(const [node,data] of [['neorchaCollections/'+key,value],['neorchaCollectionIndex/'+key,payload]]){
+          const response=await fetch(at(node),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+          if(!response.ok)await fail('HotelOps could not save the collection archive ('+response.status+').');
+        }
+      };
+      if(previous&&Number.isSafeInteger(previous.at)&&Array.isArray(previous.rows))await archive(previous);
+      await archive(card);
+      const w = await fetch(at('neorcha'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(card) });
       if (!w.ok) await fail('HotelOps did not accept the cards (' + w.status + ') — is that HotelOps account active at the hotel?'); },
   };
 }
@@ -138,6 +149,14 @@ function resolveLogin(acct, env) {
   return { err: 'The ' + acct + ' hotel is not set up on GitHub yet — add the secrets NEORCHA_USER_' + acct + ' and NEORCHA_PASS_' + acct + ' (Settings → Secrets and variables → Actions → New repository secret).' };
 }
 
+function readerFor(value) {
+  const u = new URL(value);
+  if(u.protocol !== 'https:' || u.username || u.password || !/(^|\.)myneorcha\.com$/i.test(u.hostname)) throw Error('Use a Neorcha HTTPS link.');
+  if(/^\/tweak(?:\/|$)/i.test(u.pathname)) return 'tweak';
+  if(/^\/neorchaWEBPlatform(?:\/|$)/i.test(u.pathname)) return 'legacy';
+  throw Error('Use the portal link containing /tweak/ or /neorchaWEBPlatform/.');
+}
+
 // ── the run ──
 async function main() {
   const acct = String(E.ACCOUNT || '').trim();
@@ -152,8 +171,11 @@ async function main() {
   const { from, to } = datesOf(E.FROM, E.TO);
   const url0 = String(E.NEORCHA_URL || '').trim(), okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' && /(^|\.)myneorcha\.com$/i.test(x.hostname) || (!!E.FB_DB_URL && x.hostname === 'localhost'); } catch (_) { return false; } };
   if (url0 && !okUrl(url0)) await fail('That Neorcha link is not a myneorcha.com address.');
-  const url = /^https:\/\/ibis\.myneorcha\.com\/neorchaWEBPlatform\/?(?:#.*)?$/i.test(url0) ? 'https://ibis.myneorcha.com/tweak/' : url0 || 'https://ibis.myneorcha.com/tweak/';
-  const tweak = new URL(url).hostname === 'ibis.myneorcha.com' && /^\/tweak(?:\/|$)/.test(new URL(url).pathname);
+  const url = url0 || 'https://ibis.myneorcha.com/tweak/';
+  const mode=readerFor(url),tweak=mode==='tweak';
+  const fields=E.FIELDS?JSON.parse(E.FIELDS):undefined;
+  if(fields!==undefined&&(!Array.isArray(fields)||fields.length>30||fields.some(f=>typeof f!=='string'||f.length>60)))await fail('Choose a valid collection field list.');
+  const hotelName=String(E.HOTEL_NAME||'').trim().slice(0,100);
   say('Neorcha account: ' + (R.who === 'main' ? 'main' + (acct ? ' (' + acct + ')' : '') : acct) + ' · ' + new URL(url).hostname);
   const runUrl = E.GITHUB_RUN_ID ? (E.GITHUB_SERVER_URL || 'https://github.com') + '/' + E.GITHUB_REPOSITORY + '/actions/runs/' + E.GITHUB_RUN_ID : '';
   const nice = d => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -206,7 +228,7 @@ async function main() {
     tlog('AUTH', '✓ Session open · ' + (await page.evaluate(() => location.hash)).slice(0, 40));
     say('Logged in. Collecting…'); tlog('BOT', 'Collector injected (HotelOps ' + (fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8').match(/APP_VERSION = '([^']+)'/) || [, '?'])[1] + ') · arrivals ' + from + ' → ' + to);
     await live({ step: 'search', note: 'Logged in — searching the dates…' });
-    await page.evaluate(`window.__nxDone = null; window.__nxP = {}; (${collectorSrc()})({ from: ${JSON.stringify(from)}, to: ${JSON.stringify(to)}, auto: true,
+    await page.evaluate(`window.__nxDone = null; window.__nxP = {}; (${collectorSrc()})({ from: ${JSON.stringify(from)}, to: ${JSON.stringify(to)}, auto: true, fields: ${JSON.stringify(fields)||'undefined'}, hotelName: ${JSON.stringify(hotelName)},
       progress: function (p) { window.__nxP = { note: String(p && p.note || ''), n: +(p && p.n) || 0, prog: +(p && p.prog) || 0 }; },
       send: function (rows, f, t) { window.__nxDone = { rows: rows, from: f, to: t }; } });`);
     let last = '', lastLive = 0, done = null, seenLog = 0;
@@ -227,7 +249,7 @@ async function main() {
     const rows = (done.rows || []).slice(0, 5000);
     tlog('SAVE', rows.length + ' cards · ' + rows.filter(r => r.Email).length + ' emails · ' + rows.filter(r => r.Phone).length + ' phones · ' + netN + ' network calls');
     say('Collected ' + rows.length + ' registration cards'); await live({ step: 'save', note: 'Saving ' + rows.length + ' cards in HotelOps…', n: rows.length, prog: 98 });
-    const card = { at: Date.now(), from, to, by: 'cloud', n: rows.length, rows, account: R.who === 'main' ? '' : acct };
+    const card = { at: Date.now(), from, to, by: 'cloud', n: rows.length, rows, reader: mode, fields: fields||Object.keys(rows[0]||{}), hotelName, account: R.who === 'main' ? '' : acct };
     if (E.DRY) { fs.writeFileSync(E.DRY_OUT || 'neorcha-cloud.json', JSON.stringify(card)); say('DRY run: saved to ' + (E.DRY_OUT || 'neorcha-cloud.json')); }
     if (FB) { await FB.save(card); say('✅ Saved in HotelOps — open Neorcha Registrations on any device.'); }
     tlog('SAVE', '✓ Written to HotelOps · hotels/…/neorcha'); tlog('SYS', 'Done · browser closed');
@@ -235,4 +257,4 @@ async function main() {
   } finally { await browser.close().catch(() => {}); }
 }
 if (require.main === module) main().catch(e => fail('Stopped: ' + String(e && e.message || e).split('\n')[0].replace(/\d{6,}/g, '#')));
-module.exports = { datesOf, fbConfig, resolveLogin };
+module.exports = { datesOf, fbConfig, resolveLogin, readerFor };

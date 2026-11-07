@@ -25,6 +25,14 @@ on:
         description: 'Leave empty (HotelOps fills it: the hotel''s Neorcha link)'
         required: false
         default: ''
+      fields:
+        description: 'Optional JSON array of registration/contact fields selected in HotelOps'
+        required: false
+        default: ''
+      hotel_name:
+        description: 'Exact Neorcha hotel display name (HotelOps fills it)'
+        required: false
+        default: ''
       hid:
         description: 'Leave empty (HotelOps fills it: the hotel the cards go to)'
         required: false
@@ -54,6 +62,8 @@ jobs:
       - name: Collect
         run: node scripts/neorcha-cloud.js
         env:
+          FIELDS: ${{ inputs.fields }}
+          HOTEL_NAME: ${{ inputs.hotel_name }}
           FROM: ${{ inputs.from }}
           TO: ${{ inputs.to }}
           TAG: ${{ inputs.tag }}

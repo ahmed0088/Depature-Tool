@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v555"/>
+<meta name="ho-version" content="v556"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -5600,12 +5600,13 @@ async function appInit() {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       const hadCtl = !!navigator.serviceWorker.controller;
-      navigator.serviceWorker.register('sw.js').then(reg => {
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
         // look for a new version now and then: when the app comes back to the front (at most every 10 minutes), and every 30 minutes
-        let lastCheck = Date.now();
+        let lastCheck = 0;
         const check = () => { if (Date.now() - lastCheck < 10 * 60000) return; lastCheck = Date.now(); reg.update().catch(() => {}); };
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
         setInterval(check, 30 * 60000);
+        check();
       }).catch(err => console.warn('[SW] registration failed:', err));
       // a new version took over: a small bar asks "Update now?". Not answered (or "Later"), the app restarts into it
       // by itself when you are not using it — it's in the background, or untouched for 3 minutes with nothing being

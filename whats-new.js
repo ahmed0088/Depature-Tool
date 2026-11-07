@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 556, items: [
+    { ico: '🪪', title: 'Choose your Neorcha reader and collection',
+      what: 'The saved link chooses the reader: /tweak/ uses the new portal; /neorchaWEBPlatform/ uses the original portal. The current reader is shown beside your collection settings.',
+      does: 'Use Today only (Dubai), choose Contacts & enrolment or Full registration, or select individual fields. Reservation identity stays included. New collections are archived; reopen a saved collection or export it for later use.' },
+    { ico: '☁️', title: 'Today-only Ibis cloud collection verified',
+      what: 'The full automatic Tweak workflow now starts directly after sign-in. Today-only filtering and selected fields were checked against the live portal.',
+      does: 'Open Neorcha Registrations, check the link and fields, press Today only, then Run in the cloud. The app also checks for updates when it opens.' },
+  ] },
   { v: 555, items: [
     { ico: '↗', title: 'One IN-Gauge review workspace',
       what: 'Package Audit → IN-Gauge automation reads live records, products and contributors for your linked hotel. Upload Opera reports, review missing sales and package fixes, and choose exactly what to apply.',

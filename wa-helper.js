@@ -158,7 +158,7 @@ ${reader}
   let port = null;
   const COLLECTOR = ${src};
   const post = o => { try { if (!port) open(); port.postMessage(o); } catch (_) {} };
-  const start = j => { if (!document.body) return setTimeout(() => start(j), 300); COLLECTOR({ from: j.from, to: j.to, auto: true,
+  const start = j => { if(j.url){try{const target=new URL(j.url);if(target.origin!==location.origin||target.pathname.toLowerCase().startsWith('/tweak')!==location.pathname.toLowerCase().startsWith('/tweak'))return;}catch(_){return;}} if (!document.body) return setTimeout(() => start(j), 300); COLLECTOR({ from: j.from, to: j.to, auto: true, fields: j.fields, hotelName: j.hotelName,
     progress: p => post(Object.assign({ source: 'ho-nx-progress' }, p)),
     send: (rows, f, t) => post({ source: 'ho-nx-rows', rows, from: f, to: t }) }); };
   function open() {
@@ -340,11 +340,11 @@ function link(p) {
     if (/^ho-away/.test(src) || src === 'ho-app-url') return;
     // 🪪 Neorcha: HotelOps hands a job (dates only) → kept here, Neorcha opens; its tab asks for the job and sends the cards back
     if (side === 'app' && src === 'ho-nx-job') {
-      const j = { source: 'ho-nx-job', from: String(m.from || '').slice(0, 10), to: String(m.to || '').slice(0, 10), at: Date.now() };
+      const j = { source: 'ho-nx-job', from: String(m.from || '').slice(0, 10), to: String(m.to || '').slice(0, 10), at: Date.now(), fields:Array.isArray(m.fields)?m.fields.filter(v=>typeof v==='string').slice(0,30):undefined, hotelName:String(m.hotelName||'').slice(0,100) };
       if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(j.from) || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(j.to)) return;
       let go = NX_URL; try { const x = new URL(String(m.url || '')); if (x.protocol === 'https:' && /(^|[.])myneorcha[.]com$/i.test(x.hostname)) go = x.href; } catch (_) {}   // each hotel's own Neorcha link
-      await chrome.storage.local.set({ nxJob: j });
-      if (ports.neorcha.size) toSide('neorcha', j); else { try { await chrome.tabs.create({ url: go }); } catch (_) {} }
+      j.url=go; await chrome.storage.local.set({ nxJob: j });
+      const matching=[...ports.neorcha].filter(port=>{try{const u=new URL(port.sender?.url||port.sender?.tab?.url||''),target=new URL(go);return u.origin===target.origin&&u.pathname.toLowerCase().startsWith('/tweak')===target.pathname.toLowerCase().startsWith('/tweak');}catch(_){return false;}}); if(matching.length)matching.forEach(port=>{try{port.postMessage(j);}catch(_){}});else{try{await chrome.tabs.create({ url: go });}catch(_){}}
       toSide('app', { source: 'ho-nx-progress', note: 'Neorcha is opening — log in there, the rest is automatic.', n: 0 });
       return;
     }
