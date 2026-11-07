@@ -159,3 +159,22 @@ test('a directly reviewed apply performs live preflight without requiring a sepa
  const result=await execute(plan(s,[op]),s,d);assert.equal(result.results[0].state,'applied');assert.equal(d.calls.tests,1);assert.equal(d.calls.sent,1);assert(reads.every(k=>!k.startsWith('ingauge/tests/')));
  const changed=deps(s,{changed:true});const held=await execute(plan(s,[op]),s,changed);assert.equal(held.results[0].state,'held');assert.equal(changed.calls.sent,0);
 });
+
+
+test('cancel during preflight stops before sending or creating an intent',async()=>{
+ const s=snapshot(),op=edit(s,{action:'approve'}),d=deps(s);d.portal.testOperation=async()=>{const error=Error('Cancelled');error.cancelled=true;throw error;};const result=await execute(plan(s,[op]),s,d);assert.equal(result.stopped,true);assert.equal(result.results.length,0);assert.equal(d.calls.sent,0);assert.equal(Object.keys(d.store).length,0);
+});
+test('cancel immediately before submission clears the intent without sending',async()=>{
+ const s=snapshot(),op=edit(s,{action:'approve'}),d=deps(s);d.portal.apply=async()=>{const error=Error('Cancelled');error.cancelled=true;throw error;};const result=await execute(plan(s,[op]),s,d);assert.equal(result.stopped,true);assert.equal(d.calls.sent,0);assert(Object.values(d.store).every(v=>v.state==='cancelled_before_send'));
+});
+test('cancel after one completed operation retains it and does not send the next',async()=>{
+ const s=snapshot(),second={...s.records[0],id:'101',confirmation:'12345679'};s.records.push(second);s.pagination.total=s.pagination.read=2;
+ const a=edit(s,{action:'approve'}),b={...a,key:'r-101',recordId:'101',confirmation:second.confirmation,expected:C.fingerprint(second)},d=deps(s);let cancelled=false;d.portal.apply=async op=>{d.calls.sent++;d.portal.sent=true;cancelled=true;return {recordId:op.recordId,after:{...s.records[0],status:'APPROVED'}};};d.stop=async()=>cancelled;
+ const result=await execute(plan(s,[a,b]),s,d);assert.equal(result.stopped,true);assert.equal(result.results.length,1);assert.equal(result.results[0].state,'applied');assert.equal(d.calls.sent,1);
+});
+test('portal cancellation interrupts reads before transport, but never interrupts submitted-request verification',async()=>{
+ const {AutomationCancelled}=require('../scripts/ingauge-account');let stop=true,reads=0,sends=0;const s=snapshot(),op=edit(s),portal=new InGaugeAccount({context:()=>({request:{get:async()=>{reads++;return {ok:()=>true,json:async()=>({status:'SUCCESS',data:s.records[0].raw})};},put:async()=>{sends++;stop=true;return {ok:()=>true,json:async()=>({status:'SUCCESS',data:{id:100}})};}}})},s.binding.portalUrl,{stop:async()=>stop});portal.headers={authorization:'fixture',industryid:'1'};
+ await assert.rejects(portal.readRecord('100'),AutomationCancelled);assert.equal(reads,0);
+ stop=false;portal.stopSeen=false;portal.lastStopCheck=0;portal.preflight={key:C.stable(op),binding:C.stable(s.binding),at:Date.now(),checked:{current:s.records[0],payload:{fixture:true}}};
+ const result=await portal.apply(op,s);assert.equal(result.recordId,'100');assert.equal(sends,1);assert.equal(reads,2);assert.equal(portal.finishingWrite,false);await assert.rejects(portal.checkCancelled(true),AutomationCancelled);
+});

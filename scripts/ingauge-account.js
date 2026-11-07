@@ -3,6 +3,7 @@ const C=require('../ingauge-audit-core.js');
 const {parse}=require('graphql');
 const API='/pulse/api/';
 const STATUSES=['APPROVED','PENDING','DENIED','LOCKED','ERROR','PURGED','REVIEWED','APPROVED_POST_LOCK','INVOICED_POST_LOCK','DENIED_POST_LOCK','ERROR_POST_LOCK','ADJUSTED_POST_LOCK'];
+class AutomationCancelled extends Error{constructor(){super('Automation cancelled. No further change was sent.');this.cancelled=true;}}
 class PortalError extends Error {constructor(message,uncertain=false){super(message);this.uncertain=uncertain;}}
 function readQuery(body){try{const ast=parse(JSON.parse(body).query);return ast.definitions.length>0&&ast.definitions.every(d=>d.kind==='OperationDefinition'&&d.operation==='query'&&d.selectionSet.selections.every(f=>f.kind==='Field'&&/^(find|get|is|check|fetch)/.test(f.name.value)&&!/(update|create|delete|remove|save|send|assign|approve|deny|process|reset)/i.test(f.name.value)));}catch(_){return false;}}
 function readAllowed(method,url,origin,body=''){
@@ -17,7 +18,12 @@ function readAllowed(method,url,origin,body=''){
   return method==='POST'&&/\/(find|searchProductMetricData|getAllLocaionGroupProduct)$/.test(p);
 }
 class InGaugeAccount {
-  constructor(page,url,{progress=async()=>{},referenceCache=null}={}){this.referenceCache=referenceCache;this.progress=progress;this.page=page;this.context=page.context();this.url=C.portalUrl(url);this.origin=new URL(this.url).origin;this.headers=null;this.tenantId='';this.actor=null;this.sent=false;this.closed=false;}
+  constructor(page,url,{progress=async()=>{},referenceCache=null,stop=async()=>false}={}){this.stop=stop;this.lastStopCheck=0;this.stopSeen=false;this.finishingWrite=false;this.referenceCache=referenceCache;this.progress=progress;this.page=page;this.context=page.context();this.url=C.portalUrl(url);this.origin=new URL(this.url).origin;this.headers=null;this.tenantId='';this.actor=null;this.sent=false;this.closed=false;}
+  async checkCancelled(force=false){
+    if(this.finishingWrite)return;if(this.stopSeen)throw new AutomationCancelled();
+    if(force||!this.lastStopCheck||Date.now()-this.lastStopCheck>=1000){this.stopSeen=!!(await this.stop());this.lastStopCheck=Date.now();}
+    if(this.stopSeen)throw new AutomationCancelled();
+  }
   async installGuard(){
     await this.context.route('**/*',async route=>{
       const r=route.request(),u=new URL(r.url()),h=r.headers();
@@ -29,6 +35,7 @@ class InGaugeAccount {
     });
   }
   async login(email,password){
+    await this.checkCancelled(true);
     if(!email||!password)throw new PortalError('IN-Gauge account secrets are missing.');
     await this.progress('open','Opening the secure IN-Gauge sign-in page');
     await this.page.goto(this.url,{waitUntil:'domcontentloaded',timeout:45000});
@@ -42,7 +49,7 @@ class InGaugeAccount {
     await this.page.locator('#password[type=password]').waitFor({state:'visible',timeout:30000});
     const o=valid(),user=this.page.locator('input[name=username]');
     if(o!==this.origin&&await user.count()){const v=await user.inputValue();if(v&&v.toLowerCase()!==email.toLowerCase())throw new PortalError('The login page selected another account.');}
-    await this.progress('login','Signing in securely; waiting for IN-Gauge');
+    await this.checkCancelled(true);await this.progress('login','Signing in securely; waiting for IN-Gauge');
     await this.page.locator('#password[type=password]').fill(password);
     const exchange=this.page.waitForResponse(r=>new URL(r.url()).origin===this.origin&&new URL(r.url()).pathname==='/m-api/login-service/v1/authenticate-with-auth0',{timeout:40000}).catch(()=>null);
     await this.page.locator(o===this.origin?'button.login-submit':'button[type=submit][name=action]').click();
@@ -55,6 +62,7 @@ class InGaugeAccount {
     this.actor={id:C.id(actor.data.id),name:C.text(actor.data.name)};
   }
   async read(path,data){
+    await this.checkCancelled();
     if(!this.headers?.authorization)throw new PortalError('The authenticated portal connection is unavailable.');
     const method=data===undefined?'GET':'POST',url=this.origin+path;
     if(!readAllowed(method,url,this.origin,JSON.stringify(data||{})))throw new PortalError('A read attempted an unverified endpoint.');
@@ -172,11 +180,13 @@ class InGaugeAccount {
     const checked={current,snapshot:fresh,payload:['add','edit'].includes(op.action)?C.payload(op,fresh,current):null};this.preflight={key:C.stable(op),binding:C.stable(snapshot.binding),at:Date.now(),checked};return checked;
   }
   async apply(op,snapshot){
-    this.sent=false;const cached=this.preflight;this.preflight=null;const checked=cached&&cached.key===C.stable(op)&&cached.binding===C.stable(snapshot.binding)&&Date.now()-cached.at<5000?cached.checked:await this.testOperation(op,snapshot);this.preflight=null;
+    this.sent=false;await this.checkCancelled(true);const cached=this.preflight;this.preflight=null;const checked=cached&&cached.key===C.stable(op)&&cached.binding===C.stable(snapshot.binding)&&Date.now()-cached.at<5000?cached.checked:await this.testOperation(op,snapshot);this.preflight=null;
     if(checked.current){const current=await this.readRecord(op.recordId);if(C.fingerprint(current)!==C.fingerprint(checked.current))throw new PortalError('The record changed immediately before submission. Refresh and review again.');}
     let path,method,data;
     if(['add','edit'].includes(op.action)){path=API+'productMetric/secure';method=op.action==='add'?'post':'put';data=checked.payload;}
     else{path=API+'auditTrail/secure?'+new URLSearchParams(C.auditParams(op));method='post';data={};}
+    await this.checkCancelled(true);this.finishingWrite=true;
+    try{
     // All browser traffic remains read-only. This single request is built from the validated reviewed operation.
     this.sent=true;let response;
     try{const r=await this.context.request[method](this.origin+path,{headers:{...this.headers,tenantid:snapshot.binding.tenantId},data,timeout:30000});response=await r.json();if(!r.ok()||response.status!=='SUCCESS')throw new PortalError('IN-Gauge did not confirm this change. Check the record before retrying.',true);}
@@ -186,6 +196,7 @@ class InGaugeAccount {
     let after;try{after=await this.readRecord(recordId);}catch(_){throw new PortalError('The change was sent but its final record could not be verified.',true);}
     if(after.propertyId!==snapshot.binding.propertyId||after.departmentId!==snapshot.binding.departmentId||!C.matches(op,after)){const error=new PortalError('The request was sent, but final values differ: '+C.differences(op,after,snapshot.binding).map(d=>d.field).join(', ')+'. Check this saved record before retrying.',true);error.observed=after;error.recordId=recordId;error.differences=C.differences(op,after,snapshot.binding);throw error;}
     return {recordId,after,systemNote:op.values?.memo===''&&after.memo==='APPROVED'?'IN-Gauge filled the blank memo with its APPROVED status note. All reviewed financial values match.':''};
+    }finally{this.finishingWrite=false;}
   }
 }
-module.exports={InGaugeAccount,PortalError,readAllowed,readQuery,STATUSES};
+module.exports={InGaugeAccount,PortalError,AutomationCancelled,readAllowed,readQuery,STATUSES};

@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 563, items: [
+    { ico: '⏹', title: 'Close or cancel an IN-Gauge run',
+      what: 'Running automation has separate Close window and Cancel automation buttons. They stay visible while the activity log scrolls, including on phones.',
+      does: 'Closing keeps the run going. Cancelling saves a stop request that survives refresh, stops queued work before sign-in, and stops active runs at the next safe point. Requests already sent are verified and retained in history; completed changes are not undone.' },
+  ] },
   { v: 562, items: [
     { ico: '✓', title: 'Review your list, then apply',
       what: 'The separate Check selected changes step has been removed. Review your selected hotel, sales, sellers and values, then press Apply selected changes.',
