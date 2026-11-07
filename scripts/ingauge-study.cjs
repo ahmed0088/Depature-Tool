@@ -14,6 +14,7 @@ function permitted(method,address,body='') {
   if(u.origin!==ORIGIN)return method==='GET'&&!u.pathname.includes('/m-api/');
   const p=u.pathname;
   if(method==='POST'&&p==='/pulse/api/tenantMenu/secure/getTenantMenuSelectedValue')return true;
+  if(method==='GET'&&p==='/pulse/api/currency/secure/list')return true;
   if(method==='GET'&&/^\/m-api\/account\/user\/avatar_base64\/\d+\/\d+$/.test(p))return true;
   if(method==='GET'&&p==='/m-api/login-service/v1/get-auth0-universal-page')return true;
   if(!p.startsWith('/m-api/')&&!p.startsWith('/pulse/api/'))return method==='GET';
@@ -49,7 +50,7 @@ async function main(){
   page.on('response',response=>{
    const path=new URL(response.url()).pathname;
    if(['/m-api/account/location/gql','/m-api/account/location-group/gql','/m-api/account/user-tenant-role/gql','/pulse/api/userTenantRole/secure/getAccessibleTenantsWithRoleDetails'].includes(path)||/^\/pulse\/api\/(?:tenantLocation|locationGroup)\/secure\/get/.test(path))responseTasks.push((async()=>{
-    try{const req=response.request();if(!permitted(req.method(),req.url(),req.postData()||''))return;report.catalogReads.push({path,http:response.status(),data:catalogProjection(await response.json())});}catch(_){}
+    try{const req=response.request();if(!permitted(req.method(),req.url(),req.postData()||''))return;const entry={path,http:response.status(),data:catalogProjection(await response.json())};if(!report.catalogReads.some(e=>e.path===path&&JSON.stringify(e.data)===JSON.stringify(entry.data)))report.catalogReads.push(entry);}catch(_){}
    })());
    if(path==='/pulse/api/user/is2FARequired')responseTasks.push((async()=>{try{const body=await response.json();report.twoFARequired=typeof body.data==='boolean'?body.data:'UNKNOWN';}catch(_){}})());
   });
