@@ -17,7 +17,7 @@ function readAllowed(method,url,origin,body=''){
   return method==='POST'&&/\/(find|searchProductMetricData|getAllLocaionGroupProduct)$/.test(p);
 }
 class InGaugeAccount {
-  constructor(page,url,{progress=async()=>{}}={}){this.progress=progress;this.page=page;this.context=page.context();this.url=C.portalUrl(url);this.origin=new URL(this.url).origin;this.headers=null;this.tenantId='';this.actor=null;this.sent=false;this.closed=false;}
+  constructor(page,url,{progress=async()=>{},referenceCache=null}={}){this.referenceCache=referenceCache;this.progress=progress;this.page=page;this.context=page.context();this.url=C.portalUrl(url);this.origin=new URL(this.url).origin;this.headers=null;this.tenantId='';this.actor=null;this.sent=false;this.closed=false;}
   async installGuard(){
     await this.context.route('**/*',async route=>{
       const r=route.request(),u=new URL(r.url()),h=r.headers();
@@ -98,13 +98,24 @@ class InGaugeAccount {
     if(!settings.currency||settings.metricType!=='DAILY')throw new PortalError('This property’s daily currency and date configuration needs review.');
     return {binding:b,settings,permissions:{canAdd:paths.has('/metrics/productMetrics/add'),canEdit:paths.has('/metrics/productMetrics/edit'),canApprove:can('approve'),canDeny:can('deny'),canDelete:can('delete'),canReassign:names.has('canChangeContributor')||names.has('isSuperAdmin')}};
   }
-  async contributors(b){
+  referenceScope(b){return {binding:b,actorId:this.actor?.id,industryId:this.headers?.industryid};}
+  async contributors(b,{refresh=false}={}){
+    if(!this.referenceCache)return this.readContributors(b);
+    const result=await this.referenceCache.load(this.referenceScope(b),'contributors',()=>this.readContributors(b),{force:refresh});
+    if(this.referenceCache.meta.contributors?.cached)await this.progress('contributors','Using saved sellers for the selected hotel');return result;
+  }
+  async products(b,{refresh=false}={}){
+    if(!this.referenceCache)return this.readProducts(b);
+    const result=await this.referenceCache.load(this.referenceScope(b),'products',()=>this.readProducts(b),{force:refresh});
+    if(this.referenceCache.meta.products?.cached)await this.progress('products','Using saved packages for the selected hotel');return result;
+  }
+  async readContributors(b){
     await this.progress('contributors','Reading contributors for the selected hotel');
     const rows=this.data(await this.read(API+'user/secure/getAvailableUsers/'+b.tenantId+'?'+new URLSearchParams({tenantLocationID:b.propertyId,locationGroupID:b.departmentId,getContributorsOnly:'true',getWithAllStatus:'true',getOperatorsOnly:'false',isWeightWiseUser:'false',allowSameWeightUser:'true',decideContributorOpratorLocationLevel:'true'})));
     if(!Array.isArray(rows))throw new PortalError('The contributor list is incomplete.');
     return rows.map(p=>({id:C.id(p.id),name:C.text(p.name),pulseId:C.text(p.pulseId),activeStatus:C.text(p.activeStatus)}));
   }
-  async products(b){
+  async readProducts(b){
     await this.progress('products','Reading the selected hotel’s product catalog');
     const full=await this.read('/m-api/product/product/gql',{query:'query{findAllByLocationGroupIntId(locationGroupIntId:'+b.departmentId+'){intId,name,locationGroupIntId,isRecurring,productCode,productSKU}}'});
     const list=full.data?.findAllByLocationGroupIntId;if(!Array.isArray(list))throw new PortalError('The full product catalog was not returned.');
@@ -133,14 +144,23 @@ class InGaugeAccount {
       if(!data.data.length)throw new PortalError('The live record list ended early.');
     }throw new PortalError('The record list exceeds the verified pagination limit. Narrow the date range.');
   }
-  async snapshot(b,from,to,hotelId,snapshotId){
-    const scope=await this.scope(b),[products,contributors,records]=await Promise.all([this.products(scope.binding),this.contributors(scope.binding),this.search(scope.binding,from,to)]);
-    return {schema:1,id:snapshotId,hotelId,...scope,from,to,fetchedAt:Date.now(),complete:true,pagination:{verified:true,total:records.length,read:records.length,sort:'id'},products,contributors,records,actor:this.actor};
+  async snapshot(b,from,to,hotelId,snapshotId,{refreshReferences=false}={}){
+    const scope=await this.scope(b),[products,contributors,records]=await Promise.all([this.products(scope.binding,{refresh:refreshReferences}),this.contributors(scope.binding,{refresh:refreshReferences}),this.search(scope.binding,from,to)]);
+    return {schema:1,id:snapshotId,hotelId,...scope,from,to,fetchedAt:Date.now(),complete:true,pagination:{verified:true,total:records.length,read:records.length,sort:'id'},products,contributors,records,actor:this.actor,referenceData:this.referenceCache?{...this.referenceCache.meta}:null};
   }
   async readRecord(id){return C.record(this.data(await this.read(API+'productMetric/secure/'+C.id(id))));}
+  async verifyReviewedProduct(op,snapshot){
+    if(!['add','edit','approve'].includes(op.action))return snapshot.products;
+    const selected=snapshot.products.find(p=>p.id===C.id(op.productId));if(!selected)throw new PortalError('Choose a verified package before applying this change.');
+    await this.progress('products','Checking the selected package against IN-Gauge');
+    const detail=this.data(await this.read(API+'locationGroupProduct/secure/'+selected.id));
+    const changed=C.id(detail.id)!==selected.id||C.id(detail.locationGroupId)!==snapshot.binding.departmentId||C.text(detail.name)!==selected.name||detail.isRecurring!==selected.recurring||C.text(detail.activeStatus)!==selected.activeStatus||('productCode' in detail&&C.text(detail.productCode)!==selected.code)||('productSKU' in detail&&C.text(detail.productSKU)!==selected.sku);
+    if(changed){if(this.referenceCache)await this.referenceCache.invalidate(this.referenceScope(snapshot.binding),'products');throw new PortalError('The selected package changed in IN-Gauge. Refresh packages and sellers, then review again. No change was sent.');}
+    return snapshot.products;
+  }
   async testOperation(op,snapshot){
     let current=null;if(op.action!=='add'){current=await this.readRecord(op.recordId);if(C.fingerprint(current)!==op.expected)throw new PortalError('This record changed since review. Refresh before editing or changing its status.');}
-    const scope=await this.scope(snapshot.binding),fresh={...snapshot,...scope,products:await this.products(scope.binding),contributors:await this.contributors(scope.binding)};
+    const scope=await this.scope(snapshot.binding),[products,contributors]=await Promise.all([this.verifyReviewedProduct(op,snapshot),this.contributors(scope.binding,{refresh:true})]),fresh={...snapshot,...scope,products,contributors};
     const error=C.operationError(op,fresh);if(error)throw new PortalError(error);
     const v=op.action==='add'||op.action==='edit'?op.values:C.values(current);
     const locked=this.data(await this.read(API+'productMetric/secure/isLocked?'+new URLSearchParams({tenantLocationId:scope.binding.propertyId,arrivalDate:v.arrival,departureDate:v.departure,businessDate:v.businessDate,metricDate:v.businessDate})));

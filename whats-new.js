@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 561, items: [
+    { ico: '⚡', title: 'Reuse packages and sellers between runs',
+      what: 'IN-Gauge keeps a private, hotel-specific package catalogue and seller list for up to 24 hours. Later fetches reuse these lists while reading sales live.',
+      does: 'Use Refresh packages & sellers under IN-Gauge data and refresh whenever the team or catalogue changes. Before a financial change, the selected package and current seller list are checked live. Permissions, amounts, locks and duplicate checks stay live.' },
+  ] },
   { v: 560, items: [
     { ico: '✓', title: 'Choose Manual, Automatic or Both',
       what: 'IN-Gauge automation now guides you through choosing sales, uploading the matching reports, checking and reviewing. It fetches current IN-Gauge records when needed.',

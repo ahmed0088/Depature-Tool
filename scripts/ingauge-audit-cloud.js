@@ -3,6 +3,7 @@ const crypto=require('node:crypto');
 const C=require('../ingauge-audit-core.js');
 const {connectDb,privateError}=require('./manual-sales-cloud.js');
 const {InGaugeAccount}=require('./ingauge-account.js');
+const {ReferenceCache}=require('./ingauge-reference-cache.js');
 const portalError=error=>error?.name==='TimeoutError'?'The portal did not finish the requested screen or sign-in. No further operation was sent.':privateError(error);
 const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
 const targetKey=(b,hid)=>b?'ig-'+sha(C.stable(C.binding(b))).slice(0,32):'discover-'+hid;
@@ -78,13 +79,13 @@ async function main(){
     await progress('starting','Cloud computer ready; starting IN-Gauge');
     const {chromium}=require('playwright-core');browser=await chromium.launch({headless:true,executablePath:E.CHROME_PATH||undefined,args:['--disable-dev-shm-usage']});
     const page=await browser.newPage();page.setDefaultTimeout(20000);
-    const portal=new InGaugeAccount(page,plan.binding?.portalUrl||plan.portalUrl,{progress});await portal.installGuard();await portal.login(E.INGAUGE_EMAIL,E.INGAUGE_PASS);
+    const portal=new InGaugeAccount(page,plan.binding?.portalUrl||plan.portalUrl,{progress,referenceCache:new ReferenceCache({store:db})});await portal.installGuard();await portal.login(E.INGAUGE_EMAIL,E.INGAUGE_PASS);
     if(plan.mode==='discover'){
       const result=await portal.discover();await db.put('ingauge/discovery',result);await db.patch(node,{result});const note='Found '+result.hotels.length+' hotels. Next: choose your hotel and Front Desk, then save the hotel link. No financial changes.';console.log('[IN-Gauge] '+note);await publish([],'done',note);return;
     }
     if(plan.mode==='snapshot'){
       if(!C.day(plan.from)||!C.day(plan.to)||plan.from>plan.to||new Date(plan.to)-new Date(plan.from)>366*86400000)throw Error('Choose an audit period of at most one year.');
-      const result=await portal.snapshot(plan.binding,plan.from,plan.to,db.hotelId,tag);
+      const result=await portal.snapshot(plan.binding,plan.from,plan.to,db.hotelId,tag,{refreshReferences:plan.refreshReferenceData===true});
       await db.put('ingauge/snapshots/'+tag,result);await db.patch(node,{snapshotId:tag});
       console.log('[IN-Gauge] Record fetch complete: '+result.records.length+' records');
       await publish([],'done',result.records.length+' live records retrieved with all statuses and complete pagination.');return;
