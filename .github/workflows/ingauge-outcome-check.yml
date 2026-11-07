@@ -1,0 +1,23 @@
+name: IN-Gauge outcome verification
+on:
+  push:
+    branches: ['study/ingauge-20261107-readonly']
+    paths: ['scripts/ingauge-outcome-check.cjs','.github/workflows/ingauge-outcome-check.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-audit --no-fund playwright-core@1.49.1 graphql@16.11.0
+      - run: node scripts/ingauge-outcome-check.cjs
+        env:
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
+          INGAUGE_EMAIL: ${{ secrets.INGAUGE_EMAIL }}
+          INGAUGE_PASS: ${{ secrets.INGAUGE_PASS }}

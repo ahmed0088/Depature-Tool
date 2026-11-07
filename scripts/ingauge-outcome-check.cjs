@@ -1,0 +1,8 @@
+'use strict';
+const fs=require('fs'),{envelope}=require('./ingauge-study.cjs'),{InGaugeAccount}=require('./ingauge-account.js'),{connectDb}=require('./manual-sales-cloud.js'),C=require('../ingauge-audit-core.js');
+(async()=>{let browser;const out={stage:'start'};try{
+process.env.HOTELOPS_HOTEL='ibis_dubai';
+const db=await connectDb();out.job=await db.get('ingauge/jobs/igmw6svlltddtgig');if(!out.job)throw Error('Job not found');const plan=JSON.parse(out.job.planJson);out.plan=plan;
+const {chromium}=require('playwright-core');browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true,args:['--no-sandbox']});const page=await browser.newPage(),portal=new InGaugeAccount(page,plan.binding.portalUrl);await portal.installGuard();await portal.login(process.env.INGAUGE_EMAIL,process.env.INGAUGE_PASS);await portal.scope(plan.binding);
+out.records=await portal.search(plan.binding,'2000-01-01','2099-12-31',plan.operations[0].confirmation);out.details=[];for(const r of out.records)out.details.push(await portal.readRecord(r.id));out.stage='complete';
+}catch(e){out.error=e.message;}finally{if(browser)await browser.close().catch(()=>{});const b=Buffer.from(JSON.stringify(envelope(out,fs.readFileSync('scripts/study-public.pem')))).toString('base64');for(let i=0;i<b.length;i+=2000)console.log('STUDY_CHUNK '+b.slice(i,i+2000));console.log('Read-only outcome check ended.');}})();
