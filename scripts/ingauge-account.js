@@ -64,7 +64,7 @@ class InGaugeAccount {
     try{return await r.json();}catch(_){throw new PortalError('IN-Gauge returned an unreadable response.');}
   }
   data(response){if(response.status!=='SUCCESS')throw new PortalError('IN-Gauge did not confirm the requested data read.');return response.data;}
-  async discover(){
+  async discover(propertyId=''){
     await this.progress('hotels','Reading the hotels available to this account');
     const roleResponse=await this.read(API+'userTenantRole/secure/getAccessibleTenantsWithRoleDetails');
     if(!Array.isArray(roleResponse.data)||(roleResponse.status&&roleResponse.status!=='SUCCESS'))throw new PortalError('The accessible tenant list could not be verified.');
@@ -72,8 +72,8 @@ class InGaugeAccount {
     const tenants=[...new Set((roles||[]).map(r=>C.id(r.tenantId)).filter(Boolean))];if(!tenants.length)throw new PortalError('No accessible tenant was returned.');
     const locations=this.data(await this.read(API+'tenantLocation/secure/getLocationsForUserAndTenants?'+new URLSearchParams({tenantIds:tenants.join(',')})));
     const hotels=[];
-    for(const h of locations||[]){
-      await this.progress('hotels','Reading departments for hotel '+(hotels.length+1)+' of '+locations.length);
+    for(const h of (locations||[]).filter(h=>!propertyId||C.id(h.id)===propertyId)){
+      await this.progress('hotels',propertyId?'Verifying departments for the selected hotel':'Reading departments for hotel '+(hotels.length+1)+' of '+locations.length);
       if(!tenants.includes(C.id(h.tenantId)))throw new PortalError('A location had an unverified tenant.');
       this.scopeTenant=C.id(h.tenantId);
       const groupData=this.data(await this.read(API+'locationGroup/secure/getLocationGroup/'+h.tenantId+'?'+new URLSearchParams({tenantLocationID:String(h.id)})));
@@ -83,7 +83,7 @@ class InGaugeAccount {
   }
   async scope(binding){
     const b=C.binding(binding);if(new URL(b.portalUrl).origin!==this.origin)throw new PortalError('The reviewed portal differs from this connection.');
-    const discovery=await this.discover(),hotel=discovery.hotels.find(h=>h.id===b.propertyId&&h.tenantId===b.tenantId),group=hotel?.departments.find(d=>d.id===b.departmentId);
+    const discovery=await this.discover(b.propertyId),hotel=discovery.hotels.find(h=>h.id===b.propertyId&&h.tenantId===b.tenantId),group=hotel?.departments.find(d=>d.id===b.departmentId);
     if(!hotel||!group||hotel.name!==b.property||group.name!==b.department)throw new PortalError('The exact reviewed hotel and department were not verified in this account.');
     if(group.retail||group.fnb)throw new PortalError('This automation requires the hotel Front Desk workflow. Retail and F&B need their own quantity model.');
     this.scopeTenant=b.tenantId;this.headers={...this.headers,tenantid:b.tenantId};this.tenantId=b.tenantId;
@@ -108,14 +108,16 @@ class InGaugeAccount {
     await this.progress('products','Reading the selected hotel’s product catalog');
     const full=await this.read('/m-api/product/product/gql',{query:'query{findAllByLocationGroupIntId(locationGroupIntId:'+b.departmentId+'){intId,name,locationGroupIntId,isRecurring,productCode,productSKU}}'});
     const list=full.data?.findAllByLocationGroupIntId;if(!Array.isArray(list))throw new PortalError('The full product catalog was not returned.');
-    const out=[];for(const p of list){
-      await this.progress('products','Verifying product '+(out.length+1)+' of '+list.length);
+    await this.progress('products','Verifying '+list.length+' products for the selected hotel');
+    const out=new Array(list.length);let next=0;
+    const worker=async()=>{for(;;){const i=next++;if(i>=list.length)return;const p=list[i];
       if(C.id(p.locationGroupIntId)!==b.departmentId)throw new PortalError('A product belongs to another department.');
       const detail=this.data(await this.read(API+'locationGroupProduct/secure/'+C.id(p.intId)));
       if(typeof detail.isRecurring!=='boolean')throw new PortalError('A product’s recurring flag is not verified.');
-      out.push({id:C.id(p.intId),name:C.text(p.name),code:C.text(p.productCode),sku:C.text(p.productSKU),recurring:detail.isRecurring,activeStatus:C.text(detail.activeStatus),departmentId:b.departmentId});
-    }return out;
+      out[i]={id:C.id(p.intId),name:C.text(p.name),code:C.text(p.productCode),sku:C.text(p.productSKU),recurring:detail.isRecurring,activeStatus:C.text(detail.activeStatus),departmentId:b.departmentId};
+    }};await Promise.all(Array.from({length:Math.min(3,list.length)},worker));return out;
   }
+
   async search(b,from,to,confirmation=''){
     if(!C.day(from)||!C.day(to)||from>to)throw new PortalError('Choose a valid date range.');
     const operator=this.data(await this.read(API+'locationGroup/secure/isOperator/'+b.tenantId+'/'+b.propertyId+'/'+this.actor.id+'?'+new URLSearchParams({locationGroupID:b.departmentId})));
@@ -132,7 +134,7 @@ class InGaugeAccount {
     }throw new PortalError('The record list exceeds the verified pagination limit. Narrow the date range.');
   }
   async snapshot(b,from,to,hotelId,snapshotId){
-    const scope=await this.scope(b),products=await this.products(scope.binding),contributors=await this.contributors(scope.binding),records=await this.search(scope.binding,from,to);
+    const scope=await this.scope(b),[products,contributors,records]=await Promise.all([this.products(scope.binding),this.contributors(scope.binding),this.search(scope.binding,from,to)]);
     return {schema:1,id:snapshotId,hotelId,...scope,from,to,fetchedAt:Date.now(),complete:true,pagination:{verified:true,total:records.length,read:records.length,sort:'id'},products,contributors,records,actor:this.actor};
   }
   async readRecord(id){return C.record(this.data(await this.read(API+'productMetric/secure/'+C.id(id))));}
@@ -147,10 +149,12 @@ class InGaugeAccount {
       const records=await this.search(scope.binding,'2000-01-01','2099-12-31',op.confirmation);
       if(C.duplicates(op,records.filter(r=>String(r.id)!==String(op.recordId||'')),fresh.products).length)throw new PortalError('An existing request or product already represents this sale. It was not duplicated.');
     }
-    return {current,snapshot:fresh,payload:['add','edit'].includes(op.action)?C.payload(op,fresh,current):null};
+    const checked={current,snapshot:fresh,payload:['add','edit'].includes(op.action)?C.payload(op,fresh,current):null};this.preflight={key:C.stable(op),binding:C.stable(snapshot.binding),at:Date.now(),checked};return checked;
   }
   async apply(op,snapshot){
-    this.sent=false;const checked=await this.testOperation(op,snapshot);let path,method,data;
+    this.sent=false;const cached=this.preflight;this.preflight=null;const checked=cached&&cached.key===C.stable(op)&&cached.binding===C.stable(snapshot.binding)&&Date.now()-cached.at<5000?cached.checked:await this.testOperation(op,snapshot);this.preflight=null;
+    if(checked.current){const current=await this.readRecord(op.recordId);if(C.fingerprint(current)!==C.fingerprint(checked.current))throw new PortalError('The record changed immediately before submission. Refresh and review again.');}
+    let path,method,data;
     if(['add','edit'].includes(op.action)){path=API+'productMetric/secure';method=op.action==='add'?'post':'put';data=checked.payload;}
     else{path=API+'auditTrail/secure?'+new URLSearchParams(C.auditParams(op));method='post';data={};}
     // All browser traffic remains read-only. This single request is built from the validated reviewed operation.
@@ -160,8 +164,8 @@ class InGaugeAccount {
     const recordId=op.action==='add'?C.id(response.data?.id):C.id(op.recordId);
     if(!recordId)throw new PortalError('IN-Gauge did not return the new record identifier. Check the outcome before retrying.',true);
     let after;try{after=await this.readRecord(recordId);}catch(_){throw new PortalError('The change was sent but its final record could not be verified.',true);}
-    if(after.propertyId!==snapshot.binding.propertyId||after.departmentId!==snapshot.binding.departmentId||!C.matches(op,after))throw new PortalError('IN-Gauge returned different final values. The outcome needs review.',true);
-    return {recordId,after};
+    if(after.propertyId!==snapshot.binding.propertyId||after.departmentId!==snapshot.binding.departmentId||!C.matches(op,after)){const error=new PortalError('The request was sent, but final values differ: '+C.differences(op,after,snapshot.binding).map(d=>d.field).join(', ')+'. Check this saved record before retrying.',true);error.observed=after;error.recordId=recordId;error.differences=C.differences(op,after,snapshot.binding);throw error;}
+    return {recordId,after,systemNote:op.values?.memo===''&&after.memo==='APPROVED'?'IN-Gauge filled the blank memo with its APPROVED status note. All reviewed financial values match.':''};
   }
 }
 module.exports={InGaugeAccount,PortalError,readAllowed,readQuery,STATUSES};

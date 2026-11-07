@@ -40,6 +40,7 @@ jobs:
         run: |
           node tests/ingauge-audit.test.js
           node tests/ingauge-uploads.test.js
+          node tests/ingauge-modes.test.js
           node tests/neorcha-tweak.test.js
 
       - name: IN-Gauge readiness completion in browser

@@ -137,10 +137,14 @@
       return '';
     }catch(error){return error.message;}
   }
+  function saleCategory(record){return record&&(record.isManuallyAddedRecord||record.status==='PENDING')?'manual':'automatic';}
+  function operationCategory(op,snapshot){return op.action==='add'?'manual':saleCategory(snapshot.records.find(r=>r.id===id(op.recordId)));}
+  function scopeAllows(scope,category){return ['manual','automatic','all'].includes(scope)&&['manual','automatic'].includes(category)&&(scope==='all'||scope===category);}
   function validatePlan(plan,snapshot){
-    if(!plan||plan.schema!==2||plan.mode!=='apply'||!snapshot||!snapshot.complete||!snapshot.pagination?.verified||snapshot.pagination.total!==snapshot.records.length||snapshot.pagination.read!==snapshot.records.length||!sameBinding(plan.binding,snapshot.binding)||plan.snapshotId!==snapshot.id||plan.hotelId!==snapshot.hotelId)fail('Refresh live IN-Gauge to fetch and verify every page for this hotel before reviewing changes.');
+    if(!plan||plan.schema!==2||plan.mode!=='apply'||!snapshot||!snapshot.complete||snapshot.invalidatedAt||!snapshot.pagination?.verified||snapshot.pagination.total!==snapshot.records.length||snapshot.pagination.read!==snapshot.records.length||!sameBinding(plan.binding,snapshot.binding)||plan.snapshotId!==snapshot.id||plan.hotelId!==snapshot.hotelId)fail('Refresh live IN-Gauge to fetch and verify every page for this hotel before reviewing changes.');
     if(!Array.isArray(plan.operations)||!plan.operations.length||plan.operations.length>100)fail('Select between 1 and 100 reviewed operations.');
-    const seen=new Set();for(const op of plan.operations){const error=operationError(op,snapshot);if(error)fail(error);const k=op.action==='add'?'new:'+op.transaction:'record:'+op.recordId;if(seen.has(k))fail('A record or Opera transaction appears more than once in this plan.');seen.add(k);}
+    const scope=plan.scope||'all';if(!['manual','automatic','all'].includes(scope))fail('Choose Manual upsells, Automatic packages or Both.');
+    const seen=new Set();for(const op of plan.operations){if(!scopeAllows(scope,operationCategory(op,snapshot)))fail('A selected change is outside your chosen audit mode. Choose the matching mode and review again.');const error=operationError(op,snapshot);if(error)fail(error);const k=op.action==='add'?'new:'+op.transaction:'record:'+op.recordId;if(seen.has(k))fail('A record or Opera transaction appears more than once in this plan.');seen.add(k);}
     return plan;
   }
   function values(r){return {unitCents:r.unitCents,totalCents:r.totalCents,chargeDays:r.chargeDays,arrival:r.arrival,departure:r.departure,businessDate:r.businessDate,room:r.room,memo:r.memo};}
@@ -160,14 +164,14 @@
     const product=products.find(p=>p.id===id(op.productId)),once=product&&['EC','LC'].includes(kind(product.code)||kind(product.name));
     return records.filter(r=>r.confirmation===op.confirmation&&(r.productId===id(op.productId)||!r.productId||/UNKNOWN|UNMAPPED/.test(key(r.product)))&&(once||r.businessDate===op.values?.businessDate));
   }
-  function matches(op,r){
-    if(r.confirmation!==op.confirmation)return false;
-    const fields=r.productId===id(op.productId)&&r.contributorId===id(op.contributorId)&&stable(values(r))===stable(op.values);
-    if(op.action==='approve')return fields&&r.status==='APPROVED';
-    if(op.action==='deny')return fields&&r.status==='DENIED';
-    if(op.action==='delete')return fields&&r.status==='PURGED';
-    return fields&&r.status===op.statusAfter;
+  function differences(op,r,b){
+    const expectedStatus=({approve:'APPROVED',deny:'DENIED',delete:'PURGED'})[op.action]||op.statusAfter;
+    const expected={confirmation:op.confirmation,productId:id(op.productId),contributorId:id(op.contributorId),status:expectedStatus,...op.values,...(b?{propertyId:b.propertyId,departmentId:b.departmentId}:{})};
+    return Object.entries(expected).filter(([field,value])=>stable(value)!==stable(r[field])&&!(field==='memo'&&value===''&&r.memo==='APPROVED'&&r.status==='APPROVED'&&['add','edit','approve'].includes(op.action))).map(([field,value])=>({field,expected:value??null,actual:r[field]??null}));
   }
-  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,kind,flatten,record,fingerprint,amountTotal,operationError,validatePlan,values,payload,auditParams,duplicates,matches,terminal};
+  function matches(op,r){
+    return differences(op,r).length===0;
+  }
+  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,kind,flatten,record,fingerprint,amountTotal,operationError,validatePlan,values,payload,auditParams,duplicates,matches,differences,terminal,saleCategory,operationCategory,scopeAllows};
   root.InGaugeAuditCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

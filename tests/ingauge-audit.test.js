@@ -121,3 +121,34 @@ test('record search uses total records, not the page row count, and reads beyond
  portal.read=async(path,body)=>{if(path.includes('/isOperator/'))return {status:'SUCCESS',data:true};assert(path.includes('sortBy=id'));const n=body.first===0?200:50;return {status:'SUCCESS',data:{first:body.first,total:250,totalInList:n,data:Array.from({length:n},(_,i)=>({...s.records[0].raw,id:1000+body.first+i}))}};};
  const records=await portal.search(s.binding,'2026-11-01','2026-11-07');assert.equal(records.length,250);assert(events.includes('Read 200 of 250 IN-Gauge records'));assert(events.includes('Read 250 of 250 IN-Gauge records'));
 });
+
+test('the verified IN-Gauge APPROVED default memo is equivalent to a blank note, with financial fields still exact',()=>{
+ const s=snapshot(),op=edit(s,{statusAfter:'APPROVED',values:{...C.values(s.records[0]),memo:''}}),after={...s.records[0],status:'APPROVED',memo:'APPROVED'};
+ assert(C.matches(op,after));assert.deepEqual(C.differences(op,after,s.binding),[]);
+ for(const patch of [{totalCents:9999},{unitCents:9999},{contributorId:'9'},{productId:'6'},{chargeDays:2},{memo:'A different note'},{status:'PENDING'}])assert(!C.matches(op,{...after,...patch}));
+ assert(!C.matches({...op,values:{...op.values,memo:'Keep this note'}},after));assert.equal(C.differences(op,{...after,propertyId:'99'},s.binding)[0].field,'propertyId');
+});
+test('product detail reads use at most three concurrent requests and preserve catalog identity',async()=>{
+ const portal=new InGaugeAccount({context:()=>({})},'https://app.fpg-ingauge.com'),b=snapshot().binding;let active=0,peak=0;
+ portal.read=async path=>{if(path.endsWith('/gql'))return {data:{findAllByLocationGroupIntId:Array.from({length:10},(_,i)=>({intId:i+1,name:'Product '+i,locationGroupIntId:3}))}};active++;peak=Math.max(peak,active);await new Promise(r=>setTimeout(r,2));active--;return {status:'SUCCESS',data:{isRecurring:false,activeStatus:'NORMAL'}};};
+ const products=await portal.products(b);assert.equal(products.length,10);assert.equal(peak,3);assert.deepEqual(products.map(p=>p.id),Array.from({length:10},(_,i)=>String(i+1)));
+});
+test('an immediate apply reuses its own exact preflight and still rereads the live record before sending',async()=>{
+ const s=snapshot(),op=edit(s),calls={preflight:0,reads:0,sends:0},portal=new InGaugeAccount({context:()=>({request:{put:async()=>{calls.sends++;return {ok:()=>true,json:async()=>({status:'SUCCESS',data:{id:100}})};}}})},'https://app.fpg-ingauge.com');
+ portal.readRecord=async()=>{calls.reads++;return s.records[0];};portal.testOperation=async()=>{calls.preflight++;return {current:s.records[0],payload:{fixture:true}};};
+ portal.preflight={key:C.stable(op),binding:C.stable(s.binding),at:Date.now(),checked:{current:s.records[0],payload:{fixture:true}}};
+ await portal.apply(op,s);assert.equal(calls.preflight,0);assert.equal(calls.reads,2);assert.equal(calls.sends,1);assert.equal(portal.preflight,null);
+ await portal.apply({...op,reason:'Changed review'},s);assert.equal(calls.preflight,1);assert.equal(calls.sends,2);
+ portal.preflight={key:C.stable(op),binding:C.stable(s.binding),at:Date.now()-6000,checked:{current:s.records[0],payload:{fixture:true}}};await portal.apply(op,s);assert.equal(calls.preflight,2);
+});
+test('verified changes and uncertain outcomes retain before, requested, observed values and action history',async()=>{
+ const s=snapshot(),op=edit(s,{values:{...C.values(s.records[0]),unitCents:11000,totalCents:11000}}),d=deps(s);const result=await execute(plan(s,[op]),s,d),r=result.results[0];assert.equal(r.action,'edit');assert.equal(r.hotel,'Example Hotel');assert.equal(r.before.unitCents,10000);assert.equal(r.requested.unitCents,11000);assert(r.at>0);assert.equal(r.after.status,'APPROVED');
+ const other=deps(s);other.portal.apply=async()=>{other.portal.sent=true;const error=Error('A value differs');error.uncertain=true;error.observed={...s.records[0],totalCents:9999};error.recordId='100';error.differences=[{field:'totalCents',expected:10000,actual:9999}];throw error;};const failed=await execute(plan(s,[op]),s,other);assert.equal(failed.results[0].after.totalCents,9999);assert.equal(failed.results[0].differences[0].field,'totalCents');assert.equal(failed.results[0].recordId,'100');assert.equal(failed.results[0].state,'uncertain');
+});
+
+test('the final summary counts edited, denied, held and unattempted operations explicitly',()=>{
+ const {completionNote}=require('../scripts/ingauge-audit-cloud');const note=completionNote({stopped:true,uncertain:true,results:[{state:'applied',action:'edit'},{state:'applied',action:'deny'},{state:'held'},{state:'uncertain'}]},false,5);
+ for(const part of ['1 edited / fixed','1 denied','1 held; not sent','1 need verification','1 not attempted'])assert(note.includes(part));assert(!completionNote({stopped:false,results:[{state:'tested',action:'add'}]},true,1).includes('1 added'));
+});
+
+ test('a snapshot invalidated by an applied or uncertain change cannot authorize another plan',()=>{const s=snapshot();s.invalidatedAt=Date.now();assert.throws(()=>C.validatePlan(plan(s,[edit(s)]),s),/Refresh live IN-Gauge/);});

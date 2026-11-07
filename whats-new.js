@@ -9,6 +9,17 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 560, items: [
+    { ico: '✓', title: 'Choose Manual, Automatic or Both',
+      what: 'IN-Gauge automation now guides you through choosing sales, uploading the matching reports, checking and reviewing. It fetches current IN-Gauge records when needed.',
+      does: 'Manual uses Journal + Reservation Detail. Automatic uses both Changes Logs. Both checks everything. Only changes in your chosen mode can be selected or submitted.' },
+    { ico: '☰', title: 'Phone menus you can open and search',
+      what: 'Hotel, department, product, seller and status choices use searchable in-app lists, with full names and a clear close button.',
+      does: 'The review form uses one column on phones, with larger controls. Saving puts the change in your review list; it does not send it immediately.' },
+    { ico: '📋', title: 'See what changed and why',
+      what: 'Change history shows saved runs, confirmations, actions, before/requested/final values and verified, held or uncertain results. Readiness checks are clearly separated from applied changes.',
+      does: 'A blank memo filled by IN-Gauge with APPROVED is recognised; money, seller, product, dates and hotel still have to match. Other differences show exactly which values changed. Product reads run in parallel and an immediate apply reuses its exact preflight.' },
+  ] },
   { v: 559, items: [
     { ico: '✓', title: 'Readiness checks finish correctly',
       what: 'Fixed “test is not defined” and the related plan-hash reference in the run completion handler. A passed readiness check now enables Apply for the exact reviewed selection.',
