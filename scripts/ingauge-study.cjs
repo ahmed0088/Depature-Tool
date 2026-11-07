@@ -60,13 +60,19 @@ async function main(){
   }
   await page.locator('#password[type=password]').fill(process.env.INGAUGE_PASS);
   report.stage='login-submit';
+  const exchangePromise=page.waitForResponse(r=>new URL(r.url()).origin===ORIGIN&&new URL(r.url()).pathname==='/m-api/login-service/v1/authenticate-with-auth0',{timeout:40000}).catch(()=>null);
   await page.locator(passwordOrigin===ORIGIN?'button.login-submit':'button[type=submit][name=action]').click();
   report.stage='login-callback';
   await page.waitForURL(url=>url.origin===ORIGIN,{timeout:30000});
-  await page.waitForFunction(()=>!document.querySelector('#email')&&!document.querySelector('#password'),{},{timeout:30000});
-  console.log('Authentication completed; business writes remain blocked.');
+  const exchange=await exchangePromise;
+  if(exchange){
+   const body=await exchange.json().catch(()=>null);
+   report.authExchange={http:exchange.status(),status:['SUCCESS','FAIL','FAILED','ERROR','FAILURE'].includes(body?.status)?body.status:'OTHER',keys:body?Object.keys(body):[],dataKeys:body?.data&&typeof body.data==='object'?Object.keys(body.data):[],hasAccessToken:!!body?.data?.access_token};
+  }
+  await page.waitForTimeout(7000);
   report.stage='metrics';await page.goto(ORIGIN+'/metrics/productMetrics',{waitUntil:'domcontentloaded'});
   await page.locator('select#TenantLocation option').nth(1).waitFor({state:'attached',timeout:30000});
+  console.log('Authenticated product screen reached; business writes remain blocked.');
   async function options(selector){return page.locator(selector+' option').evaluateAll(ns=>ns.map(n=>({id:n.value,name:n.textContent.trim(),attributes:Object.fromEntries([...n.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value]))})).filter(n=>n.id&&!['0','-1','null','undefined',''].includes(n.id)));}
   async function select(selector,id){await page.locator(selector).selectOption(id,{force:true});await page.locator(selector).evaluate((n,v)=>{if(window.jQuery)window.jQuery(n).trigger('change',[{selected:v}]);},id);await page.waitForTimeout(1800);}
   async function read(path,data){
