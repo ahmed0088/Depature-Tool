@@ -8,6 +8,7 @@ function readQuery(body){try{const ast=parse(JSON.parse(body).query);return ast.
 function readAllowed(method,url,origin,body=''){
   const u=new URL(url),p=u.pathname;
   if(u.origin!==origin)return method==='GET'||(u.protocol==='https:'&&u.hostname.endsWith('.fpg-ingauge.com')&&method==='POST'&&['/u/login/password','/u/login/identifier'].includes(p));
+  if(method==='GET'&&p==='/m-api/login-service/v1/get-auth0-universal-page')return true;
   if(method==='POST'&&['/m-api/login-service/v1/authenticate-with-auth0','/m-api/api/user/authenticateUserUsingLDAP','/pulse/api/tenantMenu/secure/getTenantMenuSelectedValue'].includes(p))return true;
   if(!p.startsWith('/pulse/api/')&&!p.startsWith('/m-api/'))return method==='GET';
   if(method==='POST'&&p.endsWith('/gql'))return readQuery(body);
@@ -152,3 +153,4 @@ class InGaugeAccount {
   }
 }
 module.exports={InGaugeAccount,PortalError,readAllowed,readQuery,STATUSES};
+
