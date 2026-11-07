@@ -5,6 +5,7 @@ const ORIGIN='https://app.fpg-ingauge.com';
 function permitted(method,address,body='') {
   const u=new URL(address); if(u.origin!==ORIGIN)return method==='GET'&&!u.pathname.includes('/m-api/');
   const p=u.pathname;
+  if(method==='GET'&&p==='/m-api/login-service/v1/get-auth0-universal-page')return true;
   if(!p.startsWith('/m-api/'))return method==='GET';
   if(method==='POST'&&p==='/m-api/api/user/authenticateUserUsingLDAP')return true;
   if(/(?:create|update|delete|remove|save|set[A-Z]|send|approve|deny|process|suspend|discontinue|reset|impersonat|logout|signout|track|mark|configure)/i.test(p))return false;
@@ -19,12 +20,12 @@ function envelope(report,key) {
 }
 async function main(){
  const report={version:1,started:new Date().toISOString(),stage:'initial',blocked:[],requests:[],hotels:[],failures:[]};
- let browser;
+ let browser,page;
  try {
   if(!process.env.INGAUGE_EMAIL||!process.env.INGAUGE_PASS)throw Error('MISSING_CREDENTIALS');
   const {chromium}=require('playwright-core');
   browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'/usr/bin/google-chrome',args:['--no-sandbox']});
-  const context=await browser.newContext({serviceWorkers:'block'}),page=await context.newPage();
+  const context=await browser.newContext({serviceWorkers:'block'});page=await context.newPage();
   page.setDefaultTimeout(15000);
   let headers=null,tenant=null;
   await context.route('**/*',async route=>{
@@ -97,7 +98,9 @@ async function main(){
    }catch(_){h.error='HOTEL_INSPECTION_INCOMPLETE';}
   }
   report.stage='complete';
- }catch(e){report.failure=['MISSING_CREDENTIALS','READ_GUARD'].includes(e.message)?e.message:'INSPECTION_STOPPED';}
+ }catch(e){report.failure=['MISSING_CREDENTIALS','READ_GUARD'].includes(e.message)?e.message:'INSPECTION_STOPPED';
+  if(page)try{report.page={origin:new URL(page.url()).origin,path:new URL(page.url()).pathname,title:await page.title(),fields:await page.locator('input,button').evaluateAll(ns=>ns.map(n=>({tag:n.tagName,id:n.id,name:n.name,type:n.type,label:n.tagName==='BUTTON'?n.textContent.trim().slice(0,80):n.getAttribute('placeholder')})))};}catch(_){}
+ }
  finally{
   if(browser)await browser.close().catch(()=>{});
   report.finished=new Date().toISOString();
