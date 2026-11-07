@@ -22,7 +22,7 @@ class InGaugeAccount {
     await this.context.route('**/*',async route=>{
       const r=route.request(),u=new URL(r.url()),h=r.headers();
       if(u.origin===this.origin&&h.authorization){
-        this.headers=Object.fromEntries(Object.entries(h).filter(([k])=>['authorization','industryid','tenantid','platform','content-type'].includes(k)));
+        this.headers={...this.headers,...Object.fromEntries(Object.entries(h).filter(([k])=>['authorization','industryid','tenantid','platform','content-type'].includes(k)))};
         if(h.tenantid)this.tenantId=String(h.tenantid);
       }
       return readAllowed(r.method(),r.url(),this.origin,r.postData()||'')?route.continue():route.abort();
@@ -44,8 +44,8 @@ class InGaugeAccount {
     const exchange=this.page.waitForResponse(r=>new URL(r.url()).origin===this.origin&&new URL(r.url()).pathname==='/m-api/login-service/v1/authenticate-with-auth0',{timeout:40000}).catch(()=>null);
     await this.page.locator(o===this.origin?'button.login-submit':'button[type=submit][name=action]').click();
     await this.page.waitForURL(u=>u.origin===this.origin,{timeout:30000});
-    await exchange;for(let n=0;n<60&&(!this.headers?.authorization||!this.tenantId);n++)await this.page.waitForTimeout(250);
-    if(!this.headers?.authorization||!this.tenantId)throw new PortalError('Sign-in requires an interactive verification or did not finish. No financial changes were sent.');
+    await exchange;for(let n=0;n<60&&(!this.headers?.authorization||!this.tenantId||!this.headers.industryid);n++)await this.page.waitForTimeout(250);
+    if(!this.headers?.authorization||!this.tenantId||!this.headers.industryid)throw new PortalError('Sign-in requires an interactive verification or did not finish. No financial changes were sent.');
     const actor=await this.read(API+'user/secure/getByToken');
     if(actor.status!=='SUCCESS'||!C.id(actor.data?.id))throw new PortalError('Could not verify the connected account.');
     this.actor={id:C.id(actor.data.id),name:C.text(actor.data.name)};
@@ -156,5 +156,3 @@ class InGaugeAccount {
   }
 }
 module.exports={InGaugeAccount,PortalError,readAllowed,readQuery,STATUSES};
-
-
