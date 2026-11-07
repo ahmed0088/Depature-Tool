@@ -3,11 +3,14 @@
 const crypto=require('node:crypto'),fs=require('node:fs'),zlib=require('node:zlib');
 const ORIGIN='https://app.fpg-ingauge.com';
 function permitted(method,address,body='') {
-  const u=new URL(address); if(u.origin!==ORIGIN)return method==='GET'&&!u.pathname.includes('/m-api/');
+  const u=new URL(address);
+  if(u.origin==='https://login.app.fpg-ingauge.com'&&method==='POST'&&['/u/login/password','/u/login/identifier'].includes(u.pathname))return true;
+  if(u.origin!==ORIGIN)return method==='GET'&&!u.pathname.includes('/m-api/');
   const p=u.pathname;
   if(method==='GET'&&p==='/m-api/login-service/v1/get-auth0-universal-page')return true;
   if(!p.startsWith('/m-api/'))return method==='GET';
   if(method==='POST'&&p==='/m-api/api/user/authenticateUserUsingLDAP')return true;
+  if(method==='POST'&&p==='/m-api/login-service/v1/authenticate-with-auth0')return true;
   if(/(?:create|update|delete|remove|save|set[A-Z]|send|approve|deny|process|suspend|discontinue|reset|impersonat|logout|signout|track|mark|configure)/i.test(p))return false;
   if(method==='GET')return /\/(?:get[A-Z][^/]*|find[^/]*|is[A-Z][^/]*|check[A-Z][^/]*)(?:\/[^/]*)*$/.test(p)||/\/secure\/\d+$/.test(p)||/\/(?:logo_base64|checkLogo)\//.test(p);
   if(method==='POST'&&/\/(?:find|searchProductMetricData|getAllLocaionGroupProduct)$/.test(p))return true;
@@ -41,13 +44,26 @@ async function main(){
    return route.abort();
   });
   report.stage='login';await page.goto(ORIGIN,{waitUntil:'domcontentloaded'});
-  await page.locator('#email').waitFor({state:'visible',timeout:30000});
-  await page.locator('#email').fill(process.env.INGAUGE_EMAIL);
-  if(!await page.locator('#password[type=password]').isVisible().catch(()=>false))await page.locator('button.login-submit').click();
-  await page.locator('#password[type=password]').waitFor({state:'visible',timeout:20000});
-  await page.locator('#password[type=password]').fill(process.env.INGAUGE_PASS);
-  await page.locator('button.login-submit').click();
+  await page.locator('#email,input[name=username]').first().waitFor({state:'visible',timeout:30000});
+  const loginOrigin=new URL(page.url()).origin;
+  if(loginOrigin==='https://login.app.fpg-ingauge.com'){
+   const username=page.locator('input[name=username]');
+   if(await username.isEditable())await username.fill(process.env.INGAUGE_EMAIL);
+   else if((await username.inputValue()).toLowerCase()!==process.env.INGAUGE_EMAIL.toLowerCase())throw Error('LOGIN_ACCOUNT_MISMATCH');
+   if(!await page.locator('#password[type=password]').isVisible().catch(()=>false))await page.locator('button[type=submit][name=action]').click();
+   await page.locator('#password[type=password]').waitFor({state:'visible',timeout:20000});
+   if(new URL(page.url()).origin!=='https://login.app.fpg-ingauge.com')throw Error('LOGIN_ORIGIN');
+   await page.locator('#password[type=password]').fill(process.env.INGAUGE_PASS);
+   await page.locator('button[type=submit][name=action]').click();
+   await page.waitForURL(url=>url.origin===ORIGIN,{timeout:30000});
+  }else if(loginOrigin===ORIGIN){
+   await page.locator('#email').fill(process.env.INGAUGE_EMAIL);
+   if(!await page.locator('#password[type=password]').isVisible().catch(()=>false))await page.locator('button.login-submit').click();
+   await page.locator('#password[type=password]').waitFor({state:'visible',timeout:20000});
+   await page.locator('#password[type=password]').fill(process.env.INGAUGE_PASS);await page.locator('button.login-submit').click();
+  }else throw Error('LOGIN_ORIGIN');
   await page.waitForFunction(()=>!document.querySelector('#email')&&!document.querySelector('#password'),{},{timeout:30000});
+  console.log('Authentication completed; business writes remain blocked.');
   report.stage='metrics';await page.goto(ORIGIN+'/metrics/productMetrics',{waitUntil:'domcontentloaded'});
   await page.locator('select#TenantLocation option').nth(1).waitFor({state:'attached',timeout:30000});
   async function options(selector){return page.locator(selector+' option').evaluateAll(ns=>ns.map(n=>({id:n.value,name:n.textContent.trim(),attributes:Object.fromEntries([...n.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value]))})).filter(n=>n.id&&!['0','-1','null','undefined',''].includes(n.id)));}
