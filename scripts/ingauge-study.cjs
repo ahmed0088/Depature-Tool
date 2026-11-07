@@ -2,6 +2,12 @@
 // Isolated read-only inspection. No application or financial records are written.
 const crypto=require('node:crypto'),fs=require('node:fs'),zlib=require('node:zlib');
 const ORIGIN='https://app.fpg-ingauge.com';
+function readQuery(body){
+ try{
+  const {parse}=require('graphql'),payload=JSON.parse(body),ast=parse(payload.query);
+  return ast.definitions.length>0&&ast.definitions.every(d=>d.kind==='OperationDefinition'&&d.operation==='query'&&d.selectionSet.selections.length>0&&d.selectionSet.selections.every(f=>f.kind==='Field'&&/^(?:find|get|is|check|fetch|currentUser|me$)/.test(f.name.value)&&!/(?:update|create|delete|remove|assign|process|save|send|approve|deny|reset|impersonat)/i.test(f.name.value)));
+ }catch(_){return false;}
+}
 function permitted(method,address,body='') {
   const u=new URL(address);
   if(u.origin==='https://login.app.fpg-ingauge.com'&&method==='POST'&&['/u/login/password','/u/login/identifier'].includes(u.pathname))return true;
@@ -11,6 +17,7 @@ function permitted(method,address,body='') {
   if(!p.startsWith('/m-api/'))return method==='GET';
   if(method==='POST'&&p==='/m-api/api/user/authenticateUserUsingLDAP')return true;
   if(method==='POST'&&p==='/m-api/login-service/v1/authenticate-with-auth0')return true;
+  if(method==='POST'&&['/m-api/account/user/gql','/m-api/account/user-tenant-role/gql'].includes(p))return readQuery(body);
   if(/(?:create|update|delete|remove|save|set[A-Z]|send|approve|deny|process|suspend|discontinue|reset|impersonat|logout|signout|track|mark|configure)/i.test(p))return false;
   if(method==='GET')return /\/(?:get[A-Z][^/]*|find[^/]*|is[A-Z][^/]*|check[A-Z][^/]*)(?:\/[^/]*)*$/.test(p)||/\/secure\/\d+$/.test(p)||/\/(?:logo_base64|checkLogo)\//.test(p);
   if(method==='POST'&&/\/(?:find|searchProductMetricData|getAllLocaionGroupProduct)$/.test(p))return true;
@@ -36,6 +43,7 @@ async function main(){
    if(u.origin===ORIGIN&&u.pathname.startsWith('/m-api/')){
     const h=r.headers();if(h.authorization&&h.tenantid){headers=Object.fromEntries(Object.entries(h).filter(([k])=>['authorization','industryid','tenantid','platform','content-type'].includes(k)));tenant=h.tenantid;}
     const item={method:r.method(),path:u.pathname.replace(/\/\d+(?=\/|$)/g,'/:id')};
+    if(u.pathname.endsWith('/gql'))try{item.queryFields=require('graphql').parse(JSON.parse(r.postData()).query).definitions.flatMap(d=>d.selectionSet?.selections.map(f=>f.name?.value)||[]).filter(Boolean);}catch(_){}
     if(!report.requests.some(x=>x.method===item.method&&x.path===item.path))report.requests.push(item);
    }
    if(permitted(r.method(),r.url(),r.postData()||''))return route.continue();
@@ -133,4 +141,4 @@ async function main(){
   console.log(report.stage==='complete'?'Read-only inspection completed.':'Read-only inspection stopped; encrypted diagnostic available.');
  }
 }
-module.exports={permitted,envelope};if(require.main===module)main().catch(()=>{console.log('Study report unavailable.');process.exitCode=1;});
+module.exports={permitted,envelope,readQuery};if(require.main===module)main().catch(()=>{console.log('Study report unavailable.');process.exitCode=1;});

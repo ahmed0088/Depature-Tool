@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: '22'
       - name: Browser driver
-        run: npm install --no-save --no-audit --no-fund playwright-core@1.49.1
+        run: npm install --no-save --no-audit --no-fund playwright-core@1.49.1 graphql@16.11.0
       - name: Inspect without business writes
         run: node scripts/ingauge-study.cjs
         env:
