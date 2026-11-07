@@ -3,7 +3,7 @@
   'use strict';
   const C=W.InGaugeAuditCore,D=document,el=id=>D.getElementById(id),E=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dubai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-  const S={binding:null,discovery:null,snapshot:null,drafts:new Map(),selected:new Set(),view:'proposals',query:'',from:today().slice(0,7)+'-01',to:today(),busy:false,reviewed:false,readyHash:'',readyAt:0,job:null,tag:'',unwatch:null,error:'',editing:null};
+  const S={binding:null,discovery:null,snapshot:null,drafts:new Map(),selected:new Set(),view:'proposals',query:'',from:today().slice(0,7)+'-01',to:today(),busy:false,reviewed:false,readyHash:'',readyAt:0,job:null,tag:'',unwatch:null,error:'',editing:null,runMode:'',runShown:false};
   const db=()=>typeof _ref!=='undefined'?_ref:null,hotel=()=>typeof HOTEL_ID!=='undefined'?String(HOTEL_ID):'',profile=()=>typeof currentProfile!=='undefined'?currentProfile:null;
   const allowed=()=>['owner','manager'].includes(profile()?.role),notify=(m,t)=>W.showToast?.(m,t),money=n=>Number.isSafeInteger(n)?(n/100).toFixed(2):'',hotelName=()=>el('hotelName')?.textContent.trim()||hotel();
   const list=v=>Array.isArray(v)?v:Object.values(v||{}),clone=v=>JSON.parse(JSON.stringify(v));
@@ -17,16 +17,22 @@
   function currentPlan(){const operations=[...S.selected].map(k=>S.drafts.get(k)).filter(Boolean);return C.validatePlan({schema:2,mode:'apply',hotelId:hotel(),binding:S.binding,snapshotId:S.snapshot?.id,operations},S.snapshot);}
   function hydrate(s){s.records=list(s.records);s.products=list(s.products);s.contributors=list(s.contributors);return s;}
   async function job(plan,test=true){
-    if(S.busy)throw Error('Wait for the current cloud job to finish.');if(!allowed()||!db())throw Error('An owner or manager must start this job.');
+    if(S.busy)throw Error('Wait for the current cloud job to finish.');if(restoring)throw Error('Restoring your last run. Please wait a moment.');if(!allowed()||!db())throw Error('An owner or manager must start this job.');
     const uid=W.firebase?.auth?.().currentUser?.uid;if(!uid)throw Error('Sign in before starting.');
+    S.busy=true;renderControls();renderConfiguration();
+    try {
     await github('');const hash=await digest(C.stable(plan)),target=plan.binding?'ig-'+(await digest(C.stable(C.binding(plan.binding)))).slice(0,32):'discover-'+hotel();
     const tag='ig'+Date.now().toString(36)+crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
     const record={planJson:C.stable(plan),hash,test,approvedBy:uid,reviewedAt:Date.now(),state:'queued',results:[],tag};
-    await db().child('ingauge/jobs/'+tag).set(record);S.tag=tag;S.job=record;S.busy=true;S.error='';
+    await db().child('ingauge/jobs/'+tag).set(record);await db().child('ingauge/latestJob').set(tag);S.runMode=plan.mode;S.tag=tag;S.job=record;S.busy=true;S.error='';
     if(W.hoRuns)await W.hoRuns.start('ingauge',tag,{hotel:plan.binding?.property||hotelName(),test,how:plan.mode,from:plan.from||'',to:plan.to||'',n:plan.operations?.length||0});
-    renderRun();renderControls();
+    openRun();renderControls();
     try{await github('/dispatches',{method:'POST',body:JSON.stringify({ref:'main',inputs:{tag,hid:hotel(),plan_hash:hash,target_key:target,test:test?'1':'0'}})});}
-    catch(error){S.busy=false;await db().child('ingauge/jobs/'+tag).update({state:'error',note:error.message});throw error;}
+    catch(error){S.busy=false;S.job={...record,state:'error',note:error.message};await db().child('ingauge/jobs/'+tag).update({state:'error',note:error.message});renderRun();throw error;}
+    watchJob(tag,plan);return tag;
+    }catch(error){S.busy=false;renderControls();renderConfiguration();throw error;}
+  }
+  function watchJob(tag,plan){
     if(S.unwatch)S.unwatch();
     const ref=db().child('ingauge/jobs/'+tag);let finished=false;
     const callback=async snap=>{
@@ -34,7 +40,7 @@
       if(!finished&&['done','error','stopped'].includes(S.job.state)){
         finished=true;S.busy=false;
         try{
-          if(S.job.state==='done'&&plan.mode==='discover'){S.discovery=S.job.result;renderConfiguration();}
+          if(S.job.state==='done'&&plan.mode==='discover'){S.discovery=hydrateDiscovery(S.job.result);renderConfiguration();}
           if(S.job.state==='done'&&plan.mode==='snapshot'){
             const data=(await db().child('ingauge/snapshots/'+S.job.snapshotId).once('value')).val();if(!data?.complete||!C.sameBinding(data.binding,S.binding))throw Error('The fetched snapshot did not match this hotel.');
             S.snapshot=hydrate(data);S.drafts.clear();S.selected.clear();invalidate();importSnapshot();await db().child('ingauge/latestSnapshot').set(data.id);render();
@@ -47,9 +53,9 @@
       }
     };
     ref.on('value',callback);S.unwatch=()=>ref.off('value',callback);
-    setTimeout(()=>poll(tag),12000);return tag;
+    setTimeout(()=>poll(tag),12000);
   }
-  async function poll(tag){if(S.tag!==tag||!S.busy)return;try{const data=await github('/runs?event=workflow_dispatch&per_page=20'),run=data.workflow_runs.find(r=>(r.display_title||'').includes(tag));if(run){S.job.run=run.html_url;renderRun();if(run.status==='completed'&&['queued','running'].includes(S.job.state)){await db().child('ingauge/jobs/'+tag).update({state:'error',note:'The workflow ended without a final private report. Inspect its run before retrying.'});return;}}}catch(_){}setTimeout(()=>poll(tag),12000);}
+  async function poll(tag){if(S.tag!==tag||!S.busy)return;try{const data=await github('/runs?event=workflow_dispatch&per_page=20'),run=data.workflow_runs.find(r=>(r.display_title||'').includes(tag));if(run){S.job.run=run.html_url;renderRun();if(run.status==='completed'&&['queued','running'].includes(S.job.state)){const latest=(await db().child('ingauge/jobs/'+tag).once('value')).val();if(latest&&!['queued','running'].includes(latest.state))return;await db().child('ingauge/jobs/'+tag).update({state:'error',note:'The workflow ended without a final private report. Inspect its run before retrying.'});return;}}}catch(_){}setTimeout(()=>poll(tag),12000);}
   async function discover(){const url=C.portalUrl(el('igPortalUrl').value);await job({schema:2,mode:'discover',hotelId:hotel(),portalUrl:url},true);}
   async function saveBinding(){
     if(!allowed())throw Error('An owner or manager must link this hotel.');
@@ -57,7 +63,7 @@
     if(!h||!g||!el('igBindConfirmed').checked)throw Error('Choose the property and department, then confirm the hotel link.');
     const brand=s=>(String(s).match(/ibis|adagio|mercure/i)||[''])[0].toLowerCase();if(brand(hotelName())&&brand(h.name)&&brand(hotelName())!==brand(h.name))throw Error('The selected brand differs from this HotelOps hotel. Switch to the correct hotel space first.');
     S.binding=C.binding({portalUrl:S.discovery.portalUrl,tenantId:h.tenantId,propertyId:h.id,departmentId:g.id,property:h.name,department:g.name});
-    await db().child('ingauge/binding').set({...S.binding,linkedBy:W.firebase.auth().currentUser.uid,linkedAt:Date.now()});S.snapshot=null;S.drafts.clear();S.selected.clear();invalidate();render();notify('Hotel link saved. Fetch the audit period next.','ok');
+    await db().child('ingauge/binding').set({...S.binding,linkedBy:W.firebase.auth().currentUser.uid,linkedAt:Date.now()});S.snapshot=null;S.drafts.clear();S.selected.clear();invalidate();render();el('igControls')?.scrollIntoView({behavior:'smooth',block:'center'});notify('Hotel linked. Next: choose dates and fetch live IN-Gauge.','ok');
   }
   async function fetchSnapshot(){if(!S.binding)throw Error('Link the exact IN-Gauge hotel first.');S.from=el('igFrom').value;S.to=el('igTo').value;if(!C.day(S.from)||!C.day(S.to)||S.from>S.to)throw Error('Choose a valid audit period.');await job({schema:2,mode:'snapshot',hotelId:hotel(),binding:C.binding(S.binding),from:S.from,to:S.to},true);}
   function tableRows(snapshot){
@@ -149,21 +155,21 @@
   }
   function renderConfiguration(){
     const root=el('igConfiguration');if(!root)return;
-    const bound=S.binding;root.innerHTML=`<details ${bound?'':'open'}><summary>${bound?'Linked to '+E(bound.property)+' · '+E(bound.department):'Connect this hotel to IN-Gauge'}</summary><p class="iga-hint">This HotelOps space: <b>${E(hotelName())}</b>. Account passwords stay in GitHub secrets.</p><div class="iga-config"><label>Portal URL<input id="igPortalUrl" type="url" value="${E(S.discovery?.portalUrl||bound?.portalUrl||'https://app.fpg-ingauge.com/')}"></label><button class="btn" data-ig-discover ${S.busy?'disabled':''}>Read account’s hotels</button></div>
+    const bound=S.binding;root.innerHTML=`<p class="iga-guidance"><b>1. Connect your hotel</b> · ${bound?'Hotel linked. Continue with step 2 below.':S.discovery?'Hotel list loaded. Choose the correct hotel and Front Desk below.':'Press Read account’s hotels once. A progress window will open here.'}</p><details ${bound?'':'open'}><summary>${bound?'Linked to '+E(bound.property)+' · '+E(bound.department):'Connect this hotel to IN-Gauge'}</summary><p class="iga-hint">This HotelOps space: <b>${E(hotelName())}</b>. Account passwords stay in GitHub secrets.</p><div class="iga-config"><label>Portal URL<input id="igPortalUrl" type="url" value="${E(S.discovery?.portalUrl||bound?.portalUrl||'https://app.fpg-ingauge.com/')}"></label><button class="btn" data-ig-discover ${S.busy||restoring?'disabled':''}>Read account’s hotels</button></div>
       ${S.discovery?`<div class="iga-fields"><label>Exact property<select id="igProperty"><option value="">Choose hotel…</option>${option(S.discovery.hotels,bound?.propertyId||'',h=>h.name+' · ID '+h.id)}</select></label><label>Department<select id="igDepartment"></select></label></div><label class="iga-confirm"><input type="checkbox" id="igBindConfirmed"><span>I am linking this HotelOps space to the exact IN-Gauge hotel selected above.</span></label><button class="btn" data-ig-bind>Save hotel link</button>`:''}</details>`;
     if(S.discovery)renderDepartments();
   }
   function renderDepartments(){const h=S.discovery?.hotels.find(h=>h.id===el('igProperty')?.value),field=el('igDepartment');if(field)field.innerHTML='<option value="">Choose department…</option>'+option((h?.departments||[]).filter(d=>!d.retail&&!d.fnb),S.binding?.departmentId||'',g=>g.name);}
   function renderControls(){
     const root=el('igControls');if(!root)return;const snapshot=S.snapshot;
-    root.innerHTML=`<div class="iga-period"><label>From<input id="igFrom" type="date" value="${E(S.from)}"></label><label>Through<input id="igTo" type="date" value="${E(S.to)}"></label><button class="btn" data-ig-fetch ${!S.binding||S.busy?'disabled':''}>${snapshot?'Refresh':'Fetch'} live IN-Gauge</button><button class="btn gold" data-ig-check ${!snapshot||S.busy?'disabled':''}>Check Opera reports</button></div>
+    root.innerHTML=`<p class="iga-guidance"><b>2. Fetch the records</b> · After linking the hotel, choose dates and fetch IN-Gauge. Then upload your Opera reports and check them.</p><div class="iga-period"><label>From<input id="igFrom" type="date" value="${E(S.from)}"></label><label>Through<input id="igTo" type="date" value="${E(S.to)}"></label><button class="btn" data-ig-fetch ${!S.binding||S.busy?'disabled':''}>${snapshot?'Refresh':'Fetch'} live IN-Gauge</button><button class="btn gold" data-ig-check ${!snapshot||S.busy?'disabled':''}>Check Opera reports</button></div>
       ${snapshot?`<div class="iga-snapshot"><span>✓ All-status snapshot</span><b>${E(snapshot.binding.property)}</b><small>${snapshot.records.length} records · ${E(snapshot.from)} → ${E(snapshot.to)} · ${E(new Date(snapshot.fetchedAt).toLocaleString())}</small></div>`:'<p class="iga-hint">Fetch the IN-Gauge side directly. Its Excel export is still available as a fallback in Audit and Manual sales.</p>'}
       <div class="iga-reviewbar"><div><b>${S.selected.size} selected changes</b><small>Nothing is changed until you review, check readiness, then apply.</small></div><label class="iga-confirm"><input id="igReviewed" type="checkbox" ${S.reviewed?'checked':''} ${!S.selected.size||S.busy?'disabled':''}><span>I checked the hotel, confirmations, sellers, values and resulting statuses.</span></label><div class="iga-actions"><button class="btn" data-ig-test ${!S.reviewed||S.busy?'disabled':''}>Check readiness · no changes</button><button class="btn gold" data-ig-apply ${!S.reviewed||!S.readyHash||Date.now()-S.readyAt>900000||S.busy?'disabled':''}>Apply selected changes</button></div></div>
       ${S.error?`<p class="iga-error" role="alert">${E(S.error)}</p>`:''}`;
   }
   function renderProposals(){
     const root=el('igProposals');if(!root)return;
-    const drafts=[...S.drafts.values()],pending=S.snapshot?.records.filter(r=>r.status==='PENDING')||[];
+    const drafts=S.snapshot?[...S.drafts.values()]:[],pending=S.snapshot?.records.filter(r=>r.status==='PENDING')||[];
     const visible=S.view==='proposals'?drafts:S.view==='pending'?pending:S.snapshot?.records||[];
     const q=S.query.toLowerCase(),rows=visible.filter(r=>!q||[r.confirmation,r.recordId,r.id,r.product,r.seller,r.evidence].some(v=>String(v||'').toLowerCase().includes(q))).slice(0,80);
     root.innerHTML=`<div class="iga-tabs" role="tablist">${[['proposals','Proposed fixes',drafts.length],['pending','Pending requests',pending.length],['records','Find / edit records',S.snapshot?.records.length||0]].map(([k,n,count])=>`<button type="button" role="tab" aria-selected="${S.view===k}" class="${S.view===k?'on':''}" data-ig-view="${k}">${n}<span>${count}</span></button>`).join('')}</div><label class="iga-search"><span>Search confirmation, product or seller</span><input id="igSearch" type="search" value="${E(S.query)}" placeholder="Confirmation number…"></label>
@@ -173,7 +179,25 @@
         return `<article class="iga-card ${error?'held':''}"><header><label class="iga-select"><input type="checkbox" data-ig-select="${E(r.key)}" ${S.selected.has(r.key)?'checked':''} ${error||r.completed||S.busy?'disabled':''}><span><small>${E(r.source)}</small><b>Confirmation ${E(r.confirmation)}</b></span></label><span class="iga-status">${r.completed?'VERIFIED':E(r.action.toUpperCase())}</span></header><div class="iga-change"><div><small>Currently</small><p>${before?E(before.product)+' · '+E(before.seller||'Unassigned'):'Missing sale'}</p><b>${before?E(before.status)+' · '+E(S.snapshot.settings.currency)+' '+money(before.totalCents):'No new request confirmed'}</b></div><span aria-hidden="true">→</span><div><small>Proposed</small><p>${['add','edit'].includes(r.action)?E(product?.name||'Choose product')+' · '+E(person?.name||'Choose contributor'):E(r.action==='approve'?'Approve existing request':r.action==='deny'?'Deny existing request':'Remove existing request')}</p><b>${['add','edit'].includes(r.action)?E(r.statusAfter)+' · '+E(S.snapshot.settings.currency)+' '+money(r.values.totalCents):E(r.action==='approve'?'APPROVED':r.action==='deny'?'DENIED':'PURGED')}</b></div></div><details><summary>Evidence and explanation</summary><p>${E(r.evidence)}</p>${r.reason?'<p>Reason: '+E(r.reason)+'</p>':''}<p>${r.recordId?'Existing record ID '+E(r.recordId):'Opera transaction '+E(r.transaction)} · ${E(r.values?.businessDate||before?.businessDate||'')}</p></details>${error?'<p class="iga-error">'+E(error)+'</p>':''}<button class="btn" data-ig-edit="${E(r.key)}">Review details / assignment</button></article>`;
       }).join(''):`<div class="iga-empty"><b>${S.snapshot?'No matching items':'Start with a live snapshot'}</b><p>${S.snapshot?'Upload the Opera reports and check them, or open Pending requests to review existing requests.':'Link your hotel, choose the audit period, and fetch the IN-Gauge side.'}</p></div>`}</div>${visible.length>80?'<p class="iga-hint">Showing up to 80 matches. Search a confirmation to narrow the list.</p>':''}`;
   }
-  function renderRun(){const box=el('igRunBox');if(!box)return;const j=S.job;if(!j){box.hidden=true;return;}box.hidden=false;const terminal=['done','error','stopped'].includes(j.state),results=list(j.results);box.innerHTML=`<header><div><span class="iga-eyebrow">CLOUD RUN</span><h3>${terminal?'Finished':'Running'} · ${E(j.state)}</h3></div>${terminal?'':`<button class="btn" data-ig-stop>Stop before next change</button>`}</header><p>${E(j.note||'Queued for the cloud computer')}</p>${results.length?`<div class="iga-run-results">${results.map(r=>`<div><b>${E(r.confirmation)}</b><span>${E(r.state)}</span><p>${E(r.note)}</p>${r.recordId?'<small>Record '+E(r.recordId)+'</small>':''}</div>`).join('')}</div>`:''}${j.run?`<a href="${E(j.run)}" target="_blank" rel="noopener">Open GitHub run ↗</a>`:''}<p class="iga-hint">This run stays in Cloud run history. Closing this workspace does not cancel it.</p>`;}
+  function hydrateDiscovery(value){if(!value)return null;return {...value,hotels:list(value.hotels).map(h=>({...h,departments:list(h.departments)}))};}
+  const runTitle=()=>S.runMode==='discover'?'Connect IN-Gauge':S.runMode==='snapshot'?'Fetch IN-Gauge records':S.job?.test?'Check selected changes':'Apply reviewed changes';
+  function closeRun(){S.runShown=false;if(el('igRunWindow'))el('igRunWindow').hidden=true;W.hoRuns?.minimized?.('ingauge');}
+  function openRun(){open();S.runShown=true;let modal=el('igRunWindow');if(!modal){modal=D.createElement('div');modal.id='igRunWindow';modal.className='iga-overlay';modal.hidden=true;D.body.appendChild(modal);modal.addEventListener('click',e=>{if(e.target===modal||e.target.closest('[data-ig-run-close]'))closeRun();else if(e.target.closest('[data-ig-run-next]')){closeRun();const target=S.runMode==='discover'?'igConfiguration':S.runMode==='snapshot'?'igControls':'igProposals';el(target)?.scrollIntoView({behavior:'smooth',block:'start'});if(S.runMode==='discover'){const details=el('igConfiguration')?.querySelector('details');if(details)details.open=true;el('igProperty')?.focus();}}});}modal.hidden=false;renderRun();}
+  function renderRun(){
+    const box=el('igRunBox');if(!box)return;const j=S.job;if(!j){box.hidden=true;return;}box.hidden=false;
+    const terminal=['done','error','stopped'].includes(j.state),success=j.state==='done',results=list(j.results);
+    const next=success?(S.runMode==='discover'?'Choose your hotel and Front Desk, then Save hotel link.':S.runMode==='snapshot'?'The records are loaded. Upload Opera reports, then Check Opera reports.':j.test?'Return to the reviewed list. Apply selected changes is available only if all readiness checks passed.':'Review the results below, then refresh IN-Gauge before another audit.') : '';
+    const label=success?'Completed':j.state==='error'?'Stopped with a problem':j.state==='stopped'?'Stopped':j.state==='queued'?'Starting cloud computer':'Working';
+    const signature=JSON.stringify([S.tag,j.state,j.note,j.stage,j.trace,j.results,next]);
+    if(box.dataset.signature!==signature){box.dataset.signature=signature;box.innerHTML=`<header><div><span class="iga-eyebrow">IN-GAUGE CLOUD RUN</span><h3>${E(runTitle())} · ${E(label)}</h3></div><button class="btn" data-ig-open-run>Show progress</button></header><p>${E(j.note||'Starting the cloud computer. Browser setup and sign-in can take a moment.')}</p>${next?`<p class="iga-next"><b>Next step</b> ${E(next)}</p>`:''}`;}
+    const modal=el('igRunWindow');if(!modal||!S.runShown)return;
+    if(modal.dataset.signature===signature)return;modal.dataset.signature=signature;
+    const trace=list(j.trace),progress=terminal?100:Math.max(5,Math.min(90,({starting:8,open:15,login:25,account:40,hotels:55,products:65,contributors:75,records:85})[j.stage]||5));
+    modal.innerHTML=`<section class="iga-editor iga-run-window" role="dialog" aria-modal="true" aria-labelledby="igRunTitle"><header><div><span class="iga-eyebrow">LIVE CLOUD RUN</span><h2 id="igRunTitle">${E(runTitle())}</h2><p>${E(label)} · ${j.test?'Read-only check':'Reviewed changes'}</p></div><button type="button" data-ig-run-close aria-label="Close progress">×</button></header><div class="iga-editor-body"><div class="iga-run-status ${success?'done':''}"><span class="iga-run-indicator" aria-hidden="true">${success?'✓':terminal?'!':'◌'}</span><p role="status">${E(j.note||'Starting the cloud computer. Browser setup and sign-in can take a moment.')}</p></div><progress max="100" value="${progress}" aria-label="Run stage"></progress>${next?`<div class="iga-next"><b>Next step</b><p>${E(next)}</p><button type="button" class="btn gold" data-ig-run-next>${S.runMode==='discover'?'Choose hotel':S.runMode==='snapshot'?'Check Opera reports':'Return to review list'}</button></div>`:''}
+      <details class="iga-run-log" open><summary>Activity</summary><ol>${trace.map(t=>`<li><time>${E(new Date(t.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Dubai'}))}</time><span>${E(t.note)}</span></li>`).join('')||'<li>Waiting for the cloud computer to report its first step…</li>'}</ol></details>
+      ${results.length?`<div class="iga-run-results">${results.map(r=>`<div><b>${E(r.confirmation)}</b><span>${E(r.state)}</span><p>${E(r.note)}</p>${r.recordId?'<small>Record '+E(r.recordId)+'</small>':''}</div>`).join('')}</div>`:''}
+      <p class="iga-hint">You can close this window and return from Cloud runs. The job continues and its result is saved.</p>${j.run?`<details><summary>Technical details</summary><p><a href="${E(j.run)}" target="_blank" rel="noopener">GitHub diagnostic log ↗</a></p></details>`:''}<footer><button type="button" class="btn" data-ig-run-close>${terminal?'Close':'Minimise; keep running'}</button></footer></div></section>`;
+  }
   function render(){renderConfiguration();renderControls();renderProposals();renderRun();}
   function open(){mount();restoreHotel().catch(error=>{S.error=error.message;renderControls();});if(W.showPanel)W.showPanel('package-audit');for(const id of ['pkgMainView','pkgRulesView','pkgMemoryView','pkgSettingsView','muView','manualUpsellView'])if(el(id))el(id).hidden=true;el('igWorkspace').hidden=false;D.querySelectorAll('#pkgTabs [data-v]').forEach(b=>{const on=b.dataset.v==='ingauge';b.classList.toggle('on',on);b.setAttribute('aria-selected',String(on));});render();}
   let restoredHotel='',restoring=false;
@@ -187,6 +211,13 @@
       const snapshot=latest&&(await ref.child('ingauge/snapshots/'+latest).once('value')).val();
       if(hotel()!==hid)return;
       S.binding=binding;
+      let latestTag=(await ref.child('ingauge/latestJob').once('value')).val();
+      let job=latestTag&&(await ref.child('ingauge/jobs/'+latestTag).once('value')).val();
+      if(!job){const jobs=(await ref.child('ingauge/jobs').orderByChild('reviewedAt').limitToLast(1).once('value')).val();const last=Object.entries(jobs||{})[0];if(last){latestTag=last[0];job=last[1];}}
+      const discovery=(await ref.child('ingauge/discovery').once('value')).val();
+      if(hotel()!==hid)return;
+      if(discovery)S.discovery=hydrateDiscovery(discovery);
+      if(job){let plan;try{plan=JSON.parse(job.planJson);}catch(_){}if(plan?.hotelId===hid){S.tag=latestTag;S.job=job;S.runMode=plan.mode;S.busy=['queued','running'].includes(job.state);if(plan.mode==='discover'&&job.state==='done'&&job.result)S.discovery=hydrateDiscovery(job.result);if(S.busy)watchJob(latestTag,plan);}}
       if(snapshot?.complete&&snapshot.hotelId===hid&&C.sameBinding(snapshot.binding,binding)){S.snapshot=hydrate(snapshot);importSnapshot();}
       restoredHotel=hid;render();
     }finally{restoring=false;}
@@ -200,7 +231,7 @@
       <div class="iga-uploads">${[['journal','Opera journal','.txt,.tsv','Manual charges and original notes'],['reservations','Reservation Detail','.txt,.tsv','Confirmations, guests, rooms and dates'],['changes','Opera Changes Log','.pdf,.PDF','Add for automatic-package ownership']].map(([k,n,a,h])=>`<label class="iga-upload"><span>${n}</span><small>${h}</small><input type="file" data-ig-file="${k}" accept="${a}"><b id="igFile-${k}">Choose report</b></label>`).join('')}</div>
       <p class="iga-hint">Manual sales use Journal + Reservation Detail. Automatic packages also use Opera Changes Log. Keep the existing Audit and Manual sales tabs for full evidence and fallback uploads.</p><div id="igControls"></div><div id="igProposals"></div><section id="igRunBox" class="iga-panel" hidden></section>`;
     main.parentNode.insertBefore(root,main.nextSibling);
-    root.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const act=async()=>{S.error='';if(b.hasAttribute('data-ig-discover'))await discover();else if(b.hasAttribute('data-ig-bind'))await saveBinding();else if(b.hasAttribute('data-ig-fetch'))await fetchSnapshot();else if(b.hasAttribute('data-ig-check'))await checkReports();else if(b.hasAttribute('data-ig-test'))await startApply(true);else if(b.hasAttribute('data-ig-apply'))await startApply(false);else if(b.dataset.igView){S.view=b.dataset.igView;renderProposals();}else if(b.dataset.igEdit)edit(b.dataset.igEdit);else if(b.dataset.igRecord)editRecord(b.dataset.igRecord,b.dataset.igAction);else if(b.hasAttribute('data-ig-stop')&&S.tag)await db().child('ingauge/jobs/'+S.tag).update({stopRequested:true});};act().catch(error=>{S.error=error.message;renderControls();notify(error.message,'err');});});
+    root.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const act=async()=>{S.error='';if(b.hasAttribute('data-ig-open-run'))openRun();else if(b.hasAttribute('data-ig-discover'))await discover();else if(b.hasAttribute('data-ig-bind'))await saveBinding();else if(b.hasAttribute('data-ig-fetch'))await fetchSnapshot();else if(b.hasAttribute('data-ig-check'))await checkReports();else if(b.hasAttribute('data-ig-test'))await startApply(true);else if(b.hasAttribute('data-ig-apply'))await startApply(false);else if(b.dataset.igView){S.view=b.dataset.igView;renderProposals();}else if(b.dataset.igEdit)edit(b.dataset.igEdit);else if(b.dataset.igRecord)editRecord(b.dataset.igRecord,b.dataset.igAction);else if(b.hasAttribute('data-ig-stop')&&S.tag)await db().child('ingauge/jobs/'+S.tag).update({stopRequested:true});};act().catch(error=>{S.error=error.message;renderControls();notify(error.message,'err');});});
     root.addEventListener('change',e=>{
       if(e.target.dataset.igFile&&e.target.files[0])upload(e.target.dataset.igFile,e.target.files[0]).catch(error=>{S.error=error.message;renderControls();});
       else if(e.target.id==='igProperty')renderDepartments();
@@ -209,10 +240,10 @@
       else if(e.target.id==='igFrom')S.from=e.target.value;else if(e.target.id==='igTo')S.to=e.target.value;
     });
     root.addEventListener('input',e=>{if(e.target.id==='igSearch'){const pos=e.target.selectionStart;S.query=e.target.value;renderProposals();const i=el('igSearch');i.focus();try{i.setSelectionRange(pos,pos);}catch(_){}}});
-    D.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.editing)closeEditor();});
+    D.addEventListener('keydown',e=>{if(e.key==='Escape'){if(S.editing)closeEditor();else if(S.runShown)closeRun();}});
 
     render();return true;
   }
-  W.InGaugeWorkspace={state:S,open,fromAudit,mount,tableRows,buildProposals,hydrate};
+  W.InGaugeWorkspace={state:S,open,openRun,closeRun,renderRun,fromAudit,mount,tableRows,buildProposals,hydrate};
   if(D.readyState==='loading')D.addEventListener('DOMContentLoaded',mount);else mount();
 })(window);

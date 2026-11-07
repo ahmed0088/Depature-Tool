@@ -106,3 +106,9 @@ test('Pending approval holds unidentified products, missing sellers and inconsis
  const s=snapshot(),op=edit(s,{action:'approve'});assert.equal(C.operationError(op,s),'');
  for(const change of [{productId:'8'},{contributorId:''},{totalCents:1}]){const current=snapshot();Object.assign(current.records[0],change);const action=edit(current,{action:'approve'});assert(C.operationError(action,current));}
 });
+
+test('hotel discovery reports its stage and counts without exposing account identities',async()=>{
+ const events=[],portal=new InGaugeAccount({context:()=>({})},'https://app.fpg-ingauge.com',{progress:async(stage,note)=>events.push({stage,note})});
+ portal.read=async path=>path.includes('getAccessibleTenants')?{data:[{tenantId:1}]}:path.includes('getLocationsForUser')?{status:'SUCCESS',data:[{id:2,tenantId:1,name:'Example Hotel'}]}:{status:'SUCCESS',data:[{id:3,name:'Front Desk',activeStatus:'NORMAL'}]};
+ const result=await portal.discover();assert.equal(result.hotels.length,1);assert(events.some(e=>e.note.includes('hotel 1 of 1')));assert(events.every(e=>!e.note.includes('Example Hotel')));
+});

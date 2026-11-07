@@ -54,25 +54,33 @@ async function main(){
     if(!test){const ready=await db.get('ingauge/tests/'+hash);if(!ready?.ready||Date.now()-ready.at>900000)throw Error('Check readiness for this exact selection before applying it.');}
   }
   const run=E.GITHUB_RUN_ID?'https://github.com/ahmed0088/Depature-Tool/actions/runs/'+E.GITHUB_RUN_ID:'';
-  const publish=async(results,state='running',note='Checking IN-Gauge')=>{
+  const publish=async(results,state='running',note='Checking IN-Gauge',extra={})=>{
+    publishedResults=results;
     const tally={tested:0,applied:0,unchanged:0,held:0,uncertain:0};for(const r of results)if(r.state in tally)tally[r.state]++;
-    await db.patch(node,{state,results,tally,note,run,at:Date.now()});
+    await db.patch(node,{state,results,tally,note,run,at:Date.now(),...extra});
     const live={tag,state:state==='running'?'run':state,test,n:plan.operations?.length||0,done:results.length,note,tally,at:Date.now(),started:job.reviewedAt,run};
     await db.put('ingauge/live',live);await db.patch('cloudRuns/'+tag,{...live,kind:'ingauge',url:run,hotel:plan.binding?.property||'',from:plan.from||'',to:plan.to||''});
   };
-  let browser;
+  let browser,heartbeat,publishedResults=[];const trace=[];
+  const progress=async(stage,note)=>{
+    if(trace.at(-1)?.note!==note){trace.push({at:Date.now(),stage,note});if(trace.length>60)trace.shift();console.log('[IN-Gauge] '+note);}
+    await publish(publishedResults,'running',note,{stage,trace});
+  };
   try{
-    await publish([],'running','Signing in to the reviewed IN-Gauge portal');
+    await db.put('ingauge/latestJob',tag);
+    heartbeat=setInterval(()=>{db.patch(node,{heartbeatAt:Date.now()}).catch(()=>{});},15000);
+    await progress('starting','Cloud computer ready; starting IN-Gauge');
     const {chromium}=require('playwright-core');browser=await chromium.launch({headless:true,executablePath:E.CHROME_PATH||undefined,args:['--disable-dev-shm-usage']});
     const page=await browser.newPage();page.setDefaultTimeout(20000);
-    const portal=new InGaugeAccount(page,plan.binding?.portalUrl||plan.portalUrl);await portal.installGuard();await portal.login(E.INGAUGE_EMAIL,E.INGAUGE_PASS);
+    const portal=new InGaugeAccount(page,plan.binding?.portalUrl||plan.portalUrl,{progress});await portal.installGuard();await portal.login(E.INGAUGE_EMAIL,E.INGAUGE_PASS);
     if(plan.mode==='discover'){
-      const result=await portal.discover();await db.patch(node,{result});await publish([],'done','Accessible properties and departments retrieved. No financial changes.');return;
+      const result=await portal.discover();await db.put('ingauge/discovery',result);await db.patch(node,{result});const note='Found '+result.hotels.length+' hotels. Next: choose your hotel and Front Desk, then save the hotel link. No financial changes.';console.log('[IN-Gauge] '+note);await publish([],'done',note);return;
     }
     if(plan.mode==='snapshot'){
       if(!C.day(plan.from)||!C.day(plan.to)||plan.from>plan.to||new Date(plan.to)-new Date(plan.from)>366*86400000)throw Error('Choose an audit period of at most one year.');
       const result=await portal.snapshot(plan.binding,plan.from,plan.to,db.hotelId,tag);
       await db.put('ingauge/snapshots/'+tag,result);await db.patch(node,{snapshotId:tag});
+      console.log('[IN-Gauge] Record fetch complete: '+result.records.length+' records');
       await publish([],'done',result.records.length+' live records retrieved with all statuses and complete pagination.');return;
     }
     const outcome=await execute(plan,snapshot,{portal,db,test,publish,stop:async()=>!!(await db.get(node))?.stopRequested});
@@ -80,7 +88,7 @@ async function main(){
     if(test)await db.put('ingauge/tests/'+hash,{ready,at:Date.now(),tag});
     await publish(outcome.results,outcome.uncertain?'error':outcome.stopped?'stopped':'done',outcome.uncertain?'Stopped. Verify an uncertain outcome in IN-Gauge before retrying.':outcome.stopped?'Stopped before the next operation.':test?(ready?'Readiness checks passed. No financial changes sent.':'Readiness checks finished with cases held for review.'):'Finished. Each successful change was reread and verified in IN-Gauge.');
   }catch(error){const current=await db.get(node).catch(()=>null);await publish(current?.results||[],'error',portalError(error));console.error('::error::IN-Gauge stopped. Open the private HotelOps run report for details.');process.exitCode=1;}
-  finally{if(browser)await browser.close().catch(()=>{});}
+  finally{if(heartbeat)clearInterval(heartbeat);if(browser)await browser.close().catch(()=>{});}
 }
 if(require.main===module)main().catch(()=>{console.error('::error::IN-Gauge could not validate the queued job or cloud account.');process.exitCode=1;});
 module.exports={execute,targetKey};

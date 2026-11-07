@@ -11,7 +11,7 @@
   const W = window, D = document;
   const KINDS = {
     enrol:   { ic: '✍️', name: 'Guest enrolment', live: 'enrollLive', win: 'gpAccorRunModal', open: () => { if (typeof W.gpAccorRunWin === 'function') W.gpAccorRunWin(true); else if (typeof gpAccorRunWin === 'function') gpAccorRunWin(true); } },
-    ingauge: { ic: '↗', name: 'IN-Gauge audit', live: 'ingauge/live', win: 'igWorkspace', open: () => W.InGaugeWorkspace?.open() },
+    ingauge: { ic: '↗', name: 'IN-Gauge audit', live: 'ingauge/live', win: 'igRunWindow', open: () => W.InGaugeWorkspace?.openRun() },
     manual: { ic: '↗', name: 'Manual sales', live: 'manualSalesLive', win: 'msuRunWindow', open: () => { if (W.ManualSalesAutomation) W.ManualSalesAutomation.openRun(); } },
     neorcha: { ic: '🪪', name: 'Neorcha cards', live: 'neorchaLive', win: 'nxRun', open: () => { if (W.hoNxRunOpen) W.hoNxRunOpen(); } },
   };

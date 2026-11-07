@@ -35,3 +35,7 @@ The saved URL now selects the reader directly: `/tweak/` selects Tweak, while `/
 Choose optional fields or use Contacts & enrolment / Full registration presets. Confirmation, guest names, room and stay dates remain included for matching. Today only uses the Dubai calendar date for both arrival boundaries. These are arrival-date collections, not a list of everyone currently staying in the hotel.
 
 Cloud collections are saved under private `neorchaCollections` and a small `neorchaCollectionIndex`. The previous current collection is archived before replacement. Reopen an archived list from Saved collections, or export the current selected-field collection as CSV. Guest Pipeline and Purpose of Stay continue to use the chosen fields. No enrollment or Neorcha business edits are made by collection.
+
+### In-app run progress (v557)
+
+Connecting, fetching and reviewed operations open a progress window in HotelOps. It reports sign-in, discovery, product checks and record counts; closing minimises the job. Cloud runs reopens its window. Terminal runs provide their next step, and discovery results plus the latest job are restored after refresh, including the last completed lookup from older versions. GitHub is available as an optional diagnostic link. Stage updates contain no credentials or guest identifiers. Heartbeats do not rebuild controls.

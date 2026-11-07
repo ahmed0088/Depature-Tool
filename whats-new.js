@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 557, items: [
+    { ico: '📡', title: 'IN-Gauge now has its own live run window',
+      what: 'A progress window opens when you connect, fetch records, check readiness or apply reviewed changes. It shows sign-in, hotel lookup, catalog checks and record counts inside HotelOps.',
+      does: 'Close to minimise, then reopen from Cloud runs. The latest result and hotel choices survive refresh. Completed runs show the next step, so you do not need to read GitHub logs.' },
+  ] },
   { v: 556, items: [
     { ico: '🪪', title: 'Choose your Neorcha reader and collection',
       what: 'The saved link chooses the reader: /tweak/ uses the new portal; /neorchaWEBPlatform/ uses the original portal. The current reader is shown beside your collection settings.',

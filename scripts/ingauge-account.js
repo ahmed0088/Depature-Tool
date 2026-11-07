@@ -17,7 +17,7 @@ function readAllowed(method,url,origin,body=''){
   return method==='POST'&&/\/(find|searchProductMetricData|getAllLocaionGroupProduct)$/.test(p);
 }
 class InGaugeAccount {
-  constructor(page,url){this.page=page;this.context=page.context();this.url=C.portalUrl(url);this.origin=new URL(this.url).origin;this.headers=null;this.tenantId='';this.actor=null;this.sent=false;this.closed=false;}
+  constructor(page,url,{progress=async()=>{}}={}){this.progress=progress;this.page=page;this.context=page.context();this.url=C.portalUrl(url);this.origin=new URL(this.url).origin;this.headers=null;this.tenantId='';this.actor=null;this.sent=false;this.closed=false;}
   async installGuard(){
     await this.context.route('**/*',async route=>{
       const r=route.request(),u=new URL(r.url()),h=r.headers();
@@ -30,22 +30,26 @@ class InGaugeAccount {
   }
   async login(email,password){
     if(!email||!password)throw new PortalError('IN-Gauge account secrets are missing.');
+    await this.progress('open','Opening the secure IN-Gauge sign-in page');
     await this.page.goto(this.url,{waitUntil:'domcontentloaded',timeout:45000});
     await this.page.locator('#email:visible,input[name=username]:visible,#password[type=password]:visible').first().waitFor({state:'visible',timeout:30000});
     const valid=()=>{const u=new URL(this.page.url());if(u.origin!==this.origin&&!(u.protocol==='https:'&&u.hostname.endsWith('.fpg-ingauge.com')))throw new PortalError('Sign-in left the verified IN-Gauge provider.');return u.origin;};
     if(!await this.page.locator('#password[type=password]').isVisible().catch(()=>false)){
+      await this.progress('login','Entering the account email');
       const o=valid();await this.page.locator('#email:visible,input[name=username]:visible').first().fill(email);
       await this.page.locator(o===this.origin?'button.login-submit':'button[type=submit][name=action]').click();
     }
     await this.page.locator('#password[type=password]').waitFor({state:'visible',timeout:30000});
     const o=valid(),user=this.page.locator('input[name=username]');
     if(o!==this.origin&&await user.count()){const v=await user.inputValue();if(v&&v.toLowerCase()!==email.toLowerCase())throw new PortalError('The login page selected another account.');}
+    await this.progress('login','Signing in securely; waiting for IN-Gauge');
     await this.page.locator('#password[type=password]').fill(password);
     const exchange=this.page.waitForResponse(r=>new URL(r.url()).origin===this.origin&&new URL(r.url()).pathname==='/m-api/login-service/v1/authenticate-with-auth0',{timeout:40000}).catch(()=>null);
     await this.page.locator(o===this.origin?'button.login-submit':'button[type=submit][name=action]').click();
     await this.page.waitForURL(u=>u.origin===this.origin,{timeout:30000});
     await exchange;for(let n=0;n<60&&(!this.headers?.authorization||!this.tenantId||!this.headers.industryid);n++)await this.page.waitForTimeout(250);
     if(!this.headers?.authorization||!this.tenantId||!this.headers.industryid)throw new PortalError('Sign-in requires an interactive verification or did not finish. No financial changes were sent.');
+    await this.progress('account','Sign-in complete; checking account access');
     const actor=await this.read(API+'user/secure/getByToken');
     if(actor.status!=='SUCCESS'||!C.id(actor.data?.id))throw new PortalError('Could not verify the connected account.');
     this.actor={id:C.id(actor.data.id),name:C.text(actor.data.name)};
@@ -61,6 +65,7 @@ class InGaugeAccount {
   }
   data(response){if(response.status!=='SUCCESS')throw new PortalError('IN-Gauge did not confirm the requested data read.');return response.data;}
   async discover(){
+    await this.progress('hotels','Reading the hotels available to this account');
     const roleResponse=await this.read(API+'userTenantRole/secure/getAccessibleTenantsWithRoleDetails');
     if(!Array.isArray(roleResponse.data)||(roleResponse.status&&roleResponse.status!=='SUCCESS'))throw new PortalError('The accessible tenant list could not be verified.');
     const roles=roleResponse.data;
@@ -68,6 +73,7 @@ class InGaugeAccount {
     const locations=this.data(await this.read(API+'tenantLocation/secure/getLocationsForUserAndTenants?'+new URLSearchParams({tenantIds:tenants.join(',')})));
     const hotels=[];
     for(const h of locations||[]){
+      await this.progress('hotels','Reading departments for hotel '+(hotels.length+1)+' of '+locations.length);
       if(!tenants.includes(C.id(h.tenantId)))throw new PortalError('A location had an unverified tenant.');
       this.scopeTenant=C.id(h.tenantId);
       const groupData=this.data(await this.read(API+'locationGroup/secure/getLocationGroup/'+h.tenantId+'?'+new URLSearchParams({tenantLocationID:String(h.id)})));
@@ -93,14 +99,17 @@ class InGaugeAccount {
     return {binding:b,settings,permissions:{canAdd:paths.has('/metrics/productMetrics/add'),canEdit:paths.has('/metrics/productMetrics/edit'),canApprove:can('approve'),canDeny:can('deny'),canDelete:can('delete'),canReassign:names.has('canChangeContributor')||names.has('isSuperAdmin')}};
   }
   async contributors(b){
+    await this.progress('contributors','Reading contributors for the selected hotel');
     const rows=this.data(await this.read(API+'user/secure/getAvailableUsers/'+b.tenantId+'?'+new URLSearchParams({tenantLocationID:b.propertyId,locationGroupID:b.departmentId,getContributorsOnly:'true',getWithAllStatus:'true',getOperatorsOnly:'false',isWeightWiseUser:'false',allowSameWeightUser:'true',decideContributorOpratorLocationLevel:'true'})));
     if(!Array.isArray(rows))throw new PortalError('The contributor list is incomplete.');
     return rows.map(p=>({id:C.id(p.id),name:C.text(p.name),pulseId:C.text(p.pulseId),activeStatus:C.text(p.activeStatus)}));
   }
   async products(b){
+    await this.progress('products','Reading the selected hotel’s product catalog');
     const full=await this.read('/m-api/product/product/gql',{query:'query{findAllByLocationGroupIntId(locationGroupIntId:'+b.departmentId+'){intId,name,locationGroupIntId,isRecurring,productCode,productSKU}}'});
     const list=full.data?.findAllByLocationGroupIntId;if(!Array.isArray(list))throw new PortalError('The full product catalog was not returned.');
     const out=[];for(const p of list){
+      await this.progress('products','Verifying product '+(out.length+1)+' of '+list.length);
       if(C.id(p.locationGroupIntId)!==b.departmentId)throw new PortalError('A product belongs to another department.');
       const detail=this.data(await this.read(API+'locationGroupProduct/secure/'+C.id(p.intId)));
       if(typeof detail.isRecurring!=='boolean')throw new PortalError('A product’s recurring flag is not verified.');
@@ -118,7 +127,7 @@ class InGaugeAccount {
       if(!Array.isArray(data?.data)||!Number.isSafeInteger(data.totalInList)||Number(data.first)!==first)throw new PortalError('The live record pagination was not verified.');
       if(total!==null&&total!==data.totalInList)throw new PortalError('IN-Gauge changed while records were being read. Fetch again.');total=data.totalInList;
       for(const raw of data.data){const r=C.record(raw);if(r.propertyId!==b.propertyId||r.departmentId!==b.departmentId||seen.has(r.id))throw new PortalError('A record was duplicated or outside the selected hotel.');seen.add(r.id);rows.push(r);}
-      first+=data.data.length;if(first>=total)return confirmation?rows.filter(r=>r.confirmation===confirmation):rows;
+      first+=data.data.length;await this.progress('records','Read '+first+' of '+total+' IN-Gauge records');if(first>=total)return confirmation?rows.filter(r=>r.confirmation===confirmation):rows;
       if(!data.data.length)throw new PortalError('The live record list ended early.');
     }throw new PortalError('The record list exceeds the verified pagination limit. Narrow the date range.');
   }
