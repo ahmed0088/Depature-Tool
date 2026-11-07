@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 558, items: [
+    { ico: '📄', title: 'Upload both Opera Changes Logs',
+      what: 'IN-Gauge automation now accepts the New Reservation and Update Reservation Changes Log PDFs together or one after the other, matching the original Package Audit.',
+      does: 'Use Opera Changes Logs · both PDFs. The files are merged and listed by name; uploading another log keeps the earlier events, and repeated events are deduplicated by the existing audit reader.' },
+  ] },
   { v: 557, items: [
     { ico: '📡', title: 'IN-Gauge now has its own live run window',
       what: 'A progress window opens when you connect, fetch records, check readiness or apply reviewed changes. It shows sign-in, hotel lookup, catalog checks and record counts inside HotelOps.',

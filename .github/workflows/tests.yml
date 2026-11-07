@@ -39,4 +39,5 @@ jobs:
       - name: IN-Gauge review and Neorcha reader checks
         run: |
           node tests/ingauge-audit.test.js
+          node tests/ingauge-uploads.test.js
           node tests/neorcha-tweak.test.js

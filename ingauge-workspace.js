@@ -110,11 +110,24 @@
     buildProposals();
   }
   function fromAudit(recordId){open();if(!S.snapshot){notify('Fetch the live IN-Gauge snapshot to review this record.','warn');return;}const rows=typeof pkgResults!=='undefined'?pkgResults:[],row=rows.find(r=>String(r.recordId)===String(recordId)),op=row&&proposedAudit(row);if(op){S.drafts.set(op.key,op);edit(op.key);}else{S.view='records';S.query=recordId;renderProposals();}}
-  async function upload(kind,file){
-    if(!file)return;if(kind==='changes'){await pkgLoadPdf({files:[file]});}
-    else{await W.ManualUpsells.load(kind,file);if(kind==='reservations'&&typeof pkgLoadGuests==='function')await pkgLoadGuests({files:[file]});
-      if(kind==='journal'){const days=W.ManualUpsells.state.data.journal?.rows.map(r=>W.ManualUpsells.date(r.BUSINESS_DATE)).filter(Boolean).sort();if(days?.length){S.from=days[0];S.to=days.at(-1);}}
-    }invalidate();renderControls();const label=el('igFile-'+kind);if(label)label.textContent='✓ '+file.name;
+  async function upload(kind,selection){
+    const files=selection&&typeof selection.length==='number'&&!selection.name?Array.from(selection):selection?[selection]:[];
+    if(!files.length)return;S.error='';
+    if(kind==='changes'){
+      await pkgLoadPdf({files});
+      const loaded=typeof pkgPdfFiles!=='undefined'?pkgPdfFiles:[];
+      const missing=files.filter(file=>!loaded.includes(file.name));
+      invalidate();renderControls();
+      const label=el('igFile-changes');if(label)label.textContent=loaded.length?'✓ '+loaded.length+' log'+(loaded.length===1?'':'s')+' loaded · '+loaded.join(' · '):'Choose both Changes Log PDFs';
+      if(missing.length)throw Error('These Changes Logs were not loaded: '+missing.map(f=>f.name).join(', ')+'. Check the PDF message and try those files again.');
+      return;
+    }
+    const file=files[0];
+    await W.ManualUpsells.load(kind,file);
+    if(!W.ManualUpsells.state.data[kind])throw Error(W.ManualUpsells.state.error||'This report could not be loaded.');
+    if(kind==='reservations'&&typeof pkgLoadGuests==='function')await pkgLoadGuests({files:[file]});
+    if(kind==='journal'){const days=W.ManualUpsells.state.data.journal?.rows.map(r=>W.ManualUpsells.date(r.BUSINESS_DATE)).filter(Boolean).sort();if(days?.length){S.from=days[0];S.to=days.at(-1);}}
+    invalidate();renderControls();const label=el('igFile-'+kind);if(label)label.textContent='✓ '+file.name;
   }
   function edit(k){const op=S.drafts.get(k);if(!op)return;S.editing=clone(op);paintEditor();}
   function editRecord(id,action){const r=S.snapshot?.records.find(r=>r.id===String(id));if(!r)return;const op=draftFor(r,action);S.drafts.set(op.key,op);edit(op.key);}
@@ -228,12 +241,12 @@
     tabs.addEventListener('click',e=>{const v=e.target.closest('[data-v]');if(v&&v.dataset.v!=='ingauge')el('igWorkspace').hidden=true;},true);
     const root=D.createElement('section');root.id='igWorkspace';root.className='iga';root.hidden=true;
     root.innerHTML=`<div class="iga-hero"><div><span class="iga-eyebrow">PACKAGE AUDIT + MANUAL SALES</span><h2>One review.<br><em>Every sale accounted for.</em></h2><p>Upload Opera reports, read the live IN-Gauge data, and apply only the changes you choose.</p></div><ol><li>Upload Opera</li><li>Fetch IN-Gauge</li><li>Review assignments</li><li>Check & apply</li></ol></div><div id="igConfiguration" class="iga-panel"></div>
-      <div class="iga-uploads">${[['journal','Opera journal','.txt,.tsv','Manual charges and original notes'],['reservations','Reservation Detail','.txt,.tsv','Confirmations, guests, rooms and dates'],['changes','Opera Changes Log','.pdf,.PDF','Add for automatic-package ownership']].map(([k,n,a,h])=>`<label class="iga-upload"><span>${n}</span><small>${h}</small><input type="file" data-ig-file="${k}" accept="${a}"><b id="igFile-${k}">Choose report</b></label>`).join('')}</div>
-      <p class="iga-hint">Manual sales use Journal + Reservation Detail. Automatic packages also use Opera Changes Log. Keep the existing Audit and Manual sales tabs for full evidence and fallback uploads.</p><div id="igControls"></div><div id="igProposals"></div><section id="igRunBox" class="iga-panel" hidden></section>`;
+      <div class="iga-uploads">${[['journal','Opera journal','.txt,.tsv','Manual charges and original notes'],['reservations','Reservation Detail','.txt,.tsv','Confirmations, guests, rooms and dates'],['changes','Opera Changes Logs · both PDFs','.pdf,.PDF','New Reservation + Update Reservation · select both, or add one at a time']].map(([k,n,a,h])=>`<label class="iga-upload"><span>${n}</span><small>${h}</small><input type="file" data-ig-file="${k}" accept="${a}" ${k==='changes'?'multiple':''}><b id="igFile-${k}">Choose report</b></label>`).join('')}</div>
+      <p class="iga-hint">Manual sales use Journal + Reservation Detail. Automatic packages use both Changes Log exports: New Reservation and Update Reservation. Both are merged into the existing Package Audit; adding another log keeps the earlier one. Keep the existing Audit and Manual sales tabs for full evidence and fallback uploads.</p><div id="igControls"></div><div id="igProposals"></div><section id="igRunBox" class="iga-panel" hidden></section>`;
     main.parentNode.insertBefore(root,main.nextSibling);
     root.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const act=async()=>{S.error='';if(b.hasAttribute('data-ig-open-run'))openRun();else if(b.hasAttribute('data-ig-discover'))await discover();else if(b.hasAttribute('data-ig-bind'))await saveBinding();else if(b.hasAttribute('data-ig-fetch'))await fetchSnapshot();else if(b.hasAttribute('data-ig-check'))await checkReports();else if(b.hasAttribute('data-ig-test'))await startApply(true);else if(b.hasAttribute('data-ig-apply'))await startApply(false);else if(b.dataset.igView){S.view=b.dataset.igView;renderProposals();}else if(b.dataset.igEdit)edit(b.dataset.igEdit);else if(b.dataset.igRecord)editRecord(b.dataset.igRecord,b.dataset.igAction);else if(b.hasAttribute('data-ig-stop')&&S.tag)await db().child('ingauge/jobs/'+S.tag).update({stopRequested:true});};act().catch(error=>{S.error=error.message;renderControls();notify(error.message,'err');});});
     root.addEventListener('change',e=>{
-      if(e.target.dataset.igFile&&e.target.files[0])upload(e.target.dataset.igFile,e.target.files[0]).catch(error=>{S.error=error.message;renderControls();});
+      if(e.target.dataset.igFile&&e.target.files[0])upload(e.target.dataset.igFile,Array.from(e.target.files)).catch(error=>{S.error=error.message;renderControls();}).finally(()=>{e.target.value='';});
       else if(e.target.id==='igProperty')renderDepartments();
       else if(e.target.id==='igReviewed'){S.reviewed=e.target.checked;renderControls();}
       else if(e.target.dataset.igSelect){e.target.checked?S.selected.add(e.target.dataset.igSelect):S.selected.delete(e.target.dataset.igSelect);invalidate();renderControls();}
@@ -244,6 +257,6 @@
 
     render();return true;
   }
-  W.InGaugeWorkspace={state:S,open,openRun,closeRun,renderRun,fromAudit,mount,tableRows,buildProposals,hydrate};
+  W.InGaugeWorkspace={state:S,open,openRun,closeRun,renderRun,fromAudit,upload,mount,tableRows,buildProposals,hydrate};
   if(D.readyState==='loading')D.addEventListener('DOMContentLoaded',mount);else mount();
 })(window);

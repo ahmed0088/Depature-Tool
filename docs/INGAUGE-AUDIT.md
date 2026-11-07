@@ -39,3 +39,7 @@ Cloud collections are saved under private `neorchaCollections` and a small `neor
 ### In-app run progress (v557)
 
 Connecting, fetching and reviewed operations open a progress window in HotelOps. It reports sign-in, discovery, product checks and record counts; closing minimises the job. Cloud runs reopens its window. Terminal runs provide their next step, and discovery results plus the latest job are restored after refresh, including the last completed lookup from older versions. GitHub is available as an optional diagnostic link. Stage updates contain no credentials or guest identifiers. Heartbeats do not rebuild controls.
+
+### Both Changes Log exports (v558)
+
+The automation upload accepts both Opera Changes Log PDFs: **New Reservation** and **Update Reservation**. Select both together or add the second later. It passes the full selection into the original Package Audit loader, which merges events and excludes duplicates. The card lists all loaded files; unreadable files remain errors rather than being marked loaded. Journal and Reservation Detail still have their own upload boxes for manual sales.
