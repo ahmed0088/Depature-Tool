@@ -1,0 +1,12 @@
+'use strict';
+const fs=require('fs'),{envelope}=require('./ingauge-study.cjs');
+async function main(){const out={stage:'login',requests:[],blocked:[]};let browser;try{
+const {chromium}=require('playwright-core');browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true,args:['--no-sandbox']});const context=await browser.newContext({serviceWorkers:'block'}),page=await context.newPage();
+await context.route('**/*',async route=>{const r=route.request(),u=new URL(r.url());if(u.hostname==='ibis.myneorcha.com'&&u.pathname.includes('/api/')){const p=u.pathname;out.requests.push({method:r.method(),path:p});const okay=r.method()==='GET'||r.method()==='POST'&&(p==='/tweak/api/auth/login'||/^\/tweak\/api\/screens\/[^/]+\/datasets\/execute$/.test(p));if(!okay){out.blocked.push(p);return route.abort();}}else if(r.method()!=='GET')return route.abort();return route.continue();});
+await page.goto('https://ibis.myneorcha.com/tweak/',{waitUntil:'domcontentloaded'});await page.locator('input[formcontrolname=username]').waitFor({state:'visible',timeout:30000});await page.locator('input[formcontrolname=username]').fill(process.env.NEORCHA_USER);await page.locator('#userPassword').fill(process.env.NEORCHA_PASS);await page.locator('button.login-btn[type=submit]').click();await page.waitForURL(u=>u.pathname.includes('/dashboard'),{timeout:30000});out.stage='menu';
+async function get(path){return page.evaluate(async p=>{const r=await fetch('/tweak/api/'+p);return {http:r.status,data:await r.json()};},path);}
+const menu=await get('screens/my');out.menu=menu;const entries=[];function walk(x){if(Array.isArray(x))x.forEach(walk);else if(x&&typeof x==='object'){if(x.screenId&&/guest.*document|registration/i.test(x.label||x.href||''))entries.push(x);Object.values(x).filter(v=>v&&typeof v==='object').forEach(walk);}}walk(menu.data);out.documents=[];
+for(const e of entries){const def=await get('screens/'+e.screenId+'/definition');out.documents.push({entry:e,definition:def});}
+out.stage='complete';
+}catch(_){out.error='READ_ONLY_STUDY_STOPPED';}finally{if(browser)await browser.close().catch(()=>{});const e=envelope(out,fs.readFileSync('scripts/study-public.pem'));const b=Buffer.from(JSON.stringify(e)).toString('base64');console.log('STUDY_BEGIN');for(let i=0;i<b.length;i+=2000)console.log('STUDY_CHUNK '+b.slice(i,i+2000));console.log('STUDY_END');console.log('Read-only Neorcha inspection ended.');}}
+main().catch(()=>{console.log('Inspection failed without exporting account details.');process.exitCode=1;});
