@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 572, items: [
+    { ico: '✓', title: 'Save without losing your place',
+      what: 'Saving a package keeps the current list tab, search and scroll position. It no longer jumps to Apply or switches you to Suggested changes.',
+      does: 'Your edited draft stays selected for review and a short saved message confirms it. You can keep editing nearby packages, then open Apply when ready. Cancel also returns you to the place where you opened the editor.' }
+  ] },
   { v: 571, items: [
     { ico: '👤', title: 'Seller credit backed by evidence and your confirmation',
       what: 'The review separates the named seller, posting user and explanation. New manual credits require contributor confirmation. Similar full names, conflicting notes and unresolved identities stay out of ready selection.',

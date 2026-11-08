@@ -55,5 +55,8 @@ jobs:
           node tests/monthly-tally.test.js
           node tests/monthly-tally.browser.test.js
 
+      - name: Save package without navigation jumps
+        run: node tests/ingauge-save-position.browser.test.js
+
       - name: IN-Gauge reviewed apply in browser
         run: node tests/ingauge-readiness.browser.test.js
