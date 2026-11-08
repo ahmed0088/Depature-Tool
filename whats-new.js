@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 569, items: [
+    { ico: '📊', title: 'Monthly Opera versus IN-Gauge totals',
+      what: 'The IN-Gauge workspace now compares Opera net postings with approved and pending IN-Gauge revenue for a selected month. See the difference, a daily chart and product-family breakdown for manual, automatic or both.',
+      does: 'Credits and reversals reduce the Opera total. Current months use month-to-date dates. Unmapped codes, partial snapshots, currencies and amount-basis checks remain visible. Extra codes can be mapped or excluded for the chart; totals never submit changes or prove a missing sale by themselves.' }
+  ] },
   { v: 568, items: [
     { ico: '✓', title: 'Clearer, more reliable run history',
       what: 'Search by run number, hotel or person, reset filters in one tap, and see explicit refresh feedback if a status cannot be verified. Preview runs say clearly that no changes were submitted.',

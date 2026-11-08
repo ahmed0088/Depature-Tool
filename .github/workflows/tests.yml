@@ -46,5 +46,10 @@ jobs:
           node tests/ingauge-reference-cache.test.js
           node tests/neorcha-tweak.test.js
 
+      - name: Monthly revenue reconciliation
+        run: |
+          node tests/monthly-tally.test.js
+          node tests/monthly-tally.browser.test.js
+
       - name: IN-Gauge reviewed apply in browser
         run: node tests/ingauge-readiness.browser.test.js
