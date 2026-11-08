@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 565, items: [
+    { ico: '☁️', title: 'The Neorcha look for your IN-Gauge console',
+      what: 'IN-Gauge now uses a compact cloud window with the same blue progress bar, highlighted steps and dark live console as Neorcha. Activity lines have timestamps and coloured labels.',
+      does: 'Show or hide the console, minimise to keep its chip, or close and reopen from Cloud runs. Scrolling stays where you left it, elapsed time updates quietly, and safe cancellation stays available on phones.' },
+  ] },
   { v: 564, items: [
     { ico: '1', title: 'Everything laid out in six steps',
       what: 'IN-Gauge automation now guides you through Hotel, What to fix, Reports, Review, Run, and Results. The numbered overview lets you jump to each section and shows your current stage.',
