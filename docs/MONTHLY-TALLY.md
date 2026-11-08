@@ -11,3 +11,9 @@ A current month is month-to-date in Asia/Dubai; closed months cover the entire c
 Mappings and scope changes apply to this session's chart only. They do not modify matching rules or financial records. The existing Apply workflow still requires review and live safeguards. Code mappings reset on hotel switch; journal/period/mapping/scope changes reset the report confirmation. A new snapshot must be fetched after applied/uncertain changes before treating the comparison as current.
 
 Tests: `node tests/monthly-tally.test.js`, `node tests/monthly-tally.browser.test.js`. Browser tests use synthetic records only and verify graph values, pending separation, mapping, scope, month fetch, invalidation and phone table sizing.
+
+## Performance and edge cases (v570)
+
+Catalog product codes are indexed by ID once before reading records, avoiding one catalog scan per unfamiliar product label. A synthetic local Node benchmark (10,000 Opera postings, 10,000 IN-Gauge records, 5,000 catalog products, every record requiring fallback) took approximately 88 ms with the index, versus 816 ms with the previous lookup. This measures calculation time on the development machine, not phone performance or cloud sign-in/fetch latency.
+
+A single-day current-month chart uses a finite centered x-coordinate. Denied/purged/deleted records and unsupported statuses are handled before product mapping warnings; excluded unknown products cannot falsely keep the comparison in scope review. Tests cover excluded amounts, warning relevance, approved/pending catalog fallback and first-day chart coordinates in a mobile browser.

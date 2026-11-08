@@ -21,5 +21,22 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
  await page.screenshot({path:process.env.MONTHLY_SCREENSHOT||'/tmp/hotelops-monthly-tally.png',fullPage:true});
  await page.evaluate(()=>{S.snapshot.complete=false;MonthlyTally.render(S,document.querySelector('#chart'));});assert((await page.locator('.mt-state').innerText()).includes('Provisional'));
  await page.locator('[data-mt-month]').fill('2026-09');assert((await page.locator('.mt-state').innerText()).includes('Provisional'));
- assert.deepEqual(errors,[]);console.log('Monthly tally mobile browser passed: graphic, amounts, pending separation, mapping, scope, month fetch, invalidation and responsive table.');
+ // On the first day, month-to-date has exactly one plotted day. All positions
+ // must stay finite, and excluded products must not leave a false review warning.
+ await page.clock.install({time:new Date('2026-11-01T08:00:00Z')});
+ await page.evaluate(()=>{
+   ManualUpsells.state.data.journal={rows:[{TRX_NO:'10',TRX_CODE:'1062',BUSINESS_DATE:'2026-11-01',CASHIER_DEBIT:'10',CASHIER_CREDIT:'0',CURRENCY1:'AED'}]};
+   S.snapshot={...S.snapshot,complete:true,from:'2026-11-01',to:'2026-11-01',pagination:{verified:true,total:4,read:4},records:[
+     {id:'10',propertyId:'2',departmentId:'3',product:'Late Check Out',totalCents:1000,businessDate:'2026-11-01',status:'APPROVED'},
+     ...['DENIED','PURGED','DELETED'].map((status,i)=>({id:String(20+i),propertyId:'2',departmentId:'3',product:'Unknown product',totalCents:null,businessDate:'2026-11-01',status}))
+   ]};
+   MonthlyTally.render(S,document.querySelector('#chart'));
+ });
+ assert((await page.locator('.iga-hint').allTextContents()).some(text=>text.includes('Month to date')));
+ assert.equal(await page.locator('.mt-chart circle').count(),2,'one day supplies one Opera point and one approved point');
+ const coordinates=await page.locator('.mt-chart svg').evaluate(svg=>Array.from(svg.querySelectorAll('line,polyline,circle')).flatMap(el=>Array.from(el.attributes).filter(a=>['points','cx','cy','x1','x2','y1','y2'].includes(a.name)).flatMap(a=>a.value.split(/[\s,]+/).filter(Boolean).map(Number))));
+ assert(coordinates.length>0&&coordinates.every(Number.isFinite),'first-day chart cannot contain NaN or infinite SVG coordinates');
+ await page.locator('[data-mt-confirm]').check();
+ assert((await page.locator('.mt-state').innerText()).includes('Reported totals equal'),'excluded unknown products must not prevent confirmed equal totals');
+ assert.deepEqual(errors,[]);console.log('Monthly tally mobile browser passed: graphic, amounts, pending separation, mapping, scope, month fetch, invalidation, responsive table and first-day finite chart coordinates.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

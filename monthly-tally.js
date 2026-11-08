@@ -34,14 +34,15 @@
       if(!Array.isArray(snapshot.records))throw Error('The IN-Gauge records are incomplete. Refresh the snapshot.');
       if(!binding||!hotelId||snapshot.hotelId!==hotelId||!['portalUrl','tenantId','propertyId','departmentId'].every(k=>String(snapshot.binding?.[k]||'')===String(binding[k]||'')))throw Error('IN-Gauge data belongs to a different hotel or department. Refresh the linked hotel.');
       result.snapshotReady=!!(snapshot.complete&&!snapshot.invalidatedAt&&snapshot.pagination?.verified&&snapshot.pagination.total===snapshot.records.length&&snapshot.pagination.read===snapshot.records.length&&(!asOf||dates.from<=asOf)&&snapshot.from<=dates.from&&snapshot.to>=dates.to);
-      const ids=new Map();
+      const ids=new Map(),productKinds=new Map((snapshot.products||[]).map(p=>[String(p.id),kind(p.code)]));
       for(const r of snapshot.records||[]){
         if(!r.id)throw Error('An IN-Gauge record has no ID.');const signature=JSON.stringify(r);if(ids.has(r.id)){if(ids.get(r.id)!==signature)throw Error('Conflicting duplicate IN-Gauge records. Refresh the data.');continue;}ids.set(r.id,signature);
         if(String(r.propertyId)!==String(binding.propertyId)||String(r.departmentId)!==String(binding.departmentId))throw Error('An IN-Gauge record belongs to another hotel or department.');
         const d=iso(r.businessDate);if(!d){warning('ingauge-date','IN-Gauge records without a valid business date were excluded');continue;}if(d<dates.from||d>dates.to)continue;
-        const manual=!!r.isManuallyAddedRecord||r.status==='PENDING';if(scope!=='all'&&(scope==='manual')!==manual)continue;
-        const f=kind(r.product)||kind(snapshot.products?.find(p=>String(p.id)===String(r.productId))?.code)||'OTHER';if(!families.has(f))warning('ingauge-product','IN-Gauge products without a corresponding Opera code mapping need review');
-        const state=String(r.status||'').toUpperCase();if(['DENIED','PURGED','DELETED'].includes(state)){result.excluded++;continue;}if(!['APPROVED','PENDING'].includes(state)){warning('status','IN-Gauge records with an unsupported status were excluded');continue;}
+        const state=String(r.status||'').toUpperCase();
+        const manual=!!r.isManuallyAddedRecord||state==='PENDING';if(scope!=='all'&&(scope==='manual')!==manual)continue;
+        if(['DENIED','PURGED','DELETED'].includes(state)){result.excluded++;continue;}if(!['APPROVED','PENDING'].includes(state)){warning('status','IN-Gauge records with an unsupported status were excluded');continue;}
+        const f=kind(r.product)||productKinds.get(String(r.productId))||'OTHER';if(!families.has(f))warning('ingauge-product','IN-Gauge products without a corresponding Opera code mapping need review');
         if(!Number.isSafeInteger(r.totalCents))throw Error('An IN-Gauge record has no valid total amount. Refresh the snapshot.');
         const key=state==='APPROVED'?'approved':'pending',g=group(f),t=daily(d);g[key]=add(g[key],r.totalCents);g.countIngauge++;t[key]=add(t[key],r.totalCents);result[key]=add(result[key],r.totalCents);
       }
@@ -56,7 +57,7 @@
   let view={month:new Date().toISOString().slice(0,7),scope:'all',mapping:{},confirmed:false,source:null,hotel:'',error:''};
   const money=(n,c)=>c+' '+(n/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
   function graph(r){
-    const values=r.daily.flatMap(d=>[d.opera,d.approved]),lo=Math.min(0,...values),hi=Math.max(1,...values),y=n=>130-(n-lo)/(hi-lo)*110,x=d=>20+(Number(d.slice(-2))-1)/(Number(r.to.slice(-2))-1)*560;
+    const values=r.daily.flatMap(d=>[d.opera,d.approved]),lo=Math.min(0,...values),hi=Math.max(1,...values),y=n=>130-(n-lo)/(hi-lo)*110,x=d=>Number(r.to.slice(-2))===1?300:20+(Number(d.slice(-2))-1)/(Number(r.to.slice(-2))-1)*560;
     const line=key=>r.daily.map(d=>`${x(d.day).toFixed(1)},${y(d[key]).toFixed(1)}`).join(' ');
     return `<svg viewBox="0 0 600 155" role="img" aria-label="Daily Opera postings and approved IN-Gauge amounts for ${esc(r.month)}. Exact monthly amounts are listed above and by product below."><line x1="20" y1="${y(0)}" x2="580" y2="${y(0)}" class="mt-axis"/><polyline points="${line('opera')}" class="mt-line mt-opera"/><polyline points="${line('approved')}" class="mt-line mt-approved"/>${r.daily.map(d=>`<circle cx="${x(d.day)}" cy="${y(d.opera)}" r="3" class="mt-opera-dot"><title>${esc(d.day)} · Opera ${money(d.opera,r.currency)}</title></circle><circle cx="${x(d.day)}" cy="${y(d.approved)}" r="3" class="mt-approved-dot"><title>${esc(d.day)} · IN-Gauge approved ${money(d.approved,r.currency)}</title></circle>`).join('')}<text x="20" y="151">1 ${esc(r.month)}</text><text x="580" y="151" text-anchor="end">${esc(r.to)}</text></svg>`;
   }

@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 570, items: [
+    { ico: '⚡', title: 'Faster monthly comparisons and clearer scope checks',
+      what: 'Product-code lookup is indexed once, keeping comparisons fast even when many records have an unrecognized label and need catalog matching.',
+      does: 'The month-to-date graph renders correctly on the first day of a month. Denied, deleted and purged products no longer create irrelevant mapping warnings. New unit and phone-browser regressions cover these cases; approved, pending and net posting totals retain the same safeguards.' }
+  ] },
   { v: 569, items: [
     { ico: '📊', title: 'Monthly Opera versus IN-Gauge totals',
       what: 'The IN-Gauge workspace now compares Opera net postings with approved and pending IN-Gauge revenue for a selected month. See the difference, a daily chart and product-family breakdown for manual, automatic or both.',
