@@ -16,14 +16,14 @@
     neorcha: { ic: '🪪', name: 'Neorcha cards', live: 'neorchaLive', win: 'nxRun', open: () => { if (W.hoNxRunOpen) W.hoNxRunOpen(); } },
   };
   const DISMISS_KEY = 'ho_run_dock_hide_v1';
-  let RUNS = {}, LIVE = {}, timer = 0, historyTimer = 0;
-  const FILTER = { view: 'history', from: '', to: '', kind: '', outcome: '', limit: 30 };
+  let RUNS = {}, LIVE = {}, timer = 0, historyTimer = 0, historyDeadline = Infinity, returnFocus = null, oldOverflow = '';
+  const FILTER = { view: 'history', from: '', to: '', kind: '', outcome: '', q: '', limit: 30 };
   const terminal = r => ['done','error','stopped'].includes(r.state);
-  const day = t => new Date(+t + 4 * 3600e3).toISOString().slice(0,10);
-  const status = (r, now = Date.now()) => terminal(r) ? r.state : r.workflowEnded ? 'unconfirmed' : now - (+r.at || +r.started || 0) > 20 * 60e3 ? 'unconfirmed' : 'run';
+  const day = t => { const d = new Date(+t + 4*3600e3); return +t > 0 && Number.isFinite(d.getTime()) ? d.toISOString().slice(0,10) : ''; };
+  const status = (r, now = Date.now()) => { if (terminal(r)) return r.state; const at = +r.at || +r.started || 0; return r.workflowEnded || !Number.isFinite(at) || at <= 0 || at > now + 300000 || now - at > 20 * 60e3 ? 'unconfirmed' : 'run'; };
   const active = r => status(r) === 'run';
   const operation = r => r.kind === 'ingauge' && (r.mode || r.how) === 'discover' ? 'IN-Gauge connection' : r.kind === 'ingauge' && (r.mode || r.how) === 'snapshot' ? 'IN-Gauge records' : (KINDS[r.kind] || {}).name || 'Cloud run';
-  function matches(r, f) { const st = status(r), d = day(r.started || r.at || 0); return (f.view === 'all' || (f.view === 'active' ? st === 'run' : st !== 'run')) && (!f.from || d >= f.from) && (!f.to || d <= f.to) && (!f.kind || r.kind === f.kind) && (!f.outcome || st === f.outcome); }
+  function matches(r, f) { const st = status(r), d = day(r.started || r.at || 0); return (f.view === 'all' || (f.view === 'active' ? st === 'run' : st !== 'run')) && (!f.from || d >= f.from) && (!f.to || d <= f.to) && (!f.kind || r.kind === f.kind) && (!f.outcome || st === f.outcome) && (!f.q || [r.no,r.hotel,r.account,r.by,operation(r)].join(' ').toLowerCase().includes(String(f.q).replace(/^#/, '').trim().toLowerCase())); }
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const clean = (s, n) => String(s == null ? '' : s).replace(/\S+@\S+/g, '•@•').replace(/\s+/g, ' ').trim().slice(0, n || 60);
   const hidden = () => { try { return JSON.parse(localStorage.getItem(DISMISS_KEY) || '{}') || {}; } catch (_) { return {}; } };
@@ -31,7 +31,7 @@
   const unhide = tag => { try { const h = hidden(); delete h[tag]; localStorage.setItem(DISMISS_KEY, JSON.stringify(h)); } catch (_) {} };
   const winOpen = kind => { const w = D.getElementById(KINDS[kind].win); return !!w && (kind==='ingauge'?!w.hidden:w.classList.contains('on')); };
   const dur = s => { s = Math.max(0, Math.round(s)); return s >= 3600 ? Math.floor(s / 3600) + ' h ' + Math.floor(s % 3600 / 60) + ' min' : Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
-  const when = t => { const d = new Date(+t); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Dubai' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dubai' }); };
+  const when = t => { if (!day(t)) return 'Not recorded'; const d = new Date(+t); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Dubai' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dubai' }); };
   const me = () => { try { return (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || ''; } catch (_) { return ''; } };
   const dbOk = () => typeof fbSet === 'function' && typeof _ref !== 'undefined' && !!_ref;
 
@@ -186,14 +186,29 @@
   }
   // ── 🗂 Runs: every run with its number, hotel and result ──
   function summary(r) {
-    const t = r.tally;
+    const t = r.tally && Object.keys(r.tally).length ? r.tally : null;
+    if (r.test && !['discover','snapshot'].includes(r.mode || r.how)) return 'Preview only · no changes submitted'+(t?.tested ? ' · '+t.tested+' checked' : '');
     if (r.kind === 'ingauge' && ['discover','snapshot'].includes(r.mode || r.how)) return status(r) === 'done' ? 'Read-only lookup completed' : '';
     if (r.kind === 'ingauge' && t) return `${t.applied || 0} applied · ${t.unchanged || 0} unchanged · ${t.held || 0} held${t.uncertain ? ' · '+t.uncertain+' need verification' : ''}`;
     if (r.kind === 'manual' && t) return `${t.submitted || 0} submitted · ${t.already_exists || 0} already exist · ${t.needs_review || 0} need review`;
     if (r.kind === 'enrol' && t) return `${t.enrolled || 0} enrolled · ${t.already || 0} already members · ${t.skipped || 0} skipped · ${t.errors || 0} errors`;
     return r.n ? (r.kind === 'neorcha' ? r.n+' cards read' : (r.done || 0)+' / '+r.n+' processed') : '';
   }
-  function closeHistory() { D.getElementById('hoRunList')?.classList.remove('on'); clearInterval(historyTimer); historyTimer = 0; }
+  function closeHistory() {
+    const w = D.getElementById('hoRunList'); if (!w?.classList.contains('on')) return;
+    w.classList.remove('on'); clearInterval(historyTimer); historyTimer = 0;
+    D.body.style.overflow = oldOverflow;
+    if (returnFocus?.isConnected) returnFocus.focus({preventScroll:true}); returnFocus = null;
+  }
+  function historyKeys(e) {
+    const w = D.getElementById('hoRunList'); if (!w?.classList.contains('on')) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeHistory(); return; }
+    if (e.key !== 'Tab') return;
+    const els = Array.from(w.querySelectorAll('button:not([disabled]),input,select,a[href],summary')).filter(el => el.getClientRects().length);
+    const first = els[0], last = els[els.length-1];
+    if (e.shiftKey && (D.activeElement === first || !w.contains(D.activeElement))) { e.preventDefault(); last?.focus(); }
+    else if (!e.shiftKey && (D.activeElement === last || !w.contains(D.activeElement))) { e.preventDefault(); first?.focus(); }
+  }
   function list(focus) {
     let w = D.getElementById('hoRunList');
     if (!w) {
@@ -201,34 +216,43 @@
       w.innerHTML = `<div class="hrl-bg" data-hrl-x="1"></div><section class="hrl-card" role="dialog" aria-modal="true" aria-label="Cloud run history">
         <header class="hrl-h"><span class="hrl-ic">🗂</span><div><b>Cloud run history</b><small>Results, dates and activity · Dubai time</small></div><button type="button" class="hrl-close" data-hrl-x="1" aria-label="Close">✕</button></header>
         <div class="hrl-filters"><nav aria-label="Run view"><button data-view="history">History</button><button data-view="active">Active</button><button data-view="all">All</button></nav>
+        <label class="hrl-search">Find a run<input type="search" data-filter="q" maxlength="80" placeholder="Run number, hotel or person" autocomplete="off"></label>
         <div class="hrl-dates"><label>From<input type="date" data-filter="from" aria-label="From date"></label><label>Through<input type="date" data-filter="to" aria-label="Through date"></label></div>
         <div class="hrl-quick"><button data-days="1">Today</button><button data-days="7">7 days</button><button data-days="30">30 days</button><button data-days="0">All dates</button></div>
         <div class="hrl-dates"><label>Tool<select data-filter="kind"><option value="">All tools</option>${Object.entries(KINDS).map(([k,v])=>`<option value="${k}">${esc(v.name)}</option>`).join('')}</select></label><label>Result<select data-filter="outcome"><option value="">All results</option><option value="done">Finished</option><option value="error">Failed</option><option value="stopped">Cancelled</option><option value="unconfirmed">Unconfirmed</option></select></label></div>
-        <div class="hrl-refresh"><span data-history-count role="status"></span><button type="button" data-refresh>Refresh status</button></div></div>
+        <div class="hrl-refresh"><span data-history-count role="status"></span><div><button type="button" data-reset>Reset filters</button> <button type="button" data-refresh>Refresh status</button></div></div><p class="hrl-feedback" data-history-feedback role="status" aria-live="polite"></p></div>
         <div class="hrl-b" data-history-results></div></section>`;
       w.addEventListener('click', e => {
         if (e.target.closest('[data-hrl-x]')) return closeHistory();
         const v = e.target.closest('[data-view]'); if (v) { FILTER.view = v.dataset.view; FILTER.limit = 30; renderHistory(true); return; }
         const d = e.target.closest('[data-days]'); if (d) { const n = +d.dataset.days; FILTER.from = n ? day(Date.now()-(n-1)*864e5) : ''; FILTER.to = n ? day(Date.now()) : ''; FILTER.limit = 30; syncFilters(); renderHistory(true); return; }
         if (e.target.closest('[data-more]')) { FILTER.limit += 30; renderHistory(true); return; }
-        if (e.target.closest('[data-refresh]')) return reconcile();
+        if (e.target.closest('[data-refresh]')) return reconcile(true);
+        if (e.target.closest('[data-reset]')) { Object.assign(FILTER,{from:'',to:'',kind:'',outcome:'',q:'',limit:30}); syncFilters(); renderHistory(true); return; }
         const o = e.target.closest('[data-hrl-open]'); if (o) { const r = RUNS[o.dataset.hrlOpen]; if (r && active(r) && latest(r.kind) === r) { unhide(r.tag); closeHistory(); KINDS[r.kind].open(); setTimeout(paint, 50); } }
       });
       w.addEventListener('change', e => { const k = e.target.dataset.filter; if (['from','to','kind','outcome'].includes(k)) { FILTER[k] = e.target.value; FILTER.limit = 30; renderHistory(true); } });
-      D.addEventListener('keydown', e => { if (e.key === 'Escape') closeHistory(); });
+      w.addEventListener('input', e => { if (e.target.dataset.filter === 'q') { FILTER.q = e.target.value.slice(0,80); FILTER.limit = 30; renderHistory(); } });
+      D.addEventListener('keydown', historyKeys, true);
     }
     if (focus) { FILTER.view = active(RUNS[focus] || {}) ? 'active' : 'history'; FILTER.from = ''; FILTER.to = ''; }
+    const wasOpen = w.classList.contains('on');
+    if (!wasOpen) { returnFocus = D.activeElement; oldOverflow = D.body.style.overflow; D.body.style.overflow = 'hidden'; }
     w.classList.add('on'); syncFilters(); renderHistory(true, focus);
-    clearInterval(historyTimer); historyTimer = setInterval(() => { renderHistory(); tickHistory(); }, 1000);
+    if (!wasOpen) w.querySelector('.hrl-close')?.focus({preventScroll:true});
+    clearInterval(historyTimer); historyTimer = setInterval(() => { if (Date.now() >= historyDeadline) renderHistory(); tickHistory(); }, 1000);
     reconcile();
   }
   function syncFilters() { const w = D.getElementById('hoRunList'); if (w) w.querySelectorAll('[data-filter]').forEach(el => { el.value = FILTER[el.dataset.filter]; }); }
   function tickHistory() { D.getElementById('hoRunList')?.querySelectorAll('[data-history-time]').forEach(el => { const r = RUNS[el.dataset.historyTime]; if (r && active(r)) el.textContent = dur((Date.now()-r.started)/1000); }); }
   function renderHistory(force, focus) {
     const w = D.getElementById('hoRunList'); if (!w || !w.classList.contains('on')) return;
+    historyDeadline = Object.values(RUNS).filter(active).reduce((next,r)=>Math.min(next,(+r.at || +r.started)+20*60e3+1),Infinity);
     const all = Object.values(RUNS).sort((a,b)=>(+b.started||0)-(+a.started||0));
     w.querySelectorAll('[data-view]').forEach(el => { const selected = el.dataset.view === FILTER.view; el.setAttribute('aria-pressed', String(selected)); el.textContent = ({history:'History',active:'Active',all:'All'})[el.dataset.view]+' ('+all.filter(r=>el.dataset.view==='all'||(el.dataset.view==='active'?active(r):!active(r))).length+')'; });
-    const filtered = all.filter(r => matches(r,FILTER));
+    const invalidDates = !!(FILTER.from && FILTER.to && FILTER.from > FILTER.to);
+    const filtered = invalidDates ? [] : all.filter(r => matches(r,FILTER));
+    w.querySelectorAll('[data-filter=from],[data-filter=to]').forEach(el=>el.setAttribute('aria-invalid',String(invalidDates)));
     const count = w.querySelector('[data-history-count]'); if (count) count.textContent = FILTER.from && FILTER.to && FILTER.from > FILTER.to ? 'Choose an end date after the start date.' : filtered.length+' run'+(filtered.length===1?'':'s');
     const body = w.querySelector('[data-history-results]'); if (!body) return;
     const html = filtered.slice(0,FILTER.limit).map(r=>{
@@ -248,10 +272,16 @@
     if (force || body._key !== html.replace(/<time[^>]*>.*?<\/time>/g,'')) { body.innerHTML = html; body._key = html.replace(/<time[^>]*>.*?<\/time>/g,''); }
     if (focus) body.querySelector('.focus')?.scrollIntoView({block:'nearest'});
   }
-  let checking = false, lastCheck = 0;
-  async function reconcile() {
-    if (checking || Date.now()-lastCheck < 30000) return;
-    checking = true; lastCheck = Date.now(); const root = typeof _ref !== 'undefined' ? _ref : null;
+  let checking = false, lastCheck = 0, checkedRoot = null;
+  const feedback = message => { const el = D.getElementById('hoRunList')?.querySelector('[data-history-feedback]'); if (el) el.textContent = message; };
+  function boundedRead(promise) { let timeout; return Promise.race([promise,new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Status check timed out')),10000);})]).finally(()=>clearTimeout(timeout)); }
+  async function reconcile(manual = false) {
+    const root = typeof _ref !== 'undefined' ? _ref : null;
+    if (checking) { if (manual) feedback('A status check is already in progress.'); return; }
+    if (root === checkedRoot && Date.now()-lastCheck < 30000) { if (manual) feedback('Checked just now. You can refresh again in '+Math.max(1,Math.ceil((30000-Date.now()+lastCheck)/1000))+' seconds.'); return; }
+    checking = true; lastCheck = Date.now(); checkedRoot = root;
+    let updated = 0, unavailable = 0;
+    feedback('Checking saved job results…');
     const button = D.getElementById('hoRunList')?.querySelector('[data-refresh]'); if (button) { button.disabled = true; button.textContent = 'Checking…'; }
     try {
       const rows = Object.values(RUNS).filter(r=>!terminal(r)).sort((a,b)=>b.started-a.started).slice(0,60);
@@ -260,7 +290,7 @@
         try {
           const path = r.kind==='ingauge'?'ingauge/jobs/':r.kind==='manual'?'manualSalesJobs/':null;
           if (path && root?.child) {
-            const snap = await root.child(path+r.tag).once('value'), job = snap.val();
+            const snap = await boundedRead(root.child(path+r.tag).once('value')), job = snap.val();
             if (job && ['done','error','stopped'].includes(job.state)) patch = {...fromLive(r.kind,job), finishedAt:+job.finishedAt || +job.at || +job.doneAt || 0};
           }
           if (!patch && /^https:\/\/github\.com\/ahmed0088\/Depature-Tool\/actions\/runs\/\d+$/i.test(r.url || '')) {
@@ -270,11 +300,12 @@
             if (response.ok) { const job = await response.json(); if (job.status==='completed') { const end = Date.parse(job.updated_at)||Date.now(); patch = {workflowEnded:end}; if (['failure','timed_out','cancelled','startup_failure'].includes(job.conclusion)) Object.assign(patch,{state:job.conclusion==='cancelled'?'stopped':'error',finishedAt:end,note:'Workflow '+(job.conclusion==='cancelled'?'was cancelled':'ended with an error')+'. Final application result unavailable; verify the outcome before retrying.'}); } }
           }
         } catch (_) {}
+        if (!patch) unavailable++;
         if (root !== (typeof _ref !== 'undefined' ? _ref : null) || !RUNS[r.tag] || terminal(RUNS[r.tag]) || !patch) return;
-        Object.assign(RUNS[r.tag],patch);
+        updated++; Object.assign(RUNS[r.tag],patch);
         if (dbOk()) try { await fbUpdate('cloudRuns/'+r.tag,patch); } catch (_) {}
       }));
-    } finally { checking = false; if (button) { button.disabled = false; button.textContent = 'Refresh status'; } paint(); }
+    } finally { checking = false; if (button) { button.disabled = false; button.textContent = 'Refresh status'; } if (root === (typeof _ref !== 'undefined' ? _ref : null)) feedback(unavailable ? updated+' status'+(updated===1?'':'es')+' updated · '+unavailable+' could not be verified. Saved results are kept.' : updated ? updated+' run status'+(updated===1?'':'es')+' updated.' : 'No unresolved runs to check.'); paint(); }
   }
 
   function css() {
@@ -295,8 +326,8 @@
 .hrl{position:fixed;inset:0;z-index:10050;display:none;align-items:center;justify-content:center}.hrl.on{display:flex}
 .hrl-bg{position:absolute;inset:0;background:rgba(0,0,0,.5)}
 .hrl-card{position:relative;width:min(680px,calc(100vw - 24px));max-height:calc(100dvh - 32px);display:flex;flex-direction:column;background:var(--card2,#111827);color:var(--text);border:1px solid var(--border2);border-radius:var(--r3,18px);box-shadow:0 30px 70px -20px rgba(0,0,0,.6);overflow:hidden}
-.hrl-h{position:sticky;top:0;display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);background:inherit}.hrl-h div{flex:1;display:flex;flex-direction:column}.hrl-h small{color:var(--text2);font-size:.76rem}
-.hrl-ic{font-size:22px}.hrl-close{width:40px;height:40px;border-radius:50%;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:16px;cursor:pointer}
+.hrl-h{flex:none;position:sticky;top:0;display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);background:inherit}.hrl-h div{flex:1;display:flex;flex-direction:column}.hrl-h small{color:var(--text2);font-size:.76rem}
+.hrl-ic{font-size:22px}.hrl-close{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:16px;cursor:pointer}
 .hrl-b{overflow:auto;padding:12px 14px calc(14px + env(safe-area-inset-bottom));display:grid;gap:10px}
 .hrl-section{margin:4px 0 0;font:700 .78rem var(--font);color:var(--text2)}
 .hrl-run{display:grid;grid-template-columns:1fr;gap:12px;padding:12px;border:1px solid var(--border);border-radius:var(--r2,12px);background:var(--card)}
@@ -308,8 +339,8 @@
 .hrl-act{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.hrl-act:empty{display:none}
 .hrl-empty{padding:24px;text-align:center;color:var(--text2)}
 @media (max-width:600px){.hrl{align-items:flex-end}.hrl-card{width:100vw;border-radius:20px 20px 0 0;max-height:90dvh}}
-.hrl-filters{padding:12px 16px;border-bottom:1px solid var(--border);display:grid;gap:10px;flex:none}.hrl-filters nav,.hrl-quick{display:flex;gap:6px;flex-wrap:wrap}.hrl-filters button{font:inherit;font-size:.78rem;border:1px solid var(--border2,#bbb);border-radius:9px;padding:8px 10px;color:var(--text);background:var(--card)}.hrl-filters [aria-pressed=true]{color:var(--text);background:var(--accent-bg);border-color:var(--accent);font-weight:700}.hrl-dates{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}.hrl-dates label{min-width:0;display:grid;gap:4px;font-size:.74rem;color:var(--text2)}.hrl-dates input,.hrl-dates select{box-sizing:border-box;width:100%;min-width:0;max-width:100%;height:38px;padding:6px 8px;border:1px solid var(--border2,#aaa);border-radius:8px;background:var(--card);color:var(--text);font:inherit;font-size:16px}.hrl-refresh{display:flex;align-items:center;justify-content:space-between;color:var(--text2);font-size:.74rem}.hrl-title{display:flex;justify-content:space-between;align-items:center;gap:8px}.hrl-title b{font-size:.93rem}.hrl-status{font-size:.68rem;font-weight:700;border-radius:99px;padding:4px 8px;background:var(--border);white-space:nowrap}.hrl-run.done .hrl-status{color:var(--green,#14984b)}.hrl-run.error .hrl-status{color:var(--red,#df3845)}.hrl-run.unconfirmed .hrl-status{color:var(--text2)}.hrl-main{gap:6px}.hrl-main details{font-size:.75rem;color:var(--text2)}.hrl-main summary{cursor:pointer}.hrl-b{min-height:80px}.hrl-note{line-height:1.5}.hrl-card button{cursor:pointer}.hrl-card button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-@media (max-height:650px){.hrl-filters{gap:6px;padding:8px 12px}.hrl-h{padding:8px 12px}}
+.hrl-filters{padding:12px 16px;border-bottom:1px solid var(--border);display:grid;gap:10px;flex:none}.hrl-filters nav,.hrl-quick{display:flex;gap:6px;flex-wrap:wrap}.hrl-filters button{min-height:40px;touch-action:manipulation;font:inherit;font-size:.78rem;border:1px solid var(--border2,#bbb);border-radius:9px;padding:8px 10px;color:var(--text);background:var(--card)}.hrl-filters [aria-pressed=true]{color:var(--text);background:var(--accent-bg);border-color:var(--accent);font-weight:700}.hrl-dates{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}.hrl-search{display:grid;gap:4px;font-size:.74rem;color:var(--text2)}.hrl-search input{box-sizing:border-box;width:100%;min-height:40px;border:1px solid var(--border2);border-radius:8px;padding:8px 10px;background:var(--card);color:var(--text);font:inherit;font-size:16px}.hrl-feedback{margin:0;color:var(--text2);font-size:.72rem;line-height:1.5}.hrl-feedback:empty{display:none}.hrl-dates [aria-invalid=true]{border-color:var(--red,#df3845)}.hrl-card :focus-visible{outline:2px solid var(--accent);outline-offset:2px}.hrl-refresh{flex-wrap:wrap;gap:8px}.hrl-dates label{min-width:0;display:grid;gap:4px;font-size:.74rem;color:var(--text2)}.hrl-dates input,.hrl-dates select{box-sizing:border-box;width:100%;min-width:0;max-width:100%;height:38px;padding:6px 8px;border:1px solid var(--border2,#aaa);border-radius:8px;background:var(--card);color:var(--text);font:inherit;font-size:16px}.hrl-refresh{display:flex;align-items:center;justify-content:space-between;color:var(--text2);font-size:.74rem}.hrl-title{display:flex;justify-content:space-between;align-items:center;gap:8px}.hrl-title b{font-size:.93rem}.hrl-status{font-size:.68rem;font-weight:700;border-radius:99px;padding:4px 8px;background:var(--border);white-space:nowrap}.hrl-run.done .hrl-status{color:var(--green,#14984b)}.hrl-run.error .hrl-status{color:var(--red,#df3845)}.hrl-run.unconfirmed .hrl-status{color:var(--text2)}.hrl-main{gap:6px}.hrl-main details{font-size:.75rem;color:var(--text2)}.hrl-main summary{cursor:pointer}.hrl-b{min-height:80px;overscroll-behavior:contain}.hrl-note{line-height:1.5}.hrl-card button{cursor:pointer}.hrl-card button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-height:650px){.hrl-filters{gap:6px;padding:8px 12px;max-height:40dvh;overflow:auto;overscroll-behavior:contain}.hrl-h{padding:8px 12px}}
 @media (prefers-reduced-motion:reduce){.hrd-chip,.hrd-chip.run .hrd-st{animation:none}}`;
     D.head.appendChild(s);
   }
@@ -328,6 +359,6 @@
   })();
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', () => { css(); paint(); }); else { css(); paint(); }
   async function update(tag, fields) { const r = RUNS[tag]; if (!r || (r.url === fields.url && !fields.note)) return; const patch = {}; if (/^https:\/\/github\.com\//.test(fields.url || '')) patch.url = fields.url; if (fields.note) patch.note = clean(fields.note,140); Object.assign(r,patch); if (dbOk()) try { await fbUpdate('cloudRuns/'+tag,patch); } catch (_) {} paint(); }
-  W.hoRuns = { start, update, minimized, closed, label, list, paint, _pure: { fromLive, chipText, liveKey, status, day, matches, operation } };
+  W.hoRuns = { start, update, minimized, closed, label, list, paint, _pure: { fromLive, chipText, liveKey, status, day, matches, operation, summary } };
 })();
 

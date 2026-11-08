@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 568, items: [
+    { ico: '✓', title: 'Clearer, more reliable run history',
+      what: 'Search by run number, hotel or person, reset filters in one tap, and see explicit refresh feedback if a status cannot be verified. Preview runs say clearly that no changes were submitted.',
+      does: 'History keeps keyboard focus inside the window and restores it when closed. Background scrolling is locked, results stay visible on short screens, and timers update without rebuilding the full history every second. Invalid dates and timestamps cannot create misleading live results.' }
+  ] },
   { v: 567, items: [
     { ico: '🗂', title: 'Run history with dates and clear results',
       what: 'History, Active and All views now have date, tool and result filters, quick date ranges and compact mobile cards. Times use Dubai time; older records are retained.',

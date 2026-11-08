@@ -19,6 +19,13 @@ assert(!p.matches(old,{view:'active'}));
 assert(!p.matches(old,{view:'history',from:'2026-11-09'}));
 assert(!p.matches(old,{view:'all',kind:'ingauge'}));
 assert(p.matches(old,{view:'history',outcome:'unconfirmed'}));
+assert.equal(p.day('invalid'),'');
+assert.equal(p.day(864e13),'');
+assert.equal(p.status({...old,at:now+3600e3}),'unconfirmed','future timestamps cannot keep a job live');
+assert(p.matches({...old,no:14},{view:'history',q:'#14'}));
+assert(!p.matches({...old,no:14},{view:'history',q:'wrong hotel'}));
+assert.equal(p.summary({kind:'ingauge',tally:{}}),'','empty progress does not invent a result tally');
+assert.equal(p.summary({kind:'ingauge',test:true,tally:{tested:2,applied:0}}),'Preview only · no changes submitted · 2 checked');
 assert.equal(p.operation({kind:'ingauge',how:'discover',test:true}),'IN-Gauge connection');
 assert(!p.chipText({kind:'ingauge',how:'discover',test:true}).title.includes('test'));
 (async()=>{

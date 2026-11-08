@@ -11,3 +11,11 @@ Neorcha and Accor Loop now patch `cloudRuns/<tag>` independently of the browser.
 Neorcha workflow titles include their tag and the client matches that exact tag instead of guessing by dispatch time. Legacy records without a final report or exact workflow link remain unconfirmed.
 
 Verification: `node tests/run-history.test.js` covers stale/terminal states, date boundaries and durable metadata privacy/order. `node tests/run-history.browser.test.js` uses only synthetic data and checks mobile filters, archive retention, focus stability, live actions and dismissal. No live financial changes are used in tests.
+
+## Quality pass (v568)
+
+Search accepts run numbers (including #), hotel, account, starter and tool names. Reset clears all filters except the selected view. Invalid date ranges show an inline error and no results. Preview records explicitly state that they submitted no changes; malformed or future heartbeat timestamps cannot create a permanent live run.
+
+Status refresh reports unverifiable outcomes without discarding the saved record. Repeated clicks during the 30-second cache window show when refresh will be available. Private reads have a ten-second timeout. A hotel reference change resets the refresh cache; stale in-flight reads still cannot update the next hotel.
+
+The dialog traps keyboard focus, Escape closes only the open history, focus returns to the opener, and background scrolling is restored. Filters scroll separately on short screens so run results remain visible. Timer ticks update elapsed text only; a scheduled freshness boundary or real data change updates the list.
