@@ -682,13 +682,13 @@ async function cloudStart(from, to) {
   conNote('SYS', 'HotelOps ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') + ' · run ' + RUN.tag + ' · arrivals ' + from + ' → ' + to);
   conNote('SYS', 'Neorcha account: ' + (cc.account || 'main') + (cc.url ? ' · ' + cc.url.replace(/^https:\/\//, '').split('/')[0] : '') + (cc.hid ? ' · saves to this hotel' : ''));
   conNote('NET', 'POST api.github.com/…/actions/workflows/neorcha.yml/dispatches · ref main');
-  try { if (W.hoRuns) W.hoRuns.start('neorcha', RUN.tag, { hotel: W.__hoNxHotel ? W.__hoNxHotel() : '', account: cc.account || 'main', from, to }); } catch (_) {}
+  try { if (W.hoRuns) await W.hoRuns.start('neorcha', RUN.tag, { hotel: W.__hoNxHotel ? W.__hoNxHotel() : '', account: cc.account || 'main', from, to }); } catch (_) {}
   const bx = document.getElementById('nxr-b'); if (bx && !document.getElementById('nxr-main')) bx.innerHTML = ''; runWin();
   try { await gh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: Object.assign({ from, to, tag: RUN.tag }, W.__hoNxCloud ? W.__hoNxCloud() : {}) }) }); conNote('NET', '204 · GitHub accepted the run'); }
   catch (e) { RUN.gh = { status: 'completed', conclusion: 'not started' }; paintRun(); toast(e.message, 'err'); if (/refused/.test(e.message)) { try { localStorage.removeItem(GH.key); } catch (_) {} } return; }
   clearInterval(RUN.poll);
   RUN.poll = setInterval(async () => {
-    try { const j = await gh('/runs?per_page=5&event=workflow_dispatch'); const r = (j.workflow_runs || []).filter(x => Date.parse(x.created_at) >= RUN.at - 15000).pop(); if (r) { RUN.gh = r; const k = r.status + (r.conclusion || ''); if (k !== RUN.ghSt) { RUN.ghSt = k; conNote('GH', 'run #' + r.run_number + ' · ' + r.status.replace('_', ' ') + (r.conclusion ? ' · ' + r.conclusion : r.status === 'queued' ? ' · waiting for a free computer' : ' · booting Ubuntu, installing Chromium')); } } paintRun(); } catch (_) {}
+    try { const j = await gh('/runs?per_page=5&event=workflow_dispatch'); const r = (j.workflow_runs || []).find(x => String(x.display_title || '').split(/[^\w-]+/).includes(RUN.tag)); if (r) { RUN.gh = r; if (W.hoRuns?.update) W.hoRuns.update(RUN.tag,{url:r.html_url}); const k = r.status + (r.conclusion || ''); if (k !== RUN.ghSt) { RUN.ghSt = k; conNote('GH', 'run #' + r.run_number + ' · ' + r.status.replace('_', ' ') + (r.conclusion ? ' · ' + r.conclusion : r.status === 'queued' ? ' · waiting for a free computer' : ' · booting Ubuntu, installing Chromium')); } } paintRun(); } catch (_) {}
   }, 5000);
 }
 W.hoNxRunOpen = () => { RUN.view = 'run'; runWin(); };   // the run dock (run-dock.js) opens it again

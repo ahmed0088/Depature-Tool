@@ -16,7 +16,14 @@
     neorcha: { ic: '🪪', name: 'Neorcha cards', live: 'neorchaLive', win: 'nxRun', open: () => { if (W.hoNxRunOpen) W.hoNxRunOpen(); } },
   };
   const DISMISS_KEY = 'ho_run_dock_hide_v1';
-  let RUNS = {}, LIVE = {}, timer = 0;
+  let RUNS = {}, LIVE = {}, timer = 0, historyTimer = 0;
+  const FILTER = { view: 'history', from: '', to: '', kind: '', outcome: '', limit: 30 };
+  const terminal = r => ['done','error','stopped'].includes(r.state);
+  const day = t => new Date(+t + 4 * 3600e3).toISOString().slice(0,10);
+  const status = (r, now = Date.now()) => terminal(r) ? r.state : r.workflowEnded ? 'unconfirmed' : now - (+r.at || +r.started || 0) > 20 * 60e3 ? 'unconfirmed' : 'run';
+  const active = r => status(r) === 'run';
+  const operation = r => r.kind === 'ingauge' && (r.mode || r.how) === 'discover' ? 'IN-Gauge connection' : r.kind === 'ingauge' && (r.mode || r.how) === 'snapshot' ? 'IN-Gauge records' : (KINDS[r.kind] || {}).name || 'Cloud run';
+  function matches(r, f) { const st = status(r), d = day(r.started || r.at || 0); return (f.view === 'all' || (f.view === 'active' ? st === 'run' : st !== 'run')) && (!f.from || d >= f.from) && (!f.to || d <= f.to) && (!f.kind || r.kind === f.kind) && (!f.outcome || st === f.outcome); }
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const clean = (s, n) => String(s == null ? '' : s).replace(/\S+@\S+/g, '•@•').replace(/\s+/g, ' ').trim().slice(0, n || 60);
   const hidden = () => { try { return JSON.parse(localStorage.getItem(DISMISS_KEY) || '{}') || {}; } catch (_) { return {}; } };
@@ -24,19 +31,21 @@
   const unhide = tag => { try { const h = hidden(); delete h[tag]; localStorage.setItem(DISMISS_KEY, JSON.stringify(h)); } catch (_) {} };
   const winOpen = kind => { const w = D.getElementById(KINDS[kind].win); return !!w && (kind==='ingauge'?!w.hidden:w.classList.contains('on')); };
   const dur = s => { s = Math.max(0, Math.round(s)); return s >= 3600 ? Math.floor(s / 3600) + ' h ' + Math.floor(s % 3600 / 60) + ' min' : Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
-  const when = t => { const d = new Date(+t); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); };
+  const when = t => { const d = new Date(+t); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Dubai' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dubai' }); };
   const me = () => { try { return (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || ''; } catch (_) { return ''; } };
   const dbOk = () => typeof fbSet === 'function' && typeof _ref !== 'undefined' && !!_ref;
 
   /** a run's live report → the fields kept for it (pure): state, how far, the result — no guest data */
   function fromLive(kind, v) {
     if (!v) return {};
-    const o = { at: +v.at || Date.now(), state: v.state === 'done' ? 'done' : v.state === 'error' ? 'error' : v.state === 'stopped' || v.step === 'stopped' ? 'stopped' : 'run', note: clean(v.note, 140) };
+    const o = { at: +v.at || +v.started || 0, state: v.state === 'done' ? 'done' : v.state === 'error' ? 'error' : v.state === 'stopped' || v.step === 'stopped' ? 'stopped' : 'run', note: clean(v.note, 140) };
     if (['manual','ingauge'].includes(kind)) { o.n = +v.n || 0; o.done = +v.done || 0; o.tally = v.tally || {}; }
     else if (kind === 'enrol') { o.n = +v.n || 0; o.done = Math.min(+v.done || 0, o.n || Infinity); if (v.tally) o.tally = { enrolled: +v.tally.enrolled || 0, already: +v.tally.already || 0, skipped: +v.tally.skipped || 0, errors: +v.tally.errors || 0 }; }
     else { o.n = +v.n || 0; o.prog = +v.prog || 0; o.step = clean(v.step, 20); }
     if (v.run && /^https:\/\/github\.com\//.test(v.run)) o.url = String(v.run).slice(0, 200);
     if (v.test) o.test = true;
+    if (v.mode) o.mode = clean(v.mode, 20);
+    if (terminal(o)) o.finishedAt = +v.finishedAt || +v.at || 0;
     return o;
   }
   /** the chip's words (pure) */
@@ -44,7 +53,7 @@
     const K = KINDS[r.kind] || { ic: '☁️', name: 'Cloud run' };
     const far = ['manual','ingauge'].includes(r.kind) ? `${r.done || 0}/${r.n || 0} sales` : r.kind === 'enrol' ? (r.n ? (r.done || 0) + '/' + r.n : '') : (r.n ? r.n + ' cards' : '');
     const st = { run: '⏳', done: '✅', error: '⛔', stopped: '⏹' }[r.state] || '⏳';
-    return { title: '#' + (r.no || '?') + ' ' + K.ic + ' ' + K.name + (r.test ? ' · 🧪 test' : ''), sub: [r.hotel, far].filter(Boolean).join(' · '), st };
+    return { title: '#' + (r.no || '?') + ' ' + K.ic + ' ' + operation(r), sub: [r.hotel, far].filter(Boolean).join(' · '), st };
   }
 
   /** the next run number, from the hotel's counter in one step on the server (two devices never get the same number) */
@@ -88,7 +97,7 @@
       n: +info.n || 0, test: !!info.test, how: clean(info.how, 20), by: clean(me(), 40), started: Date.now(), at: Date.now(), state: 'run', note: 'Starting…' };
     RUNS[tag] = rec; paint();
     try { if (dbOk()) await fbSet('cloudRuns/' + tag, rec); } catch (_) {}
-    prune();
+    // History is retained; date filters and pagination keep the view small.
   }
   /** the window was closed: say once where it went */
   function minimized(kind) {
@@ -115,7 +124,7 @@
     if (r) {
       const f = fromLive(kind, v);
       // A delayed progress report must never turn a finished history record back into a live run.
-      if (+v.at < +r.at || (r.state !== 'run' && f.state === 'run')) return paint();
+      if (+v.at < +r.at || (terminal(r) && f.state === 'run')) return paint();
       const key = o => [o.state, o.done, o.n, o.prog, o.url, o.started, JSON.stringify(o.tally || '')].join('|');
       const changed = key(f) !== key(r);
       if (+v.started > 0 && +v.started < r.started && r.started - v.started < 6 * 3600e3) f.started = +v.started;   // the run's real start (it can be a little before this record)
@@ -124,18 +133,14 @@
     }
     paint();
   }
-  function prune() {
-    const all = Object.values(RUNS).sort((a, b) => b.started - a.started), cut = Date.now() - 45 * 864e5;
-    all.forEach((r, i) => { if (i >= 60 || r.started < cut) { delete RUNS[r.tag]; try { if (dbOk()) fbSet('cloudRuns/' + r.tag, null); } catch (_) {} } });
-  }
-
   // ── the dock ──
   function chips() {
     const h = hidden(), now = Date.now();
-    return Object.values(RUNS).filter(r => r.state === 'run' && !winOpen(r.kind) && !h[r.tag] && now - (r.at || r.started) < 3 * 3600e3)
+    return Object.values(RUNS).filter(r => active(r) && !winOpen(r.kind) && !h[r.tag] && now - (r.at || r.started) < 3 * 3600e3)
       .sort((a, b) => b.started - a.started).slice(0, 3);
   }
   function paint() {
+    renderHistory();
     clearInterval(timer); timer = 0;
     let dock = D.getElementById('hoRunDock');
     if (!dock) { if (!D.body) return; dock = D.createElement('div'); dock.id = 'hoRunDock'; dock.className = 'hrd'; dock.setAttribute('aria-live', 'polite'); D.body.appendChild(dock);
@@ -167,6 +172,7 @@
   }
   function tickDock() {
     const dock = D.getElementById('hoRunDock'); if (!dock || dock.hidden) return;
+    if (Array.from(dock.querySelectorAll('[data-hrd-time]')).some(el => RUNS[el.dataset.hrdTime] && !active(RUNS[el.dataset.hrdTime]))) { paint(); return; }
     dock.querySelectorAll('[data-hrd-time]').forEach(el => {
       const r = RUNS[el.dataset.hrdTime]; if (!r) return;
       const text = dur(((r.state === 'run' ? Date.now() : r.at || r.started) - r.started) / 1000);
@@ -175,37 +181,100 @@
   }
   function openRun(r) {
     const cur = latest(r.kind);
-    if (r.state === 'run' && cur && cur.tag === r.tag) { KINDS[r.kind].open(); setTimeout(paint, 50); return; }
+    if (active(r) && cur && cur.tag === r.tag) { KINDS[r.kind].open(); setTimeout(paint, 50); return; }
     list(r.tag);   // an older run: its details (the live window only follows the newest of its kind)
   }
   // ── 🗂 Runs: every run with its number, hotel and result ──
+  function summary(r) {
+    const t = r.tally;
+    if (r.kind === 'ingauge' && ['discover','snapshot'].includes(r.mode || r.how)) return status(r) === 'done' ? 'Read-only lookup completed' : '';
+    if (r.kind === 'ingauge' && t) return `${t.applied || 0} applied · ${t.unchanged || 0} unchanged · ${t.held || 0} held${t.uncertain ? ' · '+t.uncertain+' need verification' : ''}`;
+    if (r.kind === 'manual' && t) return `${t.submitted || 0} submitted · ${t.already_exists || 0} already exist · ${t.needs_review || 0} need review`;
+    if (r.kind === 'enrol' && t) return `${t.enrolled || 0} enrolled · ${t.already || 0} already members · ${t.skipped || 0} skipped · ${t.errors || 0} errors`;
+    return r.n ? (r.kind === 'neorcha' ? r.n+' cards read' : (r.done || 0)+' / '+r.n+' processed') : '';
+  }
+  function closeHistory() { D.getElementById('hoRunList')?.classList.remove('on'); clearInterval(historyTimer); historyTimer = 0; }
   function list(focus) {
     let w = D.getElementById('hoRunList');
-    if (!w) { w = D.createElement('div'); w.id = 'hoRunList'; w.className = 'hrl'; D.body.appendChild(w);
+    if (!w) {
+      w = D.createElement('div'); w.id = 'hoRunList'; w.className = 'hrl'; D.body.appendChild(w);
+      w.innerHTML = `<div class="hrl-bg" data-hrl-x="1"></div><section class="hrl-card" role="dialog" aria-modal="true" aria-label="Cloud run history">
+        <header class="hrl-h"><span class="hrl-ic">🗂</span><div><b>Cloud run history</b><small>Results, dates and activity · Dubai time</small></div><button type="button" class="hrl-close" data-hrl-x="1" aria-label="Close">✕</button></header>
+        <div class="hrl-filters"><nav aria-label="Run view"><button data-view="history">History</button><button data-view="active">Active</button><button data-view="all">All</button></nav>
+        <div class="hrl-dates"><label>From<input type="date" data-filter="from" aria-label="From date"></label><label>Through<input type="date" data-filter="to" aria-label="Through date"></label></div>
+        <div class="hrl-quick"><button data-days="1">Today</button><button data-days="7">7 days</button><button data-days="30">30 days</button><button data-days="0">All dates</button></div>
+        <div class="hrl-dates"><label>Tool<select data-filter="kind"><option value="">All tools</option>${Object.entries(KINDS).map(([k,v])=>`<option value="${k}">${esc(v.name)}</option>`).join('')}</select></label><label>Result<select data-filter="outcome"><option value="">All results</option><option value="done">Finished</option><option value="error">Failed</option><option value="stopped">Cancelled</option><option value="unconfirmed">Unconfirmed</option></select></label></div>
+        <div class="hrl-refresh"><span data-history-count role="status"></span><button type="button" data-refresh>Refresh status</button></div></div>
+        <div class="hrl-b" data-history-results></div></section>`;
       w.addEventListener('click', e => {
-        if (e.target.closest('[data-hrl-x]')) { w.classList.remove('on'); return; }
-        const o = e.target.closest('[data-hrl-open]'); if (o) { const r = RUNS[o.dataset.hrlOpen]; if (r && r.state === 'run' && latest(r.kind) === r) { unhide(r.tag); w.classList.remove('on'); KINDS[r.kind].open(); setTimeout(paint, 50); } }
+        if (e.target.closest('[data-hrl-x]')) return closeHistory();
+        const v = e.target.closest('[data-view]'); if (v) { FILTER.view = v.dataset.view; FILTER.limit = 30; renderHistory(true); return; }
+        const d = e.target.closest('[data-days]'); if (d) { const n = +d.dataset.days; FILTER.from = n ? day(Date.now()-(n-1)*864e5) : ''; FILTER.to = n ? day(Date.now()) : ''; FILTER.limit = 30; syncFilters(); renderHistory(true); return; }
+        if (e.target.closest('[data-more]')) { FILTER.limit += 30; renderHistory(true); return; }
+        if (e.target.closest('[data-refresh]')) return reconcile();
+        const o = e.target.closest('[data-hrl-open]'); if (o) { const r = RUNS[o.dataset.hrlOpen]; if (r && active(r) && latest(r.kind) === r) { unhide(r.tag); closeHistory(); KINDS[r.kind].open(); setTimeout(paint, 50); } }
       });
-      D.addEventListener('keydown', e => { if (e.key === 'Escape') w.classList.remove('on'); }); }
-    const sorted = Object.values(RUNS).sort((a, b) => b.started - a.started);
-    const active = sorted.filter(r => r.state === 'run'), history = sorted.filter(r => r.state !== 'run');
-    const all = active.concat(history);
-    const res = r => r.kind === 'ingauge' ? `${r.tally?.applied || 0} applied · ${r.tally?.tested || 0} tested · ${r.tally?.unchanged || 0} unchanged · ${r.tally?.held || 0} held${r.tally?.uncertain ? ' · ' + r.tally.uncertain + ' uncertain' : ''}` : r.kind === 'manual' ? `${r.tally?.submitted || 0} submitted · ${r.tally?.already_exists || 0} already submitted · ${r.tally?.tested || 0} tested · ${r.tally?.needs_review || 0} need review${r.tally?.unclear ? ' · ' + r.tally.unclear + ' uncertain' : ''}` : r.kind === 'enrol' ? (r.tally ? `✅ ${r.tally.enrolled} ${r.test ? 'checked' : 'enrolled'} · 👤 ${r.tally.already} already · ⏭ ${r.tally.skipped} skipped · ⚠️ ${r.tally.errors} errors` : r.n ? `${r.done || 0} of ${r.n} guests` : '')
-      : (r.n ? `🪪 ${r.n} card${r.n === 1 ? '' : 's'} read` : '') + (r.from ? ` · arrivals ${r.from}${r.to && r.to !== r.from ? ' → ' + r.to : ''}` : '');
-    w.innerHTML = `<div class="hrl-bg" data-hrl-x="1"></div><section class="hrl-card" role="dialog" aria-modal="true" aria-label="Cloud run history">
-      <header class="hrl-h"><span class="hrl-ic">🗂</span><div><b>Cloud run history</b><small>Finished runs are saved here. Active runs are listed separately.</small></div><button type="button" class="hrl-close" data-hrl-x="1" aria-label="Close">✕</button></header>
-      <div class="hrl-b">${all.length ? all.map(r => { const K = KINDS[r.kind] || { ic: '☁️', name: 'Cloud run' }, isNew = latest(r.kind) === r, sec = ((r.state === 'run' ? Date.now() : r.at || r.started) - r.started) / 1000;
-        const heading = r === active[0] ? '<h3 class="hrl-section">Active runs</h3>' : r === history[0] ? '<h3 class="hrl-section">Run history · ended</h3>' : '';
-        return `${heading}<article class="hrl-run ${esc(r.state)}${focus === r.tag ? ' focus' : ''}">
-          <div class="hrl-no">#${esc(r.no || '?')}</div>
-          <div class="hrl-main"><b>${K.ic} ${esc(K.name)}${r.test ? ' <em>🧪 test</em>' : ''}</b>
-            <span class="hrl-meta">🏨 ${esc(r.hotel || '—')}${r.account ? ' · ' + esc(r.account) : ''} · 👤 ${esc(r.by || '—')}${r.how ? ' · ' + esc(r.how) : ''}</span>
-            <span class="hrl-meta">🕒 ${esc(when(r.started))} · ⏱ ${esc(dur(sec))} · ${{ run: '⏳ running', done: '✅ finished', error: '⛔ stopped with an error', stopped: '⏹ stopped by you' }[r.state] || ''}</span>
-            ${res(r) ? `<span class="hrl-res">${esc(res(r))}</span>` : ''}${r.note ? `<span class="hrl-note">${esc(r.note)}</span>` : ''}
-            <span class="hrl-act">${isNew && r.state === 'run' ? `<button type="button" class="btn sm gold" data-hrl-open="${esc(r.tag)}">📡 Open live window</button>` : ''}${r.url ? `<a class="btn sm" href="${esc(r.url)}" target="_blank" rel="noopener">GitHub ↗</a>` : ''}</span></div></article>`; }).join('')
-        : '<div class="hrl-empty">No cloud runs yet. Start one from Guest enrolment (☁️ Enroll) or Neorcha (☁️ Run in the cloud) — each gets a number here.</div>'}</div></section>`;
-    w.classList.add('on');
-    const f = w.querySelector('.hrl-run.focus'); if (f) f.scrollIntoView({ block: 'center' });
+      w.addEventListener('change', e => { const k = e.target.dataset.filter; if (['from','to','kind','outcome'].includes(k)) { FILTER[k] = e.target.value; FILTER.limit = 30; renderHistory(true); } });
+      D.addEventListener('keydown', e => { if (e.key === 'Escape') closeHistory(); });
+    }
+    if (focus) { FILTER.view = active(RUNS[focus] || {}) ? 'active' : 'history'; FILTER.from = ''; FILTER.to = ''; }
+    w.classList.add('on'); syncFilters(); renderHistory(true, focus);
+    clearInterval(historyTimer); historyTimer = setInterval(() => { renderHistory(); tickHistory(); }, 1000);
+    reconcile();
+  }
+  function syncFilters() { const w = D.getElementById('hoRunList'); if (w) w.querySelectorAll('[data-filter]').forEach(el => { el.value = FILTER[el.dataset.filter]; }); }
+  function tickHistory() { D.getElementById('hoRunList')?.querySelectorAll('[data-history-time]').forEach(el => { const r = RUNS[el.dataset.historyTime]; if (r && active(r)) el.textContent = dur((Date.now()-r.started)/1000); }); }
+  function renderHistory(force, focus) {
+    const w = D.getElementById('hoRunList'); if (!w || !w.classList.contains('on')) return;
+    const all = Object.values(RUNS).sort((a,b)=>(+b.started||0)-(+a.started||0));
+    w.querySelectorAll('[data-view]').forEach(el => { const selected = el.dataset.view === FILTER.view; el.setAttribute('aria-pressed', String(selected)); el.textContent = ({history:'History',active:'Active',all:'All'})[el.dataset.view]+' ('+all.filter(r=>el.dataset.view==='all'||(el.dataset.view==='active'?active(r):!active(r))).length+')'; });
+    const filtered = all.filter(r => matches(r,FILTER));
+    const count = w.querySelector('[data-history-count]'); if (count) count.textContent = FILTER.from && FILTER.to && FILTER.from > FILTER.to ? 'Choose an end date after the start date.' : filtered.length+' run'+(filtered.length===1?'':'s');
+    const body = w.querySelector('[data-history-results]'); if (!body) return;
+    const html = filtered.slice(0,FILTER.limit).map(r=>{
+      const st = status(r), running = st === 'run', end = +r.finishedAt || (terminal(r) ? +r.at : 0);
+      const names = {run:'Running',done:'Finished',error:'Failed',stopped:'Cancelled',unconfirmed:'Unconfirmed'};
+      const note = st === 'unconfirmed' ? 'No final result received. Verify the outcome before retrying.' : r.note || '';
+      return `<article class="hrl-run ${st}${focus===r.tag?' focus':''}"><div class="hrl-main"><div class="hrl-title"><b>${esc(operation(r))}</b><span class="hrl-status">${names[st]}</span></div>
+      <span class="hrl-meta">#${esc(r.no || '—')} · ${esc(r.hotel || 'Hotel not recorded')}${r.account?' · '+esc(r.account):''}</span>
+      ${r.by?`<span class="hrl-meta">Started by ${esc(r.by)}</span>`:''}
+      <span class="hrl-meta">Started ${esc(when(r.started || r.at))}</span>
+      ${end ? `<span class="hrl-meta">Ended ${esc(when(end))} · ${esc(dur((end-r.started)/1000))}</span>` : running ? `<span class="hrl-meta">Elapsed <time data-history-time="${esc(r.tag)}">${dur((Date.now()-r.started)/1000)}</time></span>` : `<span class="hrl-meta">${r.workflowEnded?'Workflow ended '+esc(when(r.workflowEnded)):'End time not confirmed'} · Last update ${esc(when(r.at || r.started))}</span>`}
+      ${r.from?`<span class="hrl-meta">Report dates ${esc(r.from)}${r.to && r.to!==r.from?' → '+esc(r.to):''}</span>`:''}
+      ${summary(r)?`<span class="hrl-res">${esc(summary(r))}</span>`:''}<span class="hrl-note">${esc(note)}</span>
+      ${st==='unconfirmed' && r.note ? `<details><summary>Last reported activity</summary><span class="hrl-note">${esc(r.note)}</span></details>`:''}
+      <span class="hrl-act">${running && latest(r.kind)===r?`<button type="button" class="btn sm gold" data-hrl-open="${esc(r.tag)}">Open live window</button>`:''}${/^https:\/\/github\.com\//.test(r.url||'')?`<a class="btn sm" href="${esc(r.url)}" target="_blank" rel="noopener">GitHub ↗</a>`:''}</span></div></article>`;
+    }).join('')+(filtered.length>FILTER.limit?'<button type="button" data-more>Load more runs</button>':'') || '<div class="hrl-empty">No runs match these filters.</div>';
+    if (force || body._key !== html.replace(/<time[^>]*>.*?<\/time>/g,'')) { body.innerHTML = html; body._key = html.replace(/<time[^>]*>.*?<\/time>/g,''); }
+    if (focus) body.querySelector('.focus')?.scrollIntoView({block:'nearest'});
+  }
+  let checking = false, lastCheck = 0;
+  async function reconcile() {
+    if (checking || Date.now()-lastCheck < 30000) return;
+    checking = true; lastCheck = Date.now(); const root = typeof _ref !== 'undefined' ? _ref : null;
+    const button = D.getElementById('hoRunList')?.querySelector('[data-refresh]'); if (button) { button.disabled = true; button.textContent = 'Checking…'; }
+    try {
+      const rows = Object.values(RUNS).filter(r=>!terminal(r)).sort((a,b)=>b.started-a.started).slice(0,60);
+      for (let i=0;i<rows.length;i+=5) await Promise.all(rows.slice(i,i+5).map(async r=>{
+        let patch = null;
+        try {
+          const path = r.kind==='ingauge'?'ingauge/jobs/':r.kind==='manual'?'manualSalesJobs/':null;
+          if (path && root?.child) {
+            const snap = await root.child(path+r.tag).once('value'), job = snap.val();
+            if (job && ['done','error','stopped'].includes(job.state)) patch = {...fromLive(r.kind,job), finishedAt:+job.finishedAt || +job.at || +job.doneAt || 0};
+          }
+          if (!patch && /^https:\/\/github\.com\/ahmed0088\/Depature-Tool\/actions\/runs\/\d+$/i.test(r.url || '')) {
+            const id = r.url.split('/').pop(), headers = {Accept:'application/vnd.github+json'};
+            let token = ''; try { token = localStorage.getItem('ho_gh_start_key_v1') || ''; } catch (_) {} if (token) headers.Authorization = 'Bearer '+token;
+            const response = await fetch('https://api.github.com/repos/ahmed0088/Depature-Tool/actions/runs/'+id,{headers,signal:AbortSignal.timeout(10000)});
+            if (response.ok) { const job = await response.json(); if (job.status==='completed') { const end = Date.parse(job.updated_at)||Date.now(); patch = {workflowEnded:end}; if (['failure','timed_out','cancelled','startup_failure'].includes(job.conclusion)) Object.assign(patch,{state:job.conclusion==='cancelled'?'stopped':'error',finishedAt:end,note:'Workflow '+(job.conclusion==='cancelled'?'was cancelled':'ended with an error')+'. Final application result unavailable; verify the outcome before retrying.'}); } }
+          }
+        } catch (_) {}
+        if (root !== (typeof _ref !== 'undefined' ? _ref : null) || !RUNS[r.tag] || terminal(RUNS[r.tag]) || !patch) return;
+        Object.assign(RUNS[r.tag],patch);
+        if (dbOk()) try { await fbUpdate('cloudRuns/'+r.tag,patch); } catch (_) {}
+      }));
+    } finally { checking = false; if (button) { button.disabled = false; button.textContent = 'Refresh status'; } paint(); }
   }
 
   function css() {
@@ -225,12 +294,12 @@
 @media (max-width:768px){.hrd{left:10px;bottom:calc(86px + env(safe-area-inset-bottom));max-width:calc(100vw - 96px)}}
 .hrl{position:fixed;inset:0;z-index:10050;display:none;align-items:center;justify-content:center}.hrl.on{display:flex}
 .hrl-bg{position:absolute;inset:0;background:rgba(0,0,0,.5)}
-.hrl-card{position:relative;width:min(560px,calc(100vw - 24px));max-height:calc(100dvh - 32px);display:flex;flex-direction:column;background:var(--card2,#111827);color:var(--text);border:1px solid var(--border2);border-radius:var(--r3,18px);box-shadow:0 30px 70px -20px rgba(0,0,0,.6);overflow:hidden}
+.hrl-card{position:relative;width:min(680px,calc(100vw - 24px));max-height:calc(100dvh - 32px);display:flex;flex-direction:column;background:var(--card2,#111827);color:var(--text);border:1px solid var(--border2);border-radius:var(--r3,18px);box-shadow:0 30px 70px -20px rgba(0,0,0,.6);overflow:hidden}
 .hrl-h{position:sticky;top:0;display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);background:inherit}.hrl-h div{flex:1;display:flex;flex-direction:column}.hrl-h small{color:var(--text2);font-size:.76rem}
 .hrl-ic{font-size:22px}.hrl-close{width:40px;height:40px;border-radius:50%;border:1px solid var(--border2);background:transparent;color:var(--text);font-size:16px;cursor:pointer}
 .hrl-b{overflow:auto;padding:12px 14px calc(14px + env(safe-area-inset-bottom));display:grid;gap:10px}
 .hrl-section{margin:4px 0 0;font:700 .78rem var(--font);color:var(--text2)}
-.hrl-run{display:grid;grid-template-columns:54px 1fr;gap:12px;padding:12px;border:1px solid var(--border);border-radius:var(--r2,12px);background:var(--card)}
+.hrl-run{display:grid;grid-template-columns:1fr;gap:12px;padding:12px;border:1px solid var(--border);border-radius:var(--r2,12px);background:var(--card)}
 .hrl-run.focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
 .hrl-no{font:800 1.15rem var(--font);color:var(--accent);text-align:center;padding-top:2px}
 .hrl-main{display:flex;flex-direction:column;gap:3px;min-width:0}.hrl-main>b{font-size:.92rem}.hrl-main em{font-style:normal;font-size:.72rem;color:var(--amber,#f59e0b)}
@@ -239,6 +308,8 @@
 .hrl-act{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.hrl-act:empty{display:none}
 .hrl-empty{padding:24px;text-align:center;color:var(--text2)}
 @media (max-width:600px){.hrl{align-items:flex-end}.hrl-card{width:100vw;border-radius:20px 20px 0 0;max-height:90dvh}}
+.hrl-filters{padding:12px 16px;border-bottom:1px solid var(--border);display:grid;gap:10px;flex:none}.hrl-filters nav,.hrl-quick{display:flex;gap:6px;flex-wrap:wrap}.hrl-filters button{font:inherit;font-size:.78rem;border:1px solid var(--border2,#bbb);border-radius:9px;padding:8px 10px;color:var(--text);background:var(--card)}.hrl-filters [aria-pressed=true]{color:var(--text);background:var(--accent-bg);border-color:var(--accent);font-weight:700}.hrl-dates{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}.hrl-dates label{min-width:0;display:grid;gap:4px;font-size:.74rem;color:var(--text2)}.hrl-dates input,.hrl-dates select{box-sizing:border-box;width:100%;min-width:0;max-width:100%;height:38px;padding:6px 8px;border:1px solid var(--border2,#aaa);border-radius:8px;background:var(--card);color:var(--text);font:inherit;font-size:16px}.hrl-refresh{display:flex;align-items:center;justify-content:space-between;color:var(--text2);font-size:.74rem}.hrl-title{display:flex;justify-content:space-between;align-items:center;gap:8px}.hrl-title b{font-size:.93rem}.hrl-status{font-size:.68rem;font-weight:700;border-radius:99px;padding:4px 8px;background:var(--border);white-space:nowrap}.hrl-run.done .hrl-status{color:var(--green,#14984b)}.hrl-run.error .hrl-status{color:var(--red,#df3845)}.hrl-run.unconfirmed .hrl-status{color:var(--text2)}.hrl-main{gap:6px}.hrl-main details{font-size:.75rem;color:var(--text2)}.hrl-main summary{cursor:pointer}.hrl-b{min-height:80px}.hrl-note{line-height:1.5}.hrl-card button{cursor:pointer}.hrl-card button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-height:650px){.hrl-filters{gap:6px;padding:8px 12px}.hrl-h{padding:8px 12px}}
 @media (prefers-reduced-motion:reduce){.hrd-chip,.hrd-chip.run .hrd-st{animation:none}}`;
     D.head.appendChild(s);
   }
@@ -256,6 +327,7 @@
     Object.keys(KINDS).forEach(k => fbListen(KINDS[k].live, v => onLive(k, v)));
   })();
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', () => { css(); paint(); }); else { css(); paint(); }
-  W.hoRuns = { start, minimized, closed, label, list, paint, _pure: { fromLive, chipText, liveKey } };
+  async function update(tag, fields) { const r = RUNS[tag]; if (!r || (r.url === fields.url && !fields.note)) return; const patch = {}; if (/^https:\/\/github\.com\//.test(fields.url || '')) patch.url = fields.url; if (fields.note) patch.note = clean(fields.note,140); Object.assign(r,patch); if (dbOk()) try { await fbUpdate('cloudRuns/'+tag,patch); } catch (_) {} paint(); }
+  W.hoRuns = { start, update, minimized, closed, label, list, paint, _pure: { fromLive, chipText, liveKey, status, day, matches, operation } };
 })();
 

@@ -1,4 +1,5 @@
 name: Neorcha (cloud)
+run-name: Neorcha · ${{ inputs.tag || 'scheduled' }}
 # Collects the Neorcha registration cards on GitHub's machine and saves them in HotelOps
 # (scripts/neorcha-cloud.js). Every night by itself, or press "Run workflow" (github.com or the
 # GitHub app). Needs the Secrets listed in that script; without them it does nothing.

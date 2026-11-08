@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 567, items: [
+    { ico: '🗂', title: 'Run history with dates and clear results',
+      what: 'History, Active and All views now have date, tool and result filters, quick date ranges and compact mobile cards. Times use Dubai time; older records are retained.',
+      does: 'Old runs without a final report show Unconfirmed instead of an endless Starting timer. Final results are saved by the cloud workers even while HotelOps is closed. Refresh status checks each run’s own record; an unknown result is never called a successful transaction.' }
+  ] },
   { v: 566, items: [
     { ico: '⚡', title: 'Find, edit and apply in three steps',
       what: 'Edit a package directly from live IN-Gauge data, or switch to Check Opera reports for an audit. Hotel setup and past history are tucked away. Package, seller, charge and status come first in the editor; stay details remain prefilled below.',

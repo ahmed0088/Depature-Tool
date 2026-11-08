@@ -65,10 +65,12 @@ async function fbOpen() {
     hid = typeof u === 'string' ? u : u && typeof u === 'object' ? String(u.hotelId || u.id || Object.keys(u)[0] || '') : '';
   }
   if (!/^[\w-]{1,80}$/.test(hid)) await fail('No hotel found for that HotelOps account — add the HOTELOPS_HOTEL secret');
+  if (!E.TAG) E.TAG = 'nx'+Date.now().toString(36);
   const at = p => db + '/hotels/' + hid + '/' + p + '.json?auth=' + a.idToken;
+  const history = require('./cloud-run-history')({ kind: 'neorcha', tag: String(E.TAG || ('nx'+Date.now().toString(36))).slice(0,40), run: E.GITHUB_RUN_ID ? 'https://github.com/ahmed0088/Depature-Tool/actions/runs/'+E.GITHUB_RUN_ID : '', patch: async (path, value) => { await fetch(at(path), {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)}); } });
   return {
-    live: async patch => { patch = Object.assign({ con: CON.slice(-60) }, patch); try { await fetch(at('neorchaLive'), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ at: Date.now() }, patch)) }); } catch (_) {} },
-    start: async o => { try { await fetch(at('neorchaLive'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ at: Date.now(), started: Date.now() }, o)) }); } catch (_) {} },
+    live: async patch => { await history(patch); patch = Object.assign({ con: CON.slice(-60) }, patch); try { await fetch(at('neorchaLive'), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ at: Date.now() }, patch)) }); } catch (_) {} },
+    start: async o => { await history(o); try { await fetch(at('neorchaLive'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ at: Date.now(), started: Date.now() }, o)) }); } catch (_) {} },
     save: async card => {
       const previous = await (await fetch(at('neorcha'))).json().catch(()=>null);
       const archive = async value => {

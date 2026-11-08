@@ -59,7 +59,7 @@ async function main(){
     const tally={tested:0,applied:0,unchanged:0,held:0,uncertain:0};for(const r of results)if(r.state in tally)tally[r.state]++;
     await db.patch(node,{state,results,tally,note,run,at:Date.now(),...extra});
     const live={tag,scope:plan.scope||'all',state:state==='running'?'run':state,test,n:plan.operations?.length||0,done:results.length,note,tally,at:Date.now(),started:job.reviewedAt,run};
-    await db.put('ingauge/live',live);await db.patch('cloudRuns/'+tag,{...live,kind:'ingauge',url:run,hotel:plan.binding?.property||'',from:plan.from||'',to:plan.to||''});
+    await db.put('ingauge/live',live);await db.patch('cloudRuns/'+tag,{...live,kind:'ingauge',url:run,mode:plan.mode||'',...(plan.binding?.property?{hotel:plan.binding.property}:{}),...(plan.from?{from:plan.from}:{}),...(plan.to?{to:plan.to}:{}),...(['done','error','stopped'].includes(live.state)?{finishedAt:live.at}:{})});
   };
   let browser,heartbeat,publishedResults=[];const trace=[];
   const progress=async(stage,note)=>{

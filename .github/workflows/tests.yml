@@ -29,6 +29,8 @@ jobs:
 
       - name: Run history checks
         run: node tests/run-history.test.js
+      - name: Run history on mobile
+        run: node tests/run-history.browser.test.js
       - name: Opera Departures checks
         run: node tests/opera-departures.test.js
       - name: Manual sales and seller requests

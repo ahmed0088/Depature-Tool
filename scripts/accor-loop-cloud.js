@@ -6,6 +6,7 @@ const ROOT = path.join(__dirname, '..');
 const E = process.env;
 const mask = s => String(s || '').replace(/\S+@\S+/g, '•@•').replace(/\d{6,}/g, d => '••••' + d.slice(-4)).slice(0, 180);
 const CON = [];
+let ACTIVE_HISTORY = null;
 let ACTIVE_FB = null;
 let sensitiveValues = [];
 
@@ -35,6 +36,7 @@ const fail = (message, code = 1) => {
 
 async function publishError(message) {
   const safe = tlog('ERR', message);
+  if (ACTIVE_HISTORY) await ACTIVE_HISTORY({state:'error',step:'error',note:safe});
   if (!ACTIVE_FB) return;
   try {
     await ACTIVE_FB.patch('enrollJob', { state: 'error', error: safe, errorAt: Date.now() });
@@ -163,7 +165,10 @@ async function main() {
     .filter(Boolean).sort((a, b) => String(b).length - String(a).length);
 
   const tag = String(E.TAG || (job && job.tag) || ('accor' + Date.now().toString(36))).slice(0, 40);
-  const live = p => FB.patch('enrollLive', Object.assign({ at: Date.now(), tag, con: CON.slice(-120) }, p)).catch(() => {});
+  const history = require('./cloud-run-history')({patch:FB.patch,tag,kind:'enrol',run:E.GITHUB_RUN_ID?'https://github.com/ahmed0088/Depature-Tool/actions/runs/'+E.GITHUB_RUN_ID:''});
+  ACTIVE_HISTORY = history;
+  const live = p => Promise.all([history(p), FB.patch('enrollLive', Object.assign({ at: Date.now(), tag, con: CON.slice(-120) }, p)).catch(() => {})]);
+  await history({state:'run',n:rows.length,done:0,test,note:'Preparing the cloud browser…'});
   const stopRequested = async () => {
     try { const state = await FB.get('enrollLive'); return state && state.tag === tag && (state.control === 'stop' || state.stopRequested === true); }
     catch (_) { return false; }

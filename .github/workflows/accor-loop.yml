@@ -1,4 +1,5 @@
 name: Accor Loop (cloud)
+run-name: Guest enrolment · ${{ inputs.tag || 'scheduled' }}
 # Runs the same consent-filtered Accor Loop collector as the Chrome extension,
 # using a GitHub-hosted browser and the enrollment list saved by HotelOps.
 # It is manually started from HotelOps or GitHub. TEST=1 checks the page without submitting.
