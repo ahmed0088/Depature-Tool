@@ -106,12 +106,22 @@
     const posted = clean(j.CASHIER_NAME) || clean(j.USER_NAME) || clean(j.INSERT_USER) || 'Unknown posting user';
     if (names.length > 1) return { name: names.join(' / '), basis: 'Conflicting notes', mapped: false, warning: 'The notes name different sellers. Confirm who made the sale.', explanation: `Notes name ${names.join(' and ')}; posted by ${posted}. Seller credit needs confirmation.`, employeeId: '' };
     if (names.length) {
-      const name = names[0], tokens = norm(name).split(' '), hits = employees.filter(e => tokens.every(t => norm(e.name).split(' ').includes(t)));
-      const identity = global.InGaugeAuditCore?.resolveSeller(name, employees);
-      if(identity?.state === 'matched'){hits.splice(0,hits.length,identity.person);}
-      else if(identity && ['ambiguous','suggested'].includes(identity.state)){hits.splice(0,hits.length);}
-      const seller = hits.length === 1 ? hits[0].name : name;
-      const conflict = !tokens.every(t => norm(posted).split(' ').includes(t));
+      // The strict resolver's unmatched/ambiguous/suggested result is authoritative.
+      // Standalone report use follows the same boundary: exact full names, or a
+      // unique single name of at least four letters; never a full-name subset.
+      const matches = query => {
+        if (typeof global.InGaugeAuditCore?.resolveSeller === 'function') {
+          const identity = global.InGaugeAuditCore.resolveSeller(query, employees);
+          return identity?.state === 'matched' ? [identity.person] : [];
+        }
+        const normalized = norm(query), exact = employees.filter(e => normalized && norm(e.name) === normalized);
+        if (exact.length) return exact;
+        const tokens = normalized.split(' ').filter(Boolean);
+        return tokens.length === 1 && tokens[0].length >= 4 ? employees.filter(e => norm(e.name).split(' ').includes(tokens[0])) : [];
+      };
+      const name = names[0], hits = matches(name), seller = hits.length === 1 ? hits[0].name : name;
+      const poster = matches(posted), sameContributor = hits.length === 1 && poster.length === 1 && (id(hits[0].id) && id(poster[0].id) ? id(hits[0].id) === id(poster[0].id) : norm(hits[0].name) === norm(poster[0].name));
+      const conflict = norm(name) !== norm(posted) && !sameContributor;
       return { name: seller, basis: 'Opera note', mapped: hits.length === 1, employeeId: hits.length === 1 ? hits[0].id : '', warning: [conflict ? 'The named seller differs from the posting user.' : '', hits.length !== 1 ? 'Seller is not uniquely mapped to an IN-Gauge employee in this export.' : ''].filter(Boolean).join(' '), explanation: `Credit ${seller}: the Opera note names this seller; posted by ${posted}.` };
     }
     const system = /night\s*audit|system|interface/i.test(posted);

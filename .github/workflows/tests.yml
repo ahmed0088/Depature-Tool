@@ -35,6 +35,10 @@ jobs:
         run: node tests/opera-departures.test.js
       - name: Manual sales and seller requests
         run: node tests/manual-upsells.test.js
+      - name: Seller credit decisions and phone confirmation
+        run: |
+          node tests/package-seller-decision.test.js
+          node tests/seller-credit.browser.test.js
       - name: Reviewed sales automation guards
         run: node tests/manual-sales-automation.test.js
 

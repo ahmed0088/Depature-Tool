@@ -1391,6 +1391,21 @@ async function pkgRun() {
 /** Note which rule decided something on this row (for Why? and the Rules suggestions). */
 function _pkgHit(r, k) { (r.ruleHits = r.ruleHits || []).includes(k) || r.ruleHits.push(k); }
 
+/** Validate the final rule decision, after memory, extensions and explicit pins.
+ *  An explicitly blank seller is unresolved; never replace it with an editor's event. */
+function _pkgReviewFinalSellerIdentity(results) {
+  const hasLiveContributors = typeof window !== 'undefined' && !!window.InGaugeWorkspace?.state?.snapshot?.contributors;
+  results.forEach(r => {
+    if (r.requestedSale || r.pin || !['credit','review'].includes(r.verdict) || !(r.reassign || r.needsEmployee)) return;
+    const seller = Object.prototype.hasOwnProperty.call(r, 'user') ? r.user : r.originEvent?.user;
+    const identity = _pkgResolveIdentity(seller);
+    if (identity && (['ambiguous','suggested'].includes(identity.state) || (hasLiveContributors && identity.state === 'unmatched'))) {
+      r.identityReview = true; r.verdict = 'review'; r.alreadyComplete = false;
+      r.note = identity.reason + (identity.candidates.length ? ' Candidates: ' + identity.candidates.map(p => p.name).join(' / ') : '');
+    }
+  });
+}
+
 /** The whole audit on what is loaded, under the current rules: no screen, no saving. */
 function _pkgCompute() {
   const results = pkgUnknowns.map(u => {
@@ -1446,7 +1461,7 @@ function _pkgCompute() {
   _pkgDropNoOpReassigns(normal);  // nothing that needs no change stays on the list
   _pkgApplyPins(normal);          // last: a person's pinned decision beats the log
   _pkgFlagRequestedOverlaps(results);
-  results.forEach(r=>{if(r.requestedSale||r.pin||!['credit','review'].includes(r.verdict)||!(r.reassign||r.needsEmployee))return;const identity=_pkgResolveIdentity(r.originEvent?.user||r.user);if(identity&&['ambiguous','suggested'].includes(identity.state)){r.identityReview=true;r.verdict='review';r.alreadyComplete=false;r.note=identity.reason+' Candidates: '+identity.candidates.map(p=>p.name).join(' / ');}});
+  _pkgReviewFinalSellerIdentity(results);
   if(window.InGaugeWorkspace?.state.snapshot)results.forEach(r=>{if(r.pin||r.requestedSale||r.needsProduct||_pkgCodeFamilyFor(r.product))return;r.mappingReview=true;r.verdict='review';r.alreadyComplete=false;r.note='This live product has no verified Opera package family. Confirm its mapping before changing its seller or status.';});
   return results;
 }

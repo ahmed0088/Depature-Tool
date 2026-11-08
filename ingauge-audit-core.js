@@ -120,7 +120,8 @@
       if(['deny','delete'].includes(op.action)&&text(op.reason).length<5)fail('Enter a clear reason for this denial or removal.');
       if(['add','edit'].includes(op.action)){
         const p=snapshot.products.find(p=>p.id===id(op.productId));if(!p||p.activeStatus!=='NORMAL'||/UNKNOWN|UNMAPPED/.test(key(p.code+' '+p.name)))fail('Choose an active, identified product from this hotel.');
-        if(op.requireAssignment&&!op.assignmentReviewed)fail('Review and explicitly assign the seller before selecting this sale.');
+        if(op.requireAssignment&&(!op.assignmentReviewed||!id(op.assignmentContributorId)||id(op.assignmentContributorId)!==id(op.contributorId)))fail('Review and explicitly assign the seller before selecting this sale.');
+        if(op.sellerCredit?.recommendedContributorId&&id(op.contributorId)!==id(op.sellerCredit.recommendedContributorId)&&text(op.reason).length<5)fail('Explain why credit should differ from the seller identified in the Opera note.');
         const person=snapshot.contributors.find(p=>p.id===id(op.contributorId));
         if(!before||before.contributorId!==id(op.contributorId)){if(!person||person.activeStatus!=='NORMAL')fail('Choose an active contributor assigned to this hotel.');}
         if(before&&before.contributorId!==id(op.contributorId)&&!snapshot.permissions.canReassign)fail('This account cannot reassign contributors.');

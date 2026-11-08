@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 571, items: [
+    { ico: '👤', title: 'Seller credit backed by evidence and your confirmation',
+      what: 'The review separates the named seller, posting user and explanation. New manual credits require contributor confirmation. Similar full names, conflicting notes and unresolved identities stay out of ready selection.',
+      does: 'Changing the contributor clears confirmation. Overriding a uniquely identified note seller requires a reason, and bare Opera user IDs are never treated as IN-Gauge staff IDs. Automatic-package imports keep the final extension, memory or pinned seller decision and respect Skip; the per-booking editor cannot silently replace that seller.' }
+  ] },
   { v: 570, items: [
     { ico: '⚡', title: 'Faster monthly comparisons and clearer scope checks',
       what: 'Product-code lookup is indexed once, keeping comparisons fast even when many records have an unrecognized label and need catalog matching.',

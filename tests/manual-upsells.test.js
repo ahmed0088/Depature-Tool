@@ -196,3 +196,49 @@ test('the evidence explains note priority and safely displays guest-entered mark
  const f=fixtures();f.j.REFERENCE='Upsell ** Jordan';const row=run(f).rows[0];row.note='<img src=x onerror=alert(1)>';
  const html=M.evidenceHtml(row);assert.match(html,/posted by RIVERA Lina/);assert.ok(html.includes('&lt;img'));assert.ok(!html.includes('<img'));
 });
+
+
+function sellerSandbox(withCore) {
+  const sb={console};vm.createContext(sb);
+  if(withCore)vm.runInContext(fs.readFileSync(path.join(__dirname,'../ingauge-audit-core.js'),'utf8'),sb);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../manual-upsells.js'),'utf8'),sb);
+  return sb.ManualUpsells;
+}
+for(const withCore of [false,true]) {
+  const mode=withCore?'with shared identity resolver':'standalone report';
+  test('seller identity rejects full-name subsets '+mode,()=>{
+    const api=sellerSandbox(withCore),people=[{id:'1',name:'John Paul Smith',activeStatus:'NORMAL'}];
+    const seller=api.sellerOf({REFERENCE:'Upsell ** John Smith',CASHIER_NAME:'John Smith'},people);
+    assert.equal(seller.name,'John Smith');assert.equal(seller.mapped,false);assert.equal(seller.employeeId,'');assert.match(seller.warning,/not uniquely mapped/);
+    const f=fixtures();f.j.REFERENCE='Upsell ** John Smith';f.j.CASHIER_NAME='John Smith';
+    const row=api.reconcile([f.j],[f.r],[f.g],{contributors:people}).rows[0];
+    assert.equal(row.bucket,'review');assert.equal(row.seller.mapped,false);
+  });
+  test('ambiguous and repeated-letter note names stay unresolved '+mode,()=>{
+    const api=sellerSandbox(withCore),people=[{id:'1',name:'John Smith'},{id:'2',name:'John Jones'}];
+    for(const name of ['John','Jonn']) {
+      const seller=api.sellerOf({REFERENCE:'Upsell ** '+name,CASHIER_NAME:name},people);
+      assert.equal(seller.mapped,false);assert.equal(seller.employeeId,'');
+    }
+    const suggested=api.sellerOf({REFERENCE:'Upsell ** Turaab',CASHIER_NAME:'Turaab'},[{id:'3',name:'Turab Shah'}]);
+    assert.equal(suggested.mapped,false);assert.equal(suggested.employeeId,'');
+  });
+  test('notes keep priority and expose the distinct posting contributor '+mode,()=>{
+    const api=sellerSandbox(withCore),people=[{id:'1',name:'John Smith'},{id:'2',name:'John Paul Smith'}];
+    const seller=api.sellerOf({REFERENCE:'Upsell ** John Smith',CASHIER_NAME:'John Paul Smith'},people);
+    assert.equal(seller.mapped,true);assert.equal(seller.employeeId,'1');assert.equal(seller.name,'John Smith');
+    assert.match(seller.warning,/differs from the posting user/);assert.match(seller.explanation,/Credit John Smith.*posted by John Paul Smith/);
+  });
+  test('exact full names and unique note names retain the correct contributor '+mode,()=>{
+    const api=sellerSandbox(withCore),people=[{id:'1',name:'Lina RIVERA'}];
+    for(const name of ['Lina','RIVERA Lina']) {
+      const seller=api.sellerOf({REFERENCE:'Upsell ** '+name,CASHIER_NAME:'RIVERA Lina'},people);
+      assert.equal(seller.mapped,true);assert.equal(seller.employeeId,'1');assert.equal(seller.warning,'');
+      const f=fixtures();f.j.REFERENCE='Upsell ** '+name;f.j.CASHIER_NAME='RIVERA Lina';
+      const row=api.reconcile([f.j],[f.r],[f.g],{contributors:people}).rows[0];
+      assert.equal(row.bucket,'add','a uniquely resolved note/posting identity stays ready');
+    }
+    const duplicates=api.sellerOf({REFERENCE:'Upsell ** Lina',CASHIER_NAME:'Lina'},[{id:'1',name:'Lina RIVERA'},{id:'2',name:'Lina RIVERA'}]);
+    assert.equal(duplicates.mapped,false);assert.equal(duplicates.employeeId,'');
+  });
+}

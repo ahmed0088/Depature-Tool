@@ -196,3 +196,17 @@ test('parallel lock and duplicate checks retain both financial holds before a re
  if(which==='clear'){const result=await portal.testOperation(op,s);assert.equal(result.payload.totalUpsellAmount,110);}else await assert.rejects(portal.testOperation(op,s),which==='locked'?/period is locked/:/already represents/);assert.equal(portal.sent,false);assert.equal(waiting.length,2);if(which!=='clear')assert.equal(portal.preflight,undefined);
  }
 });
+
+test('uncertain seller confirmation is bound to the actual reviewed contributor',()=>{
+ const s=snapshot(),op=edit(s,{requireAssignment:true,assignmentReviewed:false});
+ assert.match(C.operationError(op,s),/explicitly assign/);
+ op.assignmentReviewed=true;assert.match(C.operationError(op,s),/explicitly assign/);
+ op.assignmentContributorId=op.contributorId;assert.equal(C.operationError(op,s),'');
+ op.contributorId='9';assert.match(C.operationError(op,s),/explicitly assign/);
+ op.assignmentContributorId='9';assert.equal(C.operationError(op,s),'');
+});
+
+test('overriding a uniquely note-identified contributor needs a recorded reason',()=>{
+ const s=snapshot(),op=edit(s,{contributorId:'9',sellerCredit:{recommendedContributorId:'5'}});
+ assert.match(C.operationError(op,s),/differ from.*Opera note/);op.reason='The supervisor verified the original note was incorrect.';assert.equal(C.operationError(op,s),'');
+});
