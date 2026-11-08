@@ -95,10 +95,10 @@ class InGaugeAccount {
     if(!hotel||!group||hotel.name!==b.property||group.name!==b.department)throw new PortalError('The exact reviewed hotel and department were not verified in this account.');
     if(group.retail||group.fnb)throw new PortalError('This automation requires the hotel Front Desk workflow. Retail and F&B need their own quantity model.');
     this.scopeTenant=b.tenantId;this.headers={...this.headers,tenantid:b.tenantId};this.tenantId=b.tenantId;
-    const config=this.data(await this.read(API+'tenantLocation/secure/'+b.propertyId));
-    if(C.id(config.id)!==b.propertyId||C.id(config.tenantId)!==b.tenantId)throw new PortalError('The live property configuration differs from the reviewed binding.');
     const query='query{respData:findUserTenantRoleWithOpenRoutes(userTenantRoleSearchForm:{industryId:'+Number(this.headers.industryid||1)+',tenantId:'+b.tenantId+',userId:'+this.actor.id+',locationId:'+b.propertyId+',departmentId:'+b.departmentId+'}){role{rolePermissions{name} roleIndustryRoute{url}}}}';
-    const access=await this.read('/m-api/account/user-tenant-role/gql',{query}),roles=access.data?.respData;
+    const [configResponse,access]=await Promise.all([this.read(API+'tenantLocation/secure/'+b.propertyId),this.read('/m-api/account/user-tenant-role/gql',{query})]);
+    const config=this.data(configResponse),roles=access.data?.respData;
+    if(C.id(config.id)!==b.propertyId||C.id(config.tenantId)!==b.tenantId)throw new PortalError('The live property configuration differs from the reviewed binding.');
     if(!Array.isArray(roles)||!roles.length)throw new PortalError('Could not verify permissions for this property.');
     const paths=new Set(roles.flatMap(r=>(r.role?.roleIndustryRoute||[]).map(x=>x.url))),names=new Set(roles.flatMap(r=>(r.role?.rolePermissions||[]).map(x=>x.name)));
     const can=suffix=>paths.has('/metrics/productMetricAuditTrail/'+suffix)||paths.has('/metrics/productMetrics/'+suffix);
@@ -171,12 +171,13 @@ class InGaugeAccount {
     const scope=await this.scope(snapshot.binding),[products,contributors]=await Promise.all([this.verifyReviewedProduct(op,snapshot),this.contributors(scope.binding,{refresh:true})]),fresh={...snapshot,...scope,products,contributors};
     const error=C.operationError(op,fresh);if(error)throw new PortalError(error);
     const v=op.action==='add'||op.action==='edit'?op.values:C.values(current);
-    const locked=this.data(await this.read(API+'productMetric/secure/isLocked?'+new URLSearchParams({tenantLocationId:scope.binding.propertyId,arrivalDate:v.arrival,departureDate:v.departure,businessDate:v.businessDate,metricDate:v.businessDate})));
+    const [lockResponse,records]=await Promise.all([
+      this.read(API+'productMetric/secure/isLocked?'+new URLSearchParams({tenantLocationId:scope.binding.propertyId,arrivalDate:v.arrival,departureDate:v.departure,businessDate:v.businessDate,metricDate:v.businessDate})),
+      ['add','edit'].includes(op.action)?this.search(scope.binding,'2000-01-01','2099-12-31',op.confirmation):Promise.resolve([])
+    ]);
+    const locked=this.data(lockResponse);
     if(typeof locked!=='boolean'||locked)throw new PortalError('This accounting period is locked or its lock state is unknown. Use IN-Gauge’s adjustment workflow.');
-    if(['add','edit'].includes(op.action)){
-      const records=await this.search(scope.binding,'2000-01-01','2099-12-31',op.confirmation);
-      if(C.duplicates(op,records.filter(r=>String(r.id)!==String(op.recordId||'')),fresh.products).length)throw new PortalError('An existing request or product already represents this sale. It was not duplicated.');
-    }
+    if(['add','edit'].includes(op.action)&&C.duplicates(op,records.filter(r=>String(r.id)!==String(op.recordId||'')),fresh.products).length)throw new PortalError('An existing request or product already represents this sale. It was not duplicated.');
     const checked={current,snapshot:fresh,payload:['add','edit'].includes(op.action)?C.payload(op,fresh,current):null};this.preflight={key:C.stable(op),binding:C.stable(snapshot.binding),at:Date.now(),checked};return checked;
   }
   async apply(op,snapshot){

@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 566, items: [
+    { ico: '⚡', title: 'Find, edit and apply in three steps',
+      what: 'Edit a package directly from live IN-Gauge data, or switch to Check Opera reports for an audit. Hotel setup and past history are tucked away. Package, seller, charge and status come first in the editor; stay details remain prefilled below.',
+      does: 'Save & select prepares a validated edit without sending it. Prepare several edits and apply them together after review. Search keeps the same input, renders a short page of matches, and reuses loaded data. Saved edits reopen with your changes, and cancelled edits leave no draft.' },
+    { ico: '✓', title: 'Less repeated work; the same live financial checks',
+      what: 'Startup reads are parallel, history loads on demand, and cloud dispatch skips a redundant request. Independent property/permission and lock/duplicate reads run together.',
+      does: 'The selected hotel is shown again before Apply. Editing is locked during an active run and stale data must be refreshed. Live permissions, sellers, amounts, duplicate checks, locks, final verification and safe cancellation remain enforced.' },
+  ] },
   { v: 565, items: [
     { ico: '☁️', title: 'The Neorcha look for your IN-Gauge console',
       what: 'IN-Gauge now uses a compact cloud window with the same blue progress bar, highlighted steps and dark live console as Neorcha. Activity lines have timestamps and coloured labels.',

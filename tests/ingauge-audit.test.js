@@ -182,3 +182,17 @@ test('portal cancellation interrupts reads before transport, but never interrupt
 test('run stages report preflight before applying, with no apply stage for held or read-only operations',async()=>{
  const s=snapshot(),p=plan(s,[edit(s,{action:'approve'})]);for(const options of [{},{changed:true},{readOnly:true}]){const d=deps(s,options),stages=[];d.test=!!options.readOnly;d.portal.progress=async(stage,note)=>stages.push({stage,note});await execute(p,s,d);assert.equal(stages[0].stage,'preflight');assert.equal(stages.some(x=>x.stage==='apply'),!options.changed&&!options.readOnly);if(!options.changed&&!options.readOnly)assert(stages.at(-1).note.includes('verifying change 1 of 1'));}
 });
+
+test('live property settings and permissions load together and still reject a mismatched hotel', {timeout:2000}, async()=>{
+ for(const wrong of [false,true]){const s=snapshot(),portal=new InGaugeAccount({context:()=>({})},s.binding.portalUrl);portal.actor={id:'5'};portal.headers={industryid:'1'};portal.discover=async()=>({hotels:[{id:'2',tenantId:'1',name:'Example Hotel',departments:[{id:'3',name:'Front Desk'}]}]});const waiting=[];
+ portal.read=path=>new Promise(resolve=>{const config=path.includes('tenantLocation');waiting.push(()=>resolve(config?{status:'SUCCESS',data:{id:wrong?99:2,tenantId:1,localCurrencyCode:'AED',hotelMetricsDataType:'DAILY',productMetricsValidationType:'BUSINESS_DATE',maxProductCharge:200}}:{data:{respData:[{role:{rolePermissions:[],roleIndustryRoute:[{url:'/metrics/productMetrics/edit'}]}}]}}));if(waiting.length===2)waiting.forEach(done=>done());});
+ if(wrong)await assert.rejects(portal.scope(s.binding),/live property configuration/);else{const result=await portal.scope(s.binding);assert.equal(result.permissions.canEdit,true);assert.equal(result.permissions.canAdd,false);assert.equal(result.settings.currency,'AED');}assert.equal(waiting.length,2);
+ }
+});
+test('parallel lock and duplicate checks retain both financial holds before a request can be sent', {timeout:2000}, async()=>{
+ for(const which of ['locked','duplicate','clear']){const s=snapshot(),op=edit(s,{values:{...C.values(s.records[0]),unitCents:11000,totalCents:11000}}),portal=new InGaugeAccount({context:()=>({})},s.binding.portalUrl),waiting=[];
+ portal.readRecord=async()=>s.records[0];portal.scope=async()=>({binding:s.binding,settings:s.settings,permissions:s.permissions});portal.verifyReviewedProduct=async()=>s.products;portal.contributors=async()=>s.contributors;
+ const gate=value=>new Promise(resolve=>{waiting.push(()=>resolve(value));if(waiting.length===2)waiting.forEach(done=>done());});portal.read=path=>{assert(path.includes('/isLocked'));return gate({status:'SUCCESS',data:which==='locked'});};portal.search=()=>gate(which==='duplicate'?[{...s.records[0],id:'101'}]:[]);
+ if(which==='clear'){const result=await portal.testOperation(op,s);assert.equal(result.payload.totalUpsellAmount,110);}else await assert.rejects(portal.testOperation(op,s),which==='locked'?/period is locked/:/already represents/);assert.equal(portal.sent,false);assert.equal(waiting.length,2);if(which!=='clear')assert.equal(portal.preflight,undefined);
+ }
+});
