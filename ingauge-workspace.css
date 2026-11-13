@@ -40,3 +40,80 @@
 
 .iga-simple .mt-tools>.btn{box-sizing:border-box;width:100%;max-width:100%}.iga-simple label.mt-confirm{display:flex!important;align-items:flex-start;gap:10px;font-weight:400;font-size:.78rem}.iga-simple label.mt-confirm>input{flex:0 0 18px;width:18px;min-width:18px;height:18px;margin:2px 0 0}.iga-simple label.mt-confirm>span{display:block;flex:1;min-width:0;line-height:1.55}
 .iga-simple label.mt-confirm{flex-direction:row!important}.iga-simple label.mt-confirm>span{font-weight:400}
+
+/* Personal IN-Gauge controls, kept separate from financial review and evidence. */
+.iga-header-tools{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex:0 0 auto;flex-wrap:wrap;max-width:340px}
+.iga .iga-settings-trigger{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:105px;padding:10px 14px;border:1px solid var(--border,#dce0ea);border-radius:12px;background:var(--card,#fff);color:var(--text,#202535);box-shadow:none;font-size:.82rem;font-weight:650;white-space:nowrap;cursor:pointer;touch-action:manipulation}
+.iga-settings-trigger>svg{width:17px;height:17px;flex:none}
+.iga-settings-trigger:focus-visible{outline:2px solid var(--accent,#4f67e8);outline-offset:3px}
+.iga-settings-trigger[aria-expanded=true]{border-color:var(--accent,#4f67e8);background:color-mix(in srgb,var(--accent,#4f67e8) 10%,var(--card,#fff))}
+#igSettingsOverlay{--ig-accent:var(--accent,#4f67e8);position:fixed;inset:0;z-index:12300;display:flex;align-items:stretch;justify-content:flex-end;padding:14px;box-sizing:border-box;background:#080d1b80;backdrop-filter:blur(4px);color:var(--text,#202535);isolation:isolate}
+#igSettingsOverlay[hidden]{display:none!important}
+#igSettingsOverlay *{box-sizing:border-box}
+#igSettingsOverlay .iga-settings-panel{display:flex;flex-direction:column;width:min(510px,100%);max-width:100%;max-height:calc(100dvh - 28px);min-height:0;overflow:hidden;border:1px solid var(--border,#dce0ea);border-radius:21px;background:var(--card,#fff);box-shadow:0 20px 70px #0005;font:inherit;color:inherit}
+#igSettingsOverlay .iga-settings-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex:none;padding:25px 24px 20px;border-bottom:1px solid var(--border,#dce0ea);background:var(--card,#fff)}
+#igSettingsOverlay .iga-settings-header h2{margin:0;font-size:1.35rem;font-weight:750;line-height:1.25;letter-spacing:-.025em}
+#igSettingsOverlay .iga-settings-header p{margin:7px 0 0;font-size:.8rem;line-height:1.5;color:var(--text2,#657086)}
+#igSettingsOverlay .iga-settings-header>button{display:grid;place-items:center;flex:none;width:44px;height:44px;margin:-5px -5px 0 0;padding:0;border:1px solid var(--border,#dce0ea);border-radius:12px;background:var(--bg2,var(--bg,#f8f9fc));color:inherit;font:inherit;font-size:1.5rem;line-height:1;cursor:pointer;touch-action:manipulation}
+#igSettingsOverlay .iga-settings-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:20px 24px 25px;scrollbar-gutter:stable}
+#igSettingsOverlay .iga-settings-context{margin:0 0 18px;padding:12px 14px;border:1px solid var(--border,#dce0ea);border-radius:12px;background:var(--bg2,var(--bg,#f8f9fc));font-size:.78rem;line-height:1.55;color:var(--text2,#657086);overflow-wrap:anywhere}
+#igSettingsOverlay .iga-settings-context b{display:block;color:var(--text,#202535);font-size:.82rem;font-weight:650;margin-bottom:2px}
+#igSettingsOverlay .iga-settings-group{margin:0 0 17px;min-width:0;padding:0;border:1px solid var(--border,#dce0ea);border-radius:15px;overflow:hidden;background:var(--card,#fff)}
+#igSettingsOverlay .iga-settings-group>h3,#igSettingsOverlay .iga-settings-group>summary{margin:0;padding:15px 16px;font-size:.84rem;font-weight:750;line-height:1.4;color:var(--text,#202535);background:var(--bg2,var(--bg,#f8f9fc))}
+#igSettingsOverlay .iga-settings-group>h3{border-bottom:1px solid var(--border,#dce0ea)}
+#igSettingsOverlay .iga-settings-group>summary{cursor:pointer;min-height:50px;touch-action:manipulation;list-style-position:inside}
+#igSettingsOverlay .iga-settings-group[open]>summary{border-bottom:1px solid var(--border,#dce0ea)}
+#igSettingsOverlay .iga-settings-group-body{padding:0}
+#igSettingsOverlay .iga-settings-row{display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:76px;margin:0;padding:14px 16px;cursor:pointer;touch-action:manipulation;text-align:left;font:inherit}
+#igSettingsOverlay .iga-settings-row+.iga-settings-row{border-top:1px solid var(--border,#dce0ea)}
+#igSettingsOverlay .iga-settings-copy{display:block;flex:1;min-width:0}
+#igSettingsOverlay .iga-settings-copy>b{display:block;font-size:.85rem;font-weight:650;line-height:1.4;color:var(--text,#202535)}
+#igSettingsOverlay .iga-settings-copy>small{display:block;margin-top:4px;font-size:.75rem;font-weight:400;line-height:1.5;color:var(--text2,#657086);overflow-wrap:anywhere}
+#igSettingsOverlay input[role=switch]{appearance:none;-webkit-appearance:none;display:block;position:relative;flex:0 0 45px;width:45px;height:27px;min-width:45px;margin:0;border:1px solid var(--border,#cbd1dd);border-radius:999px;background:color-mix(in srgb,var(--text2,#657086) 25%,var(--bg2,var(--bg,#f8f9fc)));box-shadow:inset 0 1px 2px #0001;cursor:pointer;transition:background .15s ease,border-color .15s ease;touch-action:manipulation}
+#igSettingsOverlay input[role=switch]::before{content:'';position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:var(--card,#fff);box-shadow:0 1px 3px #0004;transition:transform .15s ease}
+#igSettingsOverlay input[role=switch]:checked{background:var(--ig-accent);border-color:var(--ig-accent)}
+#igSettingsOverlay input[role=switch]:checked::before{transform:translateX(18px)}
+#igSettingsOverlay input[role=switch]:disabled{cursor:default;opacity:.55}
+#igSettingsOverlay button:focus-visible,#igSettingsOverlay input:focus-visible,#igSettingsOverlay select:focus-visible,#igSettingsOverlay summary:focus-visible{outline:2px solid var(--ig-accent);outline-offset:3px}
+#igSettingsOverlay .iga-settings-start{display:grid;gap:8px;margin:0 0 18px;font-size:.82rem;font-weight:650;line-height:1.5}
+#igSettingsOverlay .iga-settings-start select{display:block;width:100%;min-width:0;min-height:46px;margin:0;padding:11px 13px;border:1px solid var(--border,#dce0ea);border-radius:11px;background:var(--bg2,var(--bg,#f8f9fc));color:var(--text,#202535);font:inherit;font-size:1rem}
+#igSettingsOverlay .iga-settings-note{margin:0;padding:13px 14px;border-left:3px solid var(--ig-accent);border-radius:0 10px 10px 0;background:color-mix(in srgb,var(--ig-accent) 8%,var(--card,#fff));color:var(--text2,#657086);font-size:.75rem;line-height:1.6}
+#igSettingsOverlay .iga-settings-error{margin:0 0 16px;padding:12px 14px;border:1px solid color-mix(in srgb,var(--danger,#b53a35) 35%,transparent);border-radius:11px;background:color-mix(in srgb,var(--danger,#b53a35) 8%,var(--card,#fff));color:var(--danger,#b53a35);font-size:.8rem;line-height:1.6;overflow-wrap:anywhere}
+#igSettingsOverlay .iga-settings-error:empty{display:none}
+#igSettingsOverlay .iga-settings-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:none;margin:0;padding:16px 24px;border-top:1px solid var(--border,#dce0ea);background:var(--card,#fff)}
+#igSettingsOverlay .iga-settings-footer .btn{min-height:44px;padding:11px 16px;border-radius:11px;font:inherit;font-size:.8rem;font-weight:650;cursor:pointer;touch-action:manipulation}
+#igSettingsOverlay .iga-settings-footer .gold{min-width:94px;background:var(--ig-accent);border:1px solid var(--ig-accent);color:var(--accent-text,#111);box-shadow:none}
+#igSettingsOverlay .iga-settings-footer .btn:disabled{opacity:.5;cursor:default}
+.iga.iga-compact .iga-list{gap:9px}
+.iga.iga-compact .iga-card{padding:14px;border-radius:12px}
+.iga.iga-compact .iga-change{margin:12px 0;padding:11px;gap:10px}
+.iga.iga-compact .iga-facts{margin:10px 0;gap:7px 14px}
+.iga.iga-compact .iga-card details{margin:9px 0 12px}
+.iga.iga-hints-off [data-ig-optional],.iga.iga-hints-off .iga-intro{display:none!important}
+@media(max-width:650px){
+  .iga-header-tools{order:-1;max-width:none;width:100%;justify-content:flex-end;gap:8px}
+  .iga-simple-header>.iga-settings-trigger{order:-1;align-self:flex-end}
+  .iga .iga-settings-trigger{min-width:102px;padding:10px 13px}
+  #igSettingsOverlay{padding:0;background:#080d1ba0}
+  #igSettingsOverlay .iga-settings-panel{width:100%;height:100dvh;max-height:100dvh;border-width:0;border-radius:0}
+  #igSettingsOverlay .iga-settings-header{padding:calc(19px + env(safe-area-inset-top,0px)) 19px 16px;gap:14px}
+  #igSettingsOverlay .iga-settings-header h2{font-size:1.25rem}
+  #igSettingsOverlay .iga-settings-body{padding:17px 16px 23px;scrollbar-gutter:auto}
+  #igSettingsOverlay .iga-settings-row{padding:14px;gap:14px;min-height:77px}
+  #igSettingsOverlay .iga-settings-group>h3,#igSettingsOverlay .iga-settings-group>summary{padding:14px}
+  #igSettingsOverlay .iga-settings-footer{padding:13px 16px calc(13px + env(safe-area-inset-bottom,0px));gap:10px}
+  #igSettingsOverlay .iga-settings-footer .btn{flex:1;min-width:0;font-size:.8rem}
+  .iga.iga-compact .iga-card{padding:12px}
+}
+@media(prefers-reduced-motion:reduce){#igSettingsOverlay input[role=switch],#igSettingsOverlay input[role=switch]::before{transition:none}}
+#igSettingsOverlay .iga-settings-header .iga-settings-context{margin:7px 0 0;padding:0;border:0;border-radius:0;background:none;font-size:.75rem;font-weight:400;line-height:1.55}
+#igSettingsOverlay .iga-settings-group>.iga-settings-context{margin:0;padding:14px 16px 6px;border:0;border-radius:0;background:none}
+#igSettingsOverlay .iga-settings-group>[data-ig-settings-hotel]{min-height:44px;max-width:calc(100% - 32px);margin:6px 16px 16px;padding:10px 14px;font:inherit;font-size:.8rem;font-weight:650;color:var(--text,#202535);background:var(--bg2,var(--bg,#f8f9fc));border:1px solid var(--border,#dce0ea);border-radius:10px;cursor:pointer;touch-action:manipulation}
+#igSettingsOverlay .iga-settings-note{margin-bottom:17px}
+#igSettingsOverlay .iga-settings-footer{position:relative;bottom:auto}
+#igSettingsOverlay .iga-settings-landing-options{display:grid;grid-template-columns:1fr;gap:7px;padding:8px 14px 14px}
+#igSettingsOverlay .iga-settings-landing-options>label{display:flex;align-items:center;gap:11px;min-height:46px;margin:0;padding:10px 12px;border:1px solid var(--border,#dce0ea);border-radius:10px;background:var(--bg2,var(--bg,#f8f9fc));font-size:.8rem;font-weight:500;line-height:1.4;cursor:pointer;touch-action:manipulation}
+#igSettingsOverlay .iga-settings-landing-options>label:has(input:checked){border-color:var(--ig-accent);background:color-mix(in srgb,var(--ig-accent) 8%,var(--card,#fff));font-weight:650}
+#igSettingsOverlay .iga-settings-landing-options input[type=radio]{appearance:auto;-webkit-appearance:radio;display:block;position:static;flex:0 0 18px;width:18px;height:18px;min-width:18px;min-height:18px;margin:0;padding:0;border:0;box-shadow:none;accent-color:var(--ig-accent);cursor:inherit}
+#igSettingsOverlay .iga-settings-error{position:sticky;top:0;z-index:2;background:var(--card,#fff);box-shadow:0 3px 14px #0002}
+body:has(>#igSettingsOverlay:not([hidden])){overflow:hidden;overscroll-behavior:none}

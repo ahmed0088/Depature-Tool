@@ -42,6 +42,11 @@ jobs:
       - name: Reviewed sales automation guards
         run: node tests/manual-sales-automation.test.js
 
+      - name: Flexible IN-Gauge settings
+        run: |
+          node tests/ingauge-settings.test.js
+          node tests/ingauge-settings.browser.test.js
+
       - name: Independent audit hotels
         run: |
           node tests/package-target-context.test.js

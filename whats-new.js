@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 575, items: [
+    { ico: '⚙️', title: 'Your IN-Gauge tool, your settings',
+      what: 'Settings is now at the top. Switch tools, allowed changes, charts, history and extra guidance on or off, choose compact cards and set your start page.',
+      does: 'Preferences stay separate for each hotel and account on this device. Changes apply immediately; reset defaults restores the original layout. Hotel verification, seller review, live amount checks and final confirmation always stay enforced.' }
+  ] },
   { v: 574, items: [
     { ico: '🏨', title: 'Use any hotel in your IN-Gauge account',
       what: 'Choose Mercure, Adagio, Ibis or another accessible hotel directly. You no longer need a matching HotelOps hotel space.',
