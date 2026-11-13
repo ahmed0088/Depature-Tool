@@ -1,6 +1,6 @@
 # Reviewed IN-Gauge audit
 
-Open **Package Audit → IN-Gauge automation**. An owner or manager links the current HotelOps space to an exact accessible IN-Gauge property and Front Desk department. The account's products and contributors are discovered at runtime; names and numeric IDs are not embedded in the application. The portal URL is editable within the verified IN-Gauge HTTPS provider.
+Open **Package Audit → IN-Gauge automation**. An owner or manager selects an exact accessible IN-Gauge property and Front Desk department. No matching HotelOps hotel space is required. The account's products and contributors are discovered at runtime; names and numeric IDs are not embedded in the application. The portal URL is editable within the verified IN-Gauge HTTPS provider.
 
 1. **Find or upload.** Edit a package searches the loaded live snapshot by confirmation, room, package or seller; a missing, expired or invalidated snapshot is fetched automatically. Choose Check Opera reports to use the original manual/automatic audit inputs and rules. Manual, Automatic and Both remain explicit scopes.
 2. **Edit and review.** Common fields come first, with prefilled stay dates, room and notes under an expander. Save & select validates and stages the change; it does not send a financial request. Repeat for several packages to prepare one batch. Cancelling a new edit leaves no draft, and reopening an unsent edit preserves its saved values.
@@ -122,3 +122,12 @@ Monthly totals shows journal upload and Compare totals, monthly amount bars, pen
 Review & fix shows required reports and compact scope choices. Report/date settings collapse after analysis; held and ready cases remain distinct, with bulk selection next to the proposals. Find a sale keeps direct search visible and places dates/type/refresh controls in Search options. Saved Apply controls appear only for selections or relevant Apply activity, and saving still preserves tab/search/scroll. Common errors and compact run status remain accessible from every screen; monthly fetch results return to Monthly totals. Hotel setup opens when unlinked and stays tucked away once linked.
 
 The presentation changes do not weaken seller confirmation, reviewed-plan validation, identity matching, duplicate checks or live financial safeguards. `tests/ingauge-simple-ui.browser.test.js` covers task separation, draft retention, contextual Apply, desktop/phone layout and no external actions from navigation.
+
+
+### Any accessible IN-Gauge hotel (v574)
+
+Choose the hotel and department under connection settings and press **Use selected hotel**. The authenticated HotelOps account remains private storage; its name or brand does not restrict the financial target. The worker verifies the selected portal, tenant, property and department against the signed-in IN-Gauge account on every job. Existing permissions, reviewed plan, target lock, product/contributor membership, duplicate protection and final readback checks remain enforced.
+
+The previously linked hotel keeps its original Package Audit and Manual Sales inputs, settings, memory, pins and aliases. Other targets use independent report sessions and persisted audit contexts keyed by normalized portal URL, tenant, property and department. They use the same audit engine with default rules, target-specific saved context and live target contributors; they never import another hotel's staff decisions or reports. Saving an Opera login mapping writes only to that target's context. An account with no earlier linked hotel starts with an independent context.
+
+Changing target clears the central report session, snapshot, proposals, queries and displayed job. Upload the selected hotel's reports again. Switching is blocked while a run or report upload is active and while saved changes remain selected. The legacy Package Audit data remains intact. Change history is filtered by the full target identity. No financial actions were submitted during verification; cross-hotel isolation and reviewed worker dispatch were exercised with synthetic data.

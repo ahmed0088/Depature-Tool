@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 574, items: [
+    { ico: '🏨', title: 'Use any hotel in your IN-Gauge account',
+      what: 'Choose Mercure, Adagio, Ibis or another accessible hotel directly. You no longer need a matching HotelOps hotel space.',
+      does: 'Each selected hotel keeps its own audit reports, seller mappings, decisions and change history. The original Package Audit keeps its existing data. Hotel, department, product and contributor checks still run before any reviewed change.' }
+  ] },
   { v: 573, items: [
     { ico: '✨', title: 'A simpler place to manage your upsells',
       what: 'Choose Monthly totals, Review & fix, or Find a sale. Each task now has its own focused view instead of one long page of controls.',

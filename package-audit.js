@@ -486,9 +486,10 @@ function _pkgIsChrome(text, words) {
 // confirmation (and the tail of the user's name) continues at the top of
 // the next page, which is why rows are stitched across the page break
 // before any events are read out of them.
-async function _pkgParsePdfEvents(pdf, onPage) {
+async function _pkgParsePdfEvents(pdf, onPage, options) {
   const rows = []; // every data row, in reading order across all pages
-  const chromeWords = _pkgChromeWords();
+  const chromeWords = options && Array.isArray(options.chromeWords) ? options.chromeWords : _pkgChromeWords();
+  const deleted = options && options.deleted ? options.deleted : pkgDeleted;
 
   for (let p = 1; p <= pdf.numPages; p++) {
     if (onPage) onPage(p, pdf.numPages);
@@ -578,7 +579,7 @@ async function _pkgParsePdfEvents(pdf, onPage) {
       if (cur.lastOfPage) carry = cur;
       continue;
     }
-    _pkgReadEvents(events, confMatch[1], cur);
+    _pkgReadEvents(events, confMatch[1], cur, deleted);
   }
   return events;
 }
@@ -596,7 +597,7 @@ function _pkgNormDate(s) {
 // clause per product code — rather than scanning a fixed window after the
 // ADDED marker — is what keeps prices and dates attached to the right
 // product when one entry both removes and adds a package.
-function _pkgReadEvents(events, conf, row) {
+function _pkgReadEvents(events, conf, row, deleted = pkgDeleted) {
   const details  = {}; // code -> {from, to, price}
   const added    = [];
   const attached = [];
@@ -613,7 +614,7 @@ function _pkgReadEvents(events, conf, row) {
   let m;
   const delRe = /PRODUCT\s+([A-Z0-9]+)\s+DELETED\b/gi;
   while ((m = delRe.exec(row.desc))) {
-    const l = (pkgDeleted[conf] = pkgDeleted[conf] || []);
+    const l = (deleted[conf] = deleted[conf] || []);
     if (!l.some(x => x.code === m[1] && x.ts === row.ts)) l.push({ code: m[1], ts: row.ts });
   }
   const addedRe = /PRODUCT\s+([A-Z0-9]+)\s+ADDED\b/gi;
@@ -751,8 +752,17 @@ function _pkgFamilyPart(key) {
   return w.length ? w[w.length - 1] : '';
 }
 
+// The original audit keeps its own hotel reports while an independent
+// IN-Gauge target is selected. Only a scoped target computation may use that
+// target's contributor catalog; legacy rules must keep their original scope.
+let _pkgTargetSnapshotOverride;
+function _pkgLiveSnapshot() {
+  if (_pkgTargetSnapshotOverride !== undefined) return _pkgTargetSnapshotOverride;
+  const state = typeof window !== 'undefined' && window.InGaugeWorkspace?.state;
+  return state && !state.independent ? state.snapshot || null : null;
+}
 function _pkgIdentityPeople() {
-  const live=typeof window!=='undefined'&&window.InGaugeWorkspace?.state?.snapshot;
+  const live=_pkgLiveSnapshot();
   if(live?.contributors)return live.contributors;
   const names=[...new Set([...PKG_STAFF,..._pkgReportNames()])].sort();
   return names.map((name,i)=>({id:String(i+1),name,activeStatus:PKG_STAFF_LEFT[name]?'DEACTIVATED':'NORMAL'}));
@@ -770,7 +780,7 @@ function _pkgSameUser(a, b) {
   const rx=_pkgResolveIdentity(a),ry=_pkgResolveIdentity(b);
   if([rx,ry].some(r=>r&&['ambiguous','suggested'].includes(r.state)))return false;
   if(rx?.state==='matched'&&ry?.state==='matched')return rx.person.id===ry.person.id;
-  if(typeof window!=='undefined'&&window.InGaugeWorkspace?.state?.snapshot&&[rx,ry].some(r=>r?.state==='matched'))return false;
+  if(_pkgLiveSnapshot()&&[rx,ry].some(r=>r?.state==='matched'))return false;
   for (const [name, al] of Object.entries(typeof PKG_STAFF_ALIASES !== 'undefined' ? PKG_STAFF_ALIASES : {})) {
     const is = k => _pkgUserKey(name) === k || al.some(t => k.split('-').pop() === t);
     if (is(x) && is(y)) return true;
@@ -1394,7 +1404,7 @@ function _pkgHit(r, k) { (r.ruleHits = r.ruleHits || []).includes(k) || r.ruleHi
 /** Validate the final rule decision, after memory, extensions and explicit pins.
  *  An explicitly blank seller is unresolved; never replace it with an editor's event. */
 function _pkgReviewFinalSellerIdentity(results) {
-  const hasLiveContributors = typeof window !== 'undefined' && !!window.InGaugeWorkspace?.state?.snapshot?.contributors;
+  const hasLiveContributors = !!_pkgLiveSnapshot()?.contributors;
   results.forEach(r => {
     if (r.requestedSale || r.pin || !['credit','review'].includes(r.verdict) || !(r.reassign || r.needsEmployee)) return;
     const seller = Object.prototype.hasOwnProperty.call(r, 'user') ? r.user : r.originEvent?.user;
@@ -1462,7 +1472,7 @@ function _pkgCompute() {
   _pkgApplyPins(normal);          // last: a person's pinned decision beats the log
   _pkgFlagRequestedOverlaps(results);
   _pkgReviewFinalSellerIdentity(results);
-  if(window.InGaugeWorkspace?.state.snapshot)results.forEach(r=>{if(r.pin||r.requestedSale||r.needsProduct||_pkgCodeFamilyFor(r.product))return;r.mappingReview=true;r.verdict='review';r.alreadyComplete=false;r.note='This live product has no verified Opera package family. Confirm its mapping before changing its seller or status.';});
+  if(_pkgLiveSnapshot())results.forEach(r=>{if(r.pin||r.requestedSale||r.needsProduct||_pkgCodeFamilyFor(r.product))return;r.mappingReview=true;r.verdict='review';r.alreadyComplete=false;r.note='This live product has no verified Opera package family. Confirm its mapping before changing its seller or status.';});
   return results;
 }
 
@@ -4478,3 +4488,75 @@ function _pkgStyle3() {
 // The Package Audit styles (tabs, list, rules) are needed before any file is loaded too.
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { try { _pkgStyle2(); _pkgStyle3(); } catch (_) {} });
 else { try { _pkgStyle2(); _pkgStyle3(); } catch (_) {} }
+
+
+// Independent IN-Gauge targets run the existing parser/rules without sharing
+// a HotelOps space's loaded reports, identities, decisions or persistence.
+const _pkgTargetCopy = value => JSON.parse(JSON.stringify(value == null ? {} : value));
+function _pkgTargetLogRange(events) {
+  let min = Infinity, max = 0;
+  Object.values(events || {}).forEach(list => list.forEach(event => {
+    const day = Math.floor((Number(event.ts) || 0) / 10000);
+    if (Number.isFinite(day) && day > 0) { min = Math.min(min, day); max = Math.max(max, day); }
+  }));
+  return { min: min === Infinity ? 0 : min, max };
+}
+async function pkgLoadTargetPdf(files, prior = {}) {
+  const events = _pkgTargetCopy(prior.events || {}), loaded = [...new Set((prior.files || []).map(String))], deleted = {};
+  const selection = files && typeof files.arrayBuffer === 'function' ? [files] : Array.from(files || []);
+  if (selection.length && typeof pdfjsLib === 'undefined') throw new Error('PDF engine not loaded yet. Wait a moment and try again.');
+  const chromeWords = Array.isArray(prior.chrome) ? prior.chrome.map(x => String(x || '').trim().toLowerCase()).filter(Boolean) : [];
+  const hotelName = String(prior.hotelName || '').replace(/\s+/g, ' ').trim();
+  if (hotelName) chromeWords.push(hotelName.split(' ').slice(0, 2).join(' ').toLowerCase());
+  for (const file of selection) {
+    let pdf;
+    try {
+      if (!file || typeof file.arrayBuffer !== 'function') throw new Error('Choose a PDF file.');
+      const data = new Uint8Array(await file.arrayBuffer());
+      pdf = await pdfjsLib.getDocument({ data }).promise;
+      const incoming = await _pkgParsePdfEvents(pdf, undefined, { chromeWords, deleted });
+      _pkgMergeEvents(events, incoming);
+      if (!loaded.includes(String(file.name))) loaded.push(String(file.name));
+    } catch (cause) {
+      const error = new Error('Could not read ' + String(file && file.name || 'Changes Log') + ': ' + (cause && cause.message || 'Invalid PDF'));
+      // Prior input is never mutated. A caller may retain this explicitly
+      // incomplete prefix, but must not count the failing report as loaded.
+      error.partial = { events: _pkgTargetCopy(events), files: loaded.filter(name => name !== String(file && file.name)), range: _pkgTargetLogRange(events) };
+      throw error;
+    } finally { if (pdf && typeof pdf.destroy === 'function') try { await pdf.destroy(); } catch (_) {} }
+  }
+  return { events, files: loaded, range: _pkgTargetLogRange(events) };
+}
+function pkgComputeForTarget({ rows, events = {}, guests = {}, reservationText, context = {} } = {}) {
+  if (!Array.isArray(rows)) throw new Error('A target IN-Gauge table is required.');
+  // Everything below is synchronous: callbacks and Firebase listeners cannot
+  // observe the temporary context. Restoring references also preserves the
+  // legacy UI's caches and loaded report identities exactly.
+  const saved = { pkgUnknowns, pkgDeleted, pkgEvents, pkgResults, pkgPdfFiles, pkgLogRange, pkgGuests, pkgRules,
+    pkgPins, pkgDone, pkgStaffDb, pkgMemory, pkgLearned, pkgReportAt, pkgSettingsRaw, pkgSettings, pkgLastHeaders,
+    _pkgLastRows, _pkgNamesCache, _pkgKeyCache, _pkgTargetSnapshotOverride, PKG_STAFF, PKG_STAFF_ALIASES, PKG_STAFF_FORMER, PKG_STAFF_LEFT,
+    kinds: PKG_KINDS.slice() };
+  try {
+    _pkgTargetSnapshotOverride = typeof window !== 'undefined' ? window.InGaugeWorkspace?.state?.snapshot || null : null;
+    pkgUnknowns = []; pkgDeleted = {}; pkgEvents = _pkgTargetCopy(events); pkgResults = []; pkgPdfFiles = [];
+    pkgLogRange = _pkgTargetLogRange(pkgEvents); pkgGuests = _pkgTargetCopy(guests);
+    pkgRules = Object.assign({}, PKG_RULE_DEFAULTS, _pkgTargetCopy(context.rules || {}));
+    pkgPins = _pkgTargetCopy(context.pins || {}); pkgDone = _pkgTargetCopy(context.done || {});
+    pkgStaffDb = _pkgTargetCopy(context.staff || {}); pkgMemory = _pkgMemClean(_pkgTargetCopy(context.memory || {}));
+    pkgLearned = _pkgTargetCopy(context.learned || {}); pkgReportAt = 0;
+    pkgSettingsRaw = _pkgTargetCopy(context.settings || {}); pkgSettings = _pkgMergeSettings(pkgSettingsRaw);
+    pkgLastHeaders = {}; _pkgLastRows = {}; _pkgNamesCache = { src: null, list: [] }; _pkgKeyCache = { src: null, n: -1, map: new Map() };
+    _pkgSetKinds(pkgSettings.kinds); _pkgApplyStaff();
+    if (reservationText != null) pkgGuests = _pkgParseResDetail(String(reservationText));
+    pkgUnknowns = _pkgParseExcelUnknowns(_pkgTargetCopy(rows));
+    const results = _pkgCompute();
+    const memory = _pkgMemoryBuild(results, pkgMemory, { guests: pkgGuests, by: '', months: _pkgSetting('memMonths') });
+    return { results: _pkgTargetCopy(results), memoryPatch: _pkgTargetCopy(memory.patch), memoryNext: _pkgTargetCopy(memory.next) };
+  } finally {
+    ({ pkgUnknowns, pkgDeleted, pkgEvents, pkgResults, pkgPdfFiles, pkgLogRange, pkgGuests, pkgRules, pkgPins, pkgDone,
+      pkgStaffDb, pkgMemory, pkgLearned, pkgReportAt, pkgSettingsRaw, pkgSettings, pkgLastHeaders, _pkgLastRows,
+      _pkgNamesCache, _pkgKeyCache, _pkgTargetSnapshotOverride, PKG_STAFF, PKG_STAFF_ALIASES, PKG_STAFF_FORMER, PKG_STAFF_LEFT } = saved);
+    PKG_KINDS.splice(0, PKG_KINDS.length, ...saved.kinds);
+  }
+}
+if (typeof window !== 'undefined') Object.assign(window, { pkgLoadTargetPdf, pkgComputeForTarget });

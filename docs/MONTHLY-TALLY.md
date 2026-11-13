@@ -17,3 +17,8 @@ Tests: `node tests/monthly-tally.test.js`, `node tests/monthly-tally.browser.tes
 Catalog product codes are indexed by ID once before reading records, avoiding one catalog scan per unfamiliar product label. A synthetic local Node benchmark (10,000 Opera postings, 10,000 IN-Gauge records, 5,000 catalog products, every record requiring fallback) took approximately 88 ms with the index, versus 816 ms with the previous lookup. This measures calculation time on the development machine, not phone performance or cloud sign-in/fetch latency.
 
 A single-day current-month chart uses a finite centered x-coordinate. Denied/purged/deleted records and unsupported statuses are handled before product mapping warnings; excluded unknown products cannot falsely keep the comparison in scope review. Tests cover excluded amounts, warning relevance, approved/pending catalog fallback and first-day chart coordinates in a mobile browser.
+
+
+## Independent hotel selection (v574)
+
+Monthly totals follows the selected IN-Gauge target, without requiring a matching HotelOps space. A different portal, tenant, property or department resets the comparison controls and uses that target's locally uploaded Opera Journal and live snapshot. Another hotel's legacy journal is never used as a fallback. Switching targets clears loaded report sessions; upload the intended hotel's Journal again before comparing.

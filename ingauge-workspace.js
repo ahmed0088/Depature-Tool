@@ -3,7 +3,7 @@
   'use strict';
   const C=W.InGaugeAuditCore,D=document,el=id=>D.getElementById(id),E=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dubai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-  const S={binding:null,discovery:null,snapshot:null,drafts:new Map(),selected:new Set(),view:'proposals',query:'',from:today().slice(0,7)+'-01',to:today(),busy:false,reviewed:false,readyHash:'',readyAt:0,job:null,tag:'',unwatch:null,error:'',editing:null,runMode:'',runShown:false,scope:'manual',analysisScope:'',analysisDone:false,autoAnalyse:false,history:[],historyLoading:false,historyError:'',cycleAt:0,task:'edit',findAfterFetch:false,limit:20,historyLoaded:false,screen:'monthly'};
+  const S={binding:null,discovery:null,snapshot:null,drafts:new Map(),selected:new Set(),view:'proposals',query:'',from:today().slice(0,7)+'-01',to:today(),busy:false,reviewed:false,readyHash:'',readyAt:0,job:null,tag:'',unwatch:null,error:'',editing:null,runMode:'',runShown:false,scope:'manual',analysisScope:'',analysisDone:false,autoAnalyse:false,history:[],historyLoading:false,historyError:'',cycleAt:0,task:'edit',findAfterFetch:false,limit:20,historyLoaded:false,screen:'monthly',legacyBinding:null,targetKey:'',independent:false,targetContext:{},reports:{},reportFiles:{},targetPdf:{events:{},files:[]},reservationText:'',targetIngauge:null,manualResult:null,autoResults:[],uploading:false,switching:false};
   const db=()=>typeof _ref!=='undefined'?_ref:null,hotel=()=>typeof HOTEL_ID!=='undefined'?String(HOTEL_ID):'',profile=()=>typeof currentProfile!=='undefined'?currentProfile:null;
   const allowed=()=>['owner','manager'].includes(profile()?.role),notify=(m,t)=>W.showToast?.(m,t),money=n=>Number.isSafeInteger(n)?(n/100).toFixed(2):'',hotelName=()=>el('hotelName')?.textContent.trim()||hotel();
   const list=v=>Array.isArray(v)?v:Object.values(v||{}),clone=v=>JSON.parse(JSON.stringify(v));
@@ -11,13 +11,13 @@
   async function github(suffix,options={}){
     const key=localStorage.getItem('ho_gh_start_key_v1');if(!key)throw Error('Set the GitHub start key in Neorcha → Run in the cloud. This workspace reuses it.');
     const r=await fetch('https://api.github.com/repos/ahmed0088/Depature-Tool/actions/workflows/ingauge-audit.yml'+suffix,{...options,headers:{Accept:'application/vnd.github+json','Content-Type':'application/json',Authorization:'Bearer '+key,'X-GitHub-Api-Version':'2022-11-28'}});
-    if(!r.ok)throw Error('GitHub could not access this workflow ('+r.status()+'). Check the start key’s Actions access.');return r.status===204?null:r.json();
+    if(!r.ok)throw Error('GitHub could not access this workflow ('+r.status+'). Check the start key’s Actions access.');return r.status===204?null:r.json();
   }
   function invalidate(){S.reviewed=false;S.readyHash='';S.readyAt=0;}
   function currentPlan(){const operations=[...S.selected].map(k=>S.drafts.get(k)).filter(Boolean);if(operations.some(op=>!inScopeOperation(op)))throw Error('The selection contains a sale outside the chosen mode. Review it again.');return C.validatePlan({schema:2,mode:'apply',hotelId:hotel(),binding:S.binding,snapshotId:S.snapshot?.id,scope:S.scope,operations},S.snapshot);}
   function hydrate(s){s.records=list(s.records);s.products=list(s.products);s.contributors=list(s.contributors);if(s.invalidatedAt||!s.pagination?.verified||s.pagination.total!==s.records.length||s.pagination.read!==s.records.length)s.complete=false;return s;}
   async function job(plan,test=true){
-    if(S.busy)throw Error('Wait for the current cloud job to finish.');if(restoring)throw Error('Restoring your last run. Please wait a moment.');if(!allowed()||!db())throw Error('An owner or manager must start this job.');
+    if(S.busy)throw Error('Wait for the current cloud job to finish.');if(restoring||S.switching||S.uploading)throw Error('Wait for the hotel selection or report upload to finish.');if(!allowed()||!db())throw Error('An owner or manager must start this job.');
     const uid=W.firebase?.auth?.().currentUser?.uid;if(!uid)throw Error('Sign in before starting.');
     S.busy=true;renderScope();renderControls();renderConfiguration();renderProposals();
     try {
@@ -34,25 +34,26 @@
   }
   function watchJob(tag,plan){
     if(S.unwatch)S.unwatch();
-    const ref=db().child('ingauge/jobs/'+tag);let finished=false;
+    const root=db(),hid=hotel(),ref=root.child('ingauge/jobs/'+tag);let finished=false;
+    const current=()=>S.tag===tag&&db()===root&&hotel()===hid&&!S.switching&&(plan.mode==='discover'||C.sameBinding(plan.binding,S.binding));
     const callback=async snap=>{
-      if(S.tag!==tag)return;const report=snap.val();if(!report)return;S.job=report;renderRun();
+      if(!current())return;const report=snap.val();if(!report)return;S.job=report;renderRun();
       if(!finished&&['done','error','stopped'].includes(S.job.state)){
-        finished=true;S.busy=false;S.historyLoaded=false;if(el('igHistoryDetails')?.open)loadHistory();if(S.job.state!=='done'){S.autoAnalyse=false;S.findAfterFetch=false;}
+        finished=true;S.historyLoaded=false;if(el('igHistoryDetails')?.open)loadHistory();if(S.job.state!=='done'){S.autoAnalyse=false;S.findAfterFetch=false;}
         try{
           const test=report.test,hash=report.hash;
           if(plan.mode==='apply'&&typeof test!=='boolean')throw Error('The run’s readiness mode is missing. Refresh and check the selection again.');
           if(S.job.state==='done'&&plan.mode==='discover'){S.discovery=hydrateDiscovery(S.job.result);renderConfiguration();}
           if(S.job.state==='done'&&plan.mode==='snapshot'){
-            const data=(await db().child('ingauge/snapshots/'+S.job.snapshotId).once('value')).val();if(!data?.complete||!C.sameBinding(data.binding,S.binding))throw Error('The fetched snapshot did not match this hotel.');
-            S.snapshot=hydrate(data);S.drafts.clear();S.selected.clear();invalidate();importSnapshot();await db().child('ingauge/latestSnapshot').set(data.id);render();if(S.autoAnalyse){S.autoAnalyse=false;await analyseReports();}else if(S.findAfterFetch){S.findAfterFetch=false;S.view='records';S.limit=20;renderProposals();closeRun();el('igStepReview')?.scrollIntoView({behavior:'smooth',block:'start'});}
+            const data=(await root.child('ingauge/snapshots/'+S.job.snapshotId).once('value')).val();if(!current())return;if(!data?.complete||data.hotelId!==hid||!C.sameBinding(data.binding,S.binding))throw Error('The fetched snapshot did not match this hotel.');
+            S.snapshot=hydrate(data);S.drafts.clear();S.selected.clear();invalidate();importSnapshot();await root.child('ingauge/latestSnapshot').set(data.id);if(!current())return;render();if(S.autoAnalyse){S.autoAnalyse=false;await analyseReports();}else if(S.findAfterFetch){S.findAfterFetch=false;S.view='records';S.limit=20;renderProposals();closeRun();el('igStepReview')?.scrollIntoView({behavior:'smooth',block:'start'});}
           }
           if(plan.mode==='apply'&&test&&S.job.state==='done'){
             if(!/^[a-f0-9]{64}$/.test(hash||''))throw Error('The run’s reviewed-plan hash is missing. Check readiness again.');
-            const checked=(await db().child('ingauge/tests/'+hash).once('value')).val();if(S.tag!==tag)return;S.readyHash=checked?.ready?hash:'';S.readyAt=checked?.at||0;
+            const checked=(await root.child('ingauge/tests/'+hash).once('value')).val();if(!current())return;S.readyHash=checked?.ready?hash:'';S.readyAt=checked?.at||0;
           }
           if(plan.mode==='apply'&&!test){if(S.snapshot&&list(S.job.results).some(r=>['applied','uncertain'].includes(r.state))){S.snapshot.complete=false;S.snapshot.invalidatedAt=Date.now();}invalidate();S.selected.clear();for(const r of list(S.job.results))if(['applied','unchanged'].includes(r.state)){const draft=S.drafts.get(r.key);if(draft)draft.completed=true;}renderProposals();}
-        }catch(error){S.autoAnalyse=false;S.findAfterFetch=false;S.error=error.message;}renderScope();renderConfiguration();renderControls();renderProposals();renderRun();
+        }catch(error){if(current()){S.autoAnalyse=false;S.findAfterFetch=false;S.error=error.message;}}finally{if(current()){S.busy=false;renderScope();renderConfiguration();renderControls();renderProposals();renderRun();}}
       }
     };
     ref.on('value',callback);S.unwatch=()=>ref.off('value',callback);
@@ -60,15 +61,49 @@
   }
   async function poll(tag){if(S.tag!==tag||!S.busy)return;try{const data=await github('/runs?event=workflow_dispatch&per_page=20'),run=data.workflow_runs.find(r=>(r.display_title||'').includes(tag));if(run){S.job.run=run.html_url;renderRun();if(run.status==='completed'&&['queued','running'].includes(S.job.state)){const latest=(await db().child('ingauge/jobs/'+tag).once('value')).val();if(latest&&!['queued','running'].includes(latest.state))return;await db().child('ingauge/jobs/'+tag).update({state:'error',note:'The workflow ended without a final private report. Inspect its run before retrying.'});return;}}}catch(_){}setTimeout(()=>poll(tag),12000);}
   async function discover(){const url=C.portalUrl(el('igPortalUrl').value);await job({schema:2,mode:'discover',hotelId:hotel(),portalUrl:url},true);}
-  async function saveBinding(){
-    if(!allowed())throw Error('An owner or manager must link this hotel.');
-    const property=el('igProperty').value,department=el('igDepartment').value,h=S.discovery?.hotels.find(h=>h.id===property),g=h?.departments.find(g=>g.id===department);
-    if(!h||!g||!el('igBindConfirmed').checked)throw Error('Choose the property and department, then confirm the hotel link.');
-    const brand=s=>(String(s).match(/ibis|adagio|mercure/i)||[''])[0].toLowerCase();if(brand(hotelName())&&brand(h.name)&&brand(hotelName())!==brand(h.name))throw Error('The selected brand differs from this HotelOps hotel. Switch to the correct hotel space first.');
-    S.binding=C.binding({portalUrl:S.discovery.portalUrl,tenantId:h.tenantId,propertyId:h.id,departmentId:g.id,property:h.name,department:g.name});
-    await db().child('ingauge/binding').set({...S.binding,linkedBy:W.firebase.auth().currentUser.uid,linkedAt:Date.now()});S.snapshot=null;S.drafts.clear();S.selected.clear();invalidate();render();el('igControls')?.scrollIntoView({behavior:'smooth',block:'center'});notify('Hotel linked. Next: choose dates and fetch live IN-Gauge.','ok');
+  function targetIdentity(value){const b=C.binding(value);return {portalUrl:b.portalUrl,tenantId:b.tenantId,propertyId:b.propertyId,departmentId:b.departmentId};}
+  const sameTarget=(a,b)=>{try{return C.stable(targetIdentity(a))===C.stable(targetIdentity(b));}catch(_){return false;}};
+  async function targetKey(value){return 't'+(await digest(C.stable(targetIdentity(value)))).slice(0,40);}
+  async function legacyContext(ref){
+    const stored=(await ref.child('ingauge/legacyContext').once('value')).val();if(stored?.schema===1)return stored.binding||null;
+    const previous=(await ref.child('ingauge/binding').once('value')).val(),marker={schema:1,binding:previous||null};if(!allowed())return marker.binding;
+    const node=ref.child('ingauge/legacyContext');
+    if(typeof node.transaction==='function'){const saved=await node.transaction(current=>current||marker);return saved.snapshot.val()?.binding||null;}
+    await node.set(marker);return marker.binding;
   }
-  async function fetchSnapshot(refreshReferenceData=false){if(!S.binding)throw Error('Link the exact IN-Gauge hotel first.');S.from=el('igFrom').value;S.to=el('igTo').value;if(!C.day(S.from)||!C.day(S.to)||S.from>S.to)throw Error('Choose a valid audit period.');await job({schema:2,mode:'snapshot',hotelId:hotel(),binding:C.binding(S.binding),from:S.from,to:S.to,...(refreshReferenceData?{refreshReferenceData:true}:{})},true);}
+  async function prepareTarget(binding,ref){
+    const key=await targetKey(binding),independent=!sameTarget(binding,S.legacyBinding);
+    const context=independent?(await ref.child('ingauge/targets/'+key+'/auditContext').once('value')).val()||{}:{};
+    return {key,independent,context};
+  }
+  function aliases(){return S.independent?S.targetContext.staff||{}:typeof pkgStaffDb!=='undefined'?pkgStaffDb:{};}
+  function clearTargetSession(){
+    closeEditor(false);
+    if(S.unwatch)S.unwatch();S.unwatch=null;S.snapshot=null;S.drafts.clear();S.selected.clear();S.reports={};S.reportFiles={};S.targetPdf={events:{},files:[]};S.reservationText='';S.targetIngauge=null;S.manualResult=null;S.autoResults=[];S.analysisDone=false;S.analysisScope='';S.autoAnalyse=false;S.findAfterFetch=false;S.query='';S.limit=20;S.screen='monthly';S.job=null;S.tag='';S.runMode='';S.runShown=false;S.history=[];S.historyLoaded=false;S.historyError='';invalidate();
+    if(el('igRunWindow'))el('igRunWindow').hidden=true;clearInterval(runClock);runClock=0;
+    for(const kind of ['journal','reservations','changes'])if(el('igFile-'+kind))el('igFile-'+kind).textContent='Choose report';
+  }
+  async function saveBinding(){
+    if(!allowed()||!db())throw Error('An owner or manager must select the audit hotel.');
+    if(S.busy||restoring||S.switching||S.uploading)throw Error('Wait for the current run or report upload before changing the audit hotel.');
+    if(S.selected.size)throw Error('Apply or unselect your saved changes before changing the audit hotel.');
+    const property=el('igProperty').value,department=el('igDepartment').value,h=S.discovery?.hotels.find(h=>h.id===property),g=h?.departments.find(g=>g.id===department);
+    if(!h||!g||!el('igBindConfirmed').checked)throw Error('Choose the property and department, then confirm the hotel to audit.');
+    const next=C.binding({portalUrl:S.discovery.portalUrl,tenantId:h.tenantId,propertyId:h.id,departmentId:g.id,property:h.name,department:g.name}),ref=db(),hid=hotel();
+    S.switching=true;renderConfiguration();
+    try{
+      S.legacyBinding=await legacyContext(ref);const target=await prepareTarget(next,ref);
+      if(db()!==ref||hotel()!==hid)throw Error('The signed-in account changed. Select the audit hotel again.');
+      await ref.child('ingauge/binding').set({...next,linkedBy:W.firebase.auth().currentUser.uid,linkedAt:Date.now()});
+      await ref.child('ingauge/targets/'+target.key+'/binding').set(next);
+      const changed=!C.sameBinding(S.binding,next);if(changed){await ref.child('ingauge/latestSnapshot').set(null);await ref.child('ingauge/latestJob').set(null);}
+      if(db()!==ref||hotel()!==hid)throw Error('The signed-in account changed. Select the audit hotel again.');
+      if(changed)clearTargetSession();
+      S.binding=next;S.targetKey=target.key;S.independent=target.independent;S.targetContext=target.context;S.error='';render();notify(next.property+' selected. Add this hotel’s Opera reports and compare.','ok');
+    }finally{if(db()===ref&&hotel()===hid){S.switching=false;renderConfiguration();renderScope();renderControls();}}
+  }
+
+  async function fetchSnapshot(refreshReferenceData=false){if(!S.binding)throw Error('Select the IN-Gauge hotel first.');S.from=el('igFrom').value;S.to=el('igTo').value;if(!C.day(S.from)||!C.day(S.to)||S.from>S.to)throw Error('Choose a valid audit period.');await job({schema:2,mode:'snapshot',hotelId:hotel(),binding:C.binding(S.binding),from:S.from,to:S.to,...(refreshReferenceData?{refreshReferenceData:true}:{})},true);}
   function tableRows(snapshot){
     const head=['ID','Product','Product ID','Employee','Employee ID','Confirmation no','Room No','Product Charge','Charge Days','Arrival Date','Departure Date','Daily Date( Other Data )','Daily Date','Status','Currency','Tenant Location','Manually Added Record','Created By'];
     return [head,...snapshot.records.map(r=>[r.id,r.product,r.productId,r.seller||'-',r.contributorId,r.confirmation,r.room,r.unitCents===null?'':r.unitCents/100,r.chargeDays,r.arrival,r.departure,r.businessDate,r.businessDate,r.status,snapshot.settings.currency,snapshot.binding.property,r.isManuallyAddedRecord?'Yes':'No',r.raw?.cByIdentity||''])];
@@ -76,6 +111,7 @@
   function importSnapshot(){
     if(!S.snapshot?.complete)return;
     const rows=tableRows(S.snapshot);
+    if(S.independent){S.targetIngauge=S.snapshot.records.length?W.ManualUpsells.parseIngauge(rows):{rows:[],warnings:[]};return;}
     if(W.ManualUpsells)W.ManualUpsells.useLiveSnapshot(S.snapshot,rows);
     if(typeof _pkgLastRows!=='undefined'&&typeof _pkgParseExcelUnknowns==='function'){
       _pkgLastRows.ig=rows;pkgUnknowns=_pkgParseExcelUnknowns(rows);pkgReportAt=S.snapshot.fetchedAt;
@@ -93,16 +129,16 @@
     const op=draftFor(current,r.verdict==='deny'?'deny':'edit','Package Audit');op.operaLogin=decisionSeller||'';op.evidence=[r.note,r.denyReason,r.memoryNote,'Package Audit seller decision: '+(decisionSeller||'Unresolved'),r.originEvent?.user&&'Per-booking Opera event user: '+r.originEvent.user,r.extendedFrom&&'Original package seller carried from booking '+r.extendedFrom,r.pin?.seller&&'User-confirmed seller decision: '+r.pin.seller].filter(Boolean).join(' · ');
     if(op.action==='deny'){op.reason=r.denyReason||r.note||'Opera evidence does not support this charge.';return op;}
     if(r.needsProduct){const p=C.resolveProduct({code:r.matchedEvent?.code||r.code,kind:C.kind(r.matchedEvent?.code||r.code)},S.snapshot.products);op.productId=p.product?.id||'';}
-    if(r.reassign||r.needsEmployee){const alias=typeof pkgStaffDb!=='undefined'?Object.values(pkgStaffDb):[],who=C.resolveSeller(decisionSeller,S.snapshot.contributors,alias);op.contributorId=who.person?.id||'';op.requireAssignment=who.state!=='matched'||!!r.identityReview||!!r.splitSeller;op.assignmentReviewed=false;op.assignmentContributorId='';op.evidence+=' · '+who.reason;}
+    if(r.reassign||r.needsEmployee){const alias=Object.values(aliases()),who=C.resolveSeller(decisionSeller,S.snapshot.contributors,alias);op.contributorId=who.person?.id||'';op.requireAssignment=who.state!=='matched'||!!r.identityReview||!!r.splitSeller;op.assignmentReviewed=false;op.assignmentContributorId='';op.evidence+=' · '+who.reason;}
     if(op.productId){const p=S.snapshot.products.find(p=>p.id===op.productId);try{op.values.totalCents=C.amountTotal(op.values,p,S.snapshot.settings);}catch(_){} }
     if(C.matches(op,current))return null;return op;
   }
   function buildProposals(){
     if(!S.snapshot)throw Error('Fetch live IN-Gauge records first.');S.drafts.clear();S.selected.clear();invalidate();
-    if(S.scope!=='manual'&&typeof pkgResults!=='undefined')for(const row of pkgResults){if(!row.pinSkip&&!row.requestedSale&&['credit','deny','review'].includes(row.verdict)&&(!row.alreadyComplete||row.needsEmployee||row.needsProduct||row.reassign)){const op=proposedAudit(row);if(op)S.drafts.set(op.key,op);}}
-    for(const row of S.scope==='automatic'?[]:W.ManualUpsells?.state.result?.rows||[]){
+    if(S.scope!=='manual')for(const row of S.independent?S.autoResults:typeof pkgResults!=='undefined'?pkgResults:[]){if(!row.pinSkip&&!row.requestedSale&&['credit','deny','review'].includes(row.verdict)&&(!row.alreadyComplete||row.needsEmployee||row.needsProduct||row.reassign)){const op=proposedAudit(row);if(op)S.drafts.set(op.key,op);}}
+    for(const row of S.scope==='automatic'?[]:(S.independent?S.manualResult:W.ManualUpsells?.state.result)?.rows||[]){
       if(row.bucket!=='add'&&!(row.bucket==='review'&&/^Not found in this export, but seller credit needs confirmation\./.test(row.reason)&&row.conf&&row.candidates.length===1&&!row.matches.length))continue;
-      const p=C.resolveProduct({code:row.code,label:row.product},S.snapshot.products),numericFallback=row.seller.basis!=='Opera note'&&/^\d+$/.test(row.seller.name),who=numericFallback?{state:'unmatched',reason:'An Opera posting-user ID is not an IN-Gauge contributor ID.'}:C.resolveSeller(row.seller.employeeId||row.seller.name,S.snapshot.contributors);
+      const p=C.resolveProduct({code:row.code,label:row.product},S.snapshot.products),numericFallback=row.seller.basis!=='Opera note'&&/^\d+$/.test(row.seller.name),who=numericFallback?{state:'unmatched',reason:'An Opera posting-user ID is not an IN-Gauge contributor ID.'}:C.resolveSeller(row.seller.employeeId||row.seller.name,S.snapshot.contributors,Object.values(aliases()));
       const values={unitCents:row.cents,totalCents:row.cents,chargeDays:1,arrival:row.day,departure:row.day,businessDate:row.day,room:row.room,memo:'Opera journal '+row.transaction+' · '+row.note};
       const op={key:'t-'+row.transaction,transaction:row.transaction,action:'add',source:'Opera manual sale',confirmation:row.conf,productId:p.product?.id||'',contributorId:who.person?.id||'',values,statusAfter:'PENDING',reason:'',requireAssignment:true,assignmentReviewed:false,assignmentContributorId:'',sellerCredit:{named:row.seller.name,recommendedContributorId:row.seller.basis==='Opera note'&&row.seller.mapped?row.seller.employeeId:'',basis:row.seller.basis,warning:row.seller.warning||'',postedBy:row.cashier||row.username||row.userId||'Unknown posting user',postingLogin:row.username||'',explanation:row.seller.explanation},evidence:row.seller.explanation+' · '+row.reason+' · Guest: '+row.guest+' · Room: '+row.room+' · Reservation stay: '+(row.candidates[0]?.TRUNC_BEGIN||'')+' → '+(row.candidates[0]?.TRUNC_END||'')+' · Opera posting user: '+(row.username||row.cashier)+' · Journal line '+row.line+' · '+row.note};
       S.drafts.set(op.key,op);
@@ -113,49 +149,51 @@
   function inScopeRecord(record){return C.scopeAllows(S.scope,C.saleCategory(record));}
   function inScopeOperation(op){return !!S.snapshot&&C.scopeAllows(S.scope,C.operationCategory(op,S.snapshot));}
   function reportRequirements(){
-    const missing=[],data=W.ManualUpsells?.state.data||{};
+    const missing=[],data=S.independent?S.reports:W.ManualUpsells?.state.data||{};
     if(S.scope!=='automatic'&&!data.journal)missing.push('Opera Journal');
     if(S.scope!=='automatic'&&!data.reservations)missing.push('Reservation Detail');
-    if(S.scope!=='manual'&&!(typeof pkgEvents!=='undefined'&&Object.keys(pkgEvents).length&&typeof pkgPdfFiles!=='undefined'&&new Set(pkgPdfFiles).size>=2))missing.push('Changes Logs: New Reservation + Update Reservation');
+    if(S.scope!=='manual'&&!(S.independent?Object.keys(S.targetPdf.events).length&&new Set(S.targetPdf.files).size>=2:typeof pkgEvents!=='undefined'&&Object.keys(pkgEvents).length&&typeof pkgPdfFiles!=='undefined'&&new Set(pkgPdfFiles).size>=2))missing.push('Changes Logs: New Reservation + Update Reservation');
     return missing;
   }
   function clearReview(){S.cycleAt=Date.now();S.drafts.clear();S.selected.clear();S.analysisScope='';S.analysisDone=false;invalidate();}
   function setScope(scope){
     if(!['manual','automatic','all'].includes(scope))throw Error('Choose one of the three audit modes.');
-    if(S.busy||restoring)throw Error('Wait for the current run to finish before changing mode.');
+    if(S.busy||restoring||S.switching||S.uploading)throw Error('Wait for the current run or report upload to finish before changing mode.');
     if(scope===S.scope)return;S.scope=scope;S.autoAnalyse=false;S.findAfterFetch=false;clearReview();S.view='proposals';S.query='';S.limit=20;S.error='';
     try{localStorage.setItem('ho_ingauge_scope_v1:'+hotel(),scope);}catch(_){}render();
   }
   async function checkReports(){
-    if(S.busy)throw Error('Wait for the current run to finish.');
+    if(S.busy||S.switching||S.uploading)throw Error('Wait for the current run or report upload to finish.');
     const missing=reportRequirements();if(missing.length)throw Error('Add these reports first: '+missing.join(' · '));
     S.from=el('igFrom')?.value||S.from;S.to=el('igTo')?.value||S.to;
     if(!C.day(S.from)||!C.day(S.to)||S.from>S.to)throw Error('Choose valid From and Through dates.');
-    if(!S.binding)throw Error('Connect this HotelOps hotel to IN-Gauge first.');
+    if(!S.binding)throw Error('Select the IN-Gauge hotel to audit first.');
     const current=S.snapshot?.complete&&C.sameBinding(S.snapshot.binding,S.binding)&&S.snapshot.from===S.from&&S.snapshot.to===S.to&&Date.now()-S.snapshot.fetchedAt<=21600000;
     if(!current){S.autoAnalyse=true;try{await fetchSnapshot();}catch(error){S.autoAnalyse=false;throw error;}return;}
     await analyseReports();
   }
   async function analyseReports(){
+    if(restoring||S.switching)throw Error('Wait for the hotel selection to finish.');
     if(!S.snapshot?.complete)throw Error('Fetch a complete IN-Gauge snapshot first.');
     const missing=reportRequirements();if(missing.length)throw Error('Add these reports first: '+missing.join(' · '));
-    if(S.scope!=='automatic'&&W.ManualUpsells.state.busy)throw Error('Wait for the Opera report to finish loading.');
+    if(S.uploading||S.scope!=='automatic'&&!S.independent&&W.ManualUpsells.state.busy)throw Error('Wait for the Opera report to finish loading.');
     S.busy=true;clearReview();renderScope();renderControls();
     try{
       importSnapshot();
-      if(S.scope!=='automatic'){await W.ManualUpsells.run();if(W.ManualUpsells.state.error)throw Error(W.ManualUpsells.state.error);}
+      if(S.scope!=='automatic'){if(S.independent){S.manualResult=W.ManualUpsells.reconcile(S.reports.journal.rows,S.reports.reservations.rows,S.targetIngauge.rows,{contributors:S.snapshot.contributors,coverage:{complete:S.snapshot.complete,from:S.snapshot.from,to:S.snapshot.to}});}else{await W.ManualUpsells.run();if(W.ManualUpsells.state.error)throw Error(W.ManualUpsells.state.error);}}
       if(S.scope!=='manual'){
-        if(typeof pkgRun==='function'&&typeof pkgUnknowns!=='undefined'&&pkgUnknowns.length)await pkgRun();
+        if(S.independent){if(typeof W.pkgComputeForTarget!=='function')throw Error('Refresh the app to load the independent hotel audit engine.');const computed=W.pkgComputeForTarget({rows:tableRows(S.snapshot),events:S.targetPdf.events,reservationText:S.reservationText,context:S.targetContext});S.autoResults=computed.results;if(computed.memoryPatch&&Object.keys(computed.memoryPatch).length){await db().child('ingauge/targets/'+S.targetKey+'/auditContext/memory').update(computed.memoryPatch);S.targetContext.memory=computed.memoryNext;}}else if(typeof pkgRun==='function'&&typeof pkgUnknowns!=='undefined'&&pkgUnknowns.length)await pkgRun();
         else if(typeof pkgResults!=='undefined')pkgResults=[];
       }
       buildProposals();
     }finally{S.busy=false;render();}
   }
 
-  function fromAudit(recordId){S.screen='work';S.task='audit';open();if(S.busy||!S.snapshot?.complete){S.error='Find packages again after the current run to load current values.';renderControls();return;}const source=S.snapshot?.records.find(r=>r.id===String(recordId));if(source&&!inScopeRecord(source)){S.error='This record is outside '+scopeLabel(S.scope)+'. Choose Automatic packages or Both to review it.';renderControls();return;}if(!S.snapshot){notify('Fetch the live IN-Gauge snapshot to review this record.','warn');return;}const rows=typeof pkgResults!=='undefined'?pkgResults:[],row=rows.find(r=>String(r.recordId)===String(recordId)),op=row&&proposedAudit(row);if(op){S.drafts.set(op.key,op);edit(op.key);}else{S.view='records';S.query=recordId;renderProposals();}}
+  function fromAudit(recordId){if(S.independent){notify('Open Review & fix for '+S.binding.property+'; the original Package Audit reports belong to the original hotel.','warn');return;}S.screen='work';S.task='audit';open();if(S.busy||S.switching||S.uploading||restoring||!S.snapshot?.complete){S.error='Find packages again after the current run to load current values.';renderControls();return;}const source=S.snapshot?.records.find(r=>r.id===String(recordId));if(source&&!inScopeRecord(source)){S.error='This record is outside '+scopeLabel(S.scope)+'. Choose Automatic packages or Both to review it.';renderControls();return;}if(!S.snapshot){notify('Fetch the live IN-Gauge snapshot to review this record.','warn');return;}const rows=typeof pkgResults!=='undefined'?pkgResults:[],row=rows.find(r=>String(r.recordId)===String(recordId)),op=row&&proposedAudit(row);if(op){S.drafts.set(op.key,op);edit(op.key);}else{S.view='records';S.query=recordId;renderProposals();}}
   async function upload(kind,selection){
     const files=selection&&typeof selection.length==='number'&&!selection.name?Array.from(selection):selection?[selection]:[];
-    if(!files.length)return;S.error='';clearReview();renderControls();renderProposals();
+    if(!files.length)return;if(S.independent)return uploadTarget(kind,files);if(S.busy||S.switching||S.uploading||restoring)throw Error('Wait for the current run or report upload to finish.');S.uploading=true;renderConfiguration();
+    try{S.error='';clearReview();renderControls();renderProposals();
     if(kind==='changes'){
       await pkgLoadPdf({files});
       const loaded=typeof pkgPdfFiles!=='undefined'?pkgPdfFiles:[];
@@ -171,6 +209,25 @@
     if(kind==='reservations'&&typeof pkgLoadGuests==='function')await pkgLoadGuests({files:[file]});
     if(kind==='journal'){const days=W.ManualUpsells.state.data.journal?.rows.map(r=>W.ManualUpsells.date(r.BUSINESS_DATE)).filter(Boolean).sort();if(days?.length){S.from=days[0];S.to=days.at(-1);}}
     invalidate();renderControls();const label=el('igFile-'+kind);if(label)label.textContent='✓ '+file.name;
+    }finally{S.uploading=false;renderConfiguration();renderScope();renderControls();}
+  }
+  async function uploadTarget(kind,files){
+    if(S.busy||S.switching||S.uploading||restoring)throw Error('Wait for the current run or report upload to finish.');
+    const ref=db(),hid=hotel(),key=S.targetKey,assertTarget=()=>{if(db()!==ref||hotel()!==hid||S.targetKey!==key)throw Error('The selected hotel changed. Upload this report again for the intended hotel.');};
+    S.uploading=true;S.error='';clearReview();renderConfiguration();renderScope();renderControls();
+    try{
+      if(kind==='changes'){
+        if(typeof W.pkgLoadTargetPdf!=='function')throw Error('Refresh the app to load the independent PDF reader.');
+        const pdf=await W.pkgLoadTargetPdf(files,{...S.targetPdf,hotelName:S.binding.property,chrome:S.targetContext.settings?.chrome});assertTarget();S.targetPdf=pdf;
+        if(el('igFile-changes'))el('igFile-changes').textContent='✓ '+S.targetPdf.files.length+' logs loaded · '+S.targetPdf.files.join(' · ');
+      }else{
+        delete S.reports[kind];delete S.reportFiles[kind];if(kind==='reservations')S.reservationText='';if(el('igFile-'+kind))el('igFile-'+kind).textContent='Choose report';
+        const file=files[0],text=await file.text();assertTarget();const parsed=kind==='journal'?W.ManualUpsells.parseJournal(text):W.ManualUpsells.parseReservations(text);
+        S.reports[kind]=parsed;S.reportFiles[kind]={name:file.name};if(kind==='reservations')S.reservationText=text;
+        if(kind==='journal'){const dates=parsed.rows.map(r=>W.ManualUpsells.date(r.BUSINESS_DATE)).filter(Boolean).sort();if(dates.length){S.from=dates[0];S.to=dates.at(-1);}}
+        if(el('igFile-'+kind))el('igFile-'+kind).textContent='✓ '+file.name;
+      }
+    }finally{if(db()===ref&&hotel()===hid&&S.targetKey===key){S.uploading=false;renderConfiguration();renderScope();renderControls();renderProposals();}}
   }
   let editReturn=null;
   function captureEditPosition(source){
@@ -184,8 +241,8 @@
     for(const item of position.containers)if(item.node.isConnected)item.node.scrollTo({top:item.top,left:item.left,behavior:'instant'});
     W.scrollTo({top:position.top,left:position.left,behavior:'instant'});
   }
-  function edit(k,source){if(S.busy||!S.snapshot?.complete||Date.now()-S.snapshot.fetchedAt>21600000)throw Error('Find packages again after the current run finishes to load current values.');const op=S.drafts.get(k);if(!op)return;captureEditPosition(source);S.editing=clone(op);paintEditor();}
-  function editRecord(id,action,source){if(S.busy||!S.snapshot?.complete||Date.now()-S.snapshot.fetchedAt>21600000)throw Error('Find packages again after the current run finishes to load current values.');const r=S.snapshot?.records.find(r=>r.id===String(id));if(!r)return;if(!inScopeRecord(r))throw Error('This record is outside the chosen audit mode.');S.cycleAt=Date.now();const saved=S.drafts.get('r-'+r.id),op=saved?.action===action&&!saved.completed?saved:draftFor(r,action);captureEditPosition(source);S.editing=clone(op);paintEditor();}
+  function edit(k,source){if(S.busy||S.switching||S.uploading||restoring||!S.snapshot?.complete||Date.now()-S.snapshot.fetchedAt>21600000)throw Error('Find packages again after the current run finishes to load current values.');const op=S.drafts.get(k);if(!op)return;captureEditPosition(source);S.editing=clone(op);paintEditor();}
+  function editRecord(id,action,source){if(S.busy||S.switching||S.uploading||restoring||!S.snapshot?.complete||Date.now()-S.snapshot.fetchedAt>21600000)throw Error('Find packages again after the current run finishes to load current values.');const r=S.snapshot?.records.find(r=>r.id===String(id));if(!r)return;if(!inScopeRecord(r))throw Error('This record is outside the chosen audit mode.');S.cycleAt=Date.now();const saved=S.drafts.get('r-'+r.id),op=saved?.action===action&&!saved.completed?saved:draftFor(r,action);captureEditPosition(source);S.editing=clone(op);paintEditor();}
   // Use an ordinary searchable sheet: phone webviews can fail to open native select popups.
   let pickerSource=null,pickerReturn=null;
   function closePicker(){const sheet=el('igPicker');if(sheet)sheet.hidden=true;const back=pickerReturn;if(back)back.setAttribute('aria-expanded','false');pickerSource=null;pickerReturn=null;if(back?.isConnected)back.focus({preventScroll:true});}
@@ -237,14 +294,15 @@
   }
   function closeEditor(restore=true){closePicker();if(el('igEditor'))el('igEditor').hidden=true;S.editing=null;const position=editReturn;editReturn=null;if(restore)restoreEditPosition(position);}
   async function saveEditor(){
-    if(S.busy||!S.snapshot?.complete)throw Error('Wait for the current run and refresh package values before saving another edit.');const op=S.editing;if(!op)return;
+    if(S.busy||S.switching||S.uploading||restoring||!S.snapshot?.complete)throw Error('Wait for the current run and refresh package values before saving another edit.');const op=S.editing;if(!op)return;const target=S.targetKey,snapshot=S.snapshot,ref=db(),stillEditing=()=>S.editing===op&&S.targetKey===target&&S.snapshot===snapshot&&db()===ref;
     if(['add','edit'].includes(op.action)){
       op.productId=el('igEditProduct').value;op.contributorId=el('igEditPerson').value;op.statusAfter=el('igEditStatus').value;
       op.values={unitCents:C.cents(el('igEditUnit').value),chargeDays:Number(el('igEditDays').value),arrival:el('igEditArrival').value,departure:el('igEditDeparture').value,businessDate:el('igEditDay').value,room:el('igEditRoom').value.trim(),memo:el('igEditMemo').value.trim()};
       try{op.values.totalCents=C.amountTotal(op.values,S.snapshot.products.find(p=>p.id===op.productId),S.snapshot.settings);}catch(error){el('igEditError').textContent=error.message;return;}
     }
     op.reason=el('igEditReason').value.trim();op.assignmentReviewed=!op.requireAssignment||!!el('igAssignmentConfirmed')?.checked;op.assignmentContributorId=op.assignmentReviewed?op.contributorId:'';const error=C.operationError(op,S.snapshot);if(error){el('igEditError').textContent=error;return;}
-    if(op.operaLogin&&el('igRememberAlias')?.checked){const person=S.snapshot.contributors.find(p=>p.id===op.contributorId);if(!person||person.activeStatus!=='NORMAL'||!allowed())throw Error('Choose an active contributor before saving an alias.');const current=typeof pkgStaffDb!=='undefined'?Object.entries(pkgStaffDb).find(([k,s])=>s.contributorId===person.id||s.name===person.name):null;const staffKey=current?.[0]||'ig_'+person.id,previous=current?.[1]||{};const value={...previous,name:person.name,contributorId:person.id,logins:[...new Set([...(previous.logins||[]),op.operaLogin])],status:'active'};await db().child('packageAudit/staff/'+staffKey).set(value);if(typeof pkgStaffDb!=='undefined'){pkgStaffDb={...pkgStaffDb,[staffKey]:value};_pkgApplyStaff();}}
+    if(op.operaLogin&&el('igRememberAlias')?.checked){const person=S.snapshot.contributors.find(p=>p.id===op.contributorId);if(!person||person.activeStatus!=='NORMAL'||!allowed())throw Error('Choose an active contributor before saving an alias.');const current=Object.entries(aliases()).find(([k,s])=>s.contributorId===person.id||s.name===person.name),staffKey=current?.[0]||'ig_'+person.id,previous=current?.[1]||{},value={...previous,name:person.name,contributorId:person.id,logins:[...new Set([...(previous.logins||[]),op.operaLogin])],status:'active'};if(S.independent){await ref.child('ingauge/targets/'+target+'/auditContext/staff/'+staffKey).set(value);if(!stillEditing())return;S.targetContext.staff={...(S.targetContext.staff||{}),[staffKey]:value};}else{await ref.child('packageAudit/staff/'+staffKey).set(value);if(!stillEditing())return;if(typeof pkgStaffDb!=='undefined'){pkgStaffDb={...pkgStaffDb,[staffKey]:value};_pkgApplyStaff();}}}
+
     S.drafts.set(op.key,op);S.selected.add(op.key);invalidate();const position=editReturn;closeEditor(false);renderProposals();renderControls();restoreEditPosition(position);notify('Saved to review list · '+S.selected.size+' selected','ok');
   }
   async function startApply(){
@@ -272,7 +330,7 @@
     D.querySelectorAll('[data-ig-task]').forEach(b=>{b.setAttribute('aria-pressed',String(!monthly&&b.dataset.igTask===S.task));b.disabled=S.busy;});
     D.querySelectorAll('[data-ig-monthly]').forEach(b=>{b.setAttribute('aria-pressed',String(monthly));b.disabled=S.busy;});
     const title=el('igFindTitle'),intro=el('igFindIntro'),setup=el('igSetupSummary');if(title)title.textContent=editing?'Find a sale':'Check your Opera reports';if(intro)intro.textContent=editing?'Enter a confirmation, room, package or seller.':'Choose what to check, then add the reports shown below.';
-    if(setup)setup.textContent=S.binding?S.binding.property+' · Hotel settings':'Connect your hotel to begin';
+    if(setup)setup.textContent=S.binding?S.binding.property+' · Hotel settings':'Select the hotel to audit';
     const settings=el('igSetupDetails');if(settings&&settings.dataset.bound!==String(!!S.binding)){settings.open=!S.binding;settings.dataset.bound=String(!!S.binding);}
     const options=el('igWorkOptions'),optionsKey=S.task+':'+String(S.analysisDone);if(options&&options.dataset.mode!==optionsKey){options.open=!editing&&!S.analysisDone;options.dataset.mode=optionsKey;}
     if(el('igWorkOptionsLabel'))el('igWorkOptionsLabel').textContent=editing?'Search options · '+scopeLabel(S.scope)+' · '+S.from+' → '+S.to:S.analysisDone?'Reports and dates · change or recheck':'Reports and dates';
@@ -307,8 +365,8 @@
   }
   function renderConfiguration(){
     const root=el('igConfiguration');if(!root)return;
-    const bound=S.binding;root.innerHTML=`<p class="iga-guidance"><b>${bound?'Hotel connected':'Connect your hotel once'}</b> · ${bound?E(bound.property):S.discovery?'Choose the correct hotel and Front Desk below.':'Press Connect IN-Gauge. A progress window will open here.'}</p><details ${bound?'':'open'}><summary>${bound?'Linked to '+E(bound.property)+' · '+E(bound.department):'Connect this hotel to IN-Gauge'}</summary><p class="iga-hint">This HotelOps space: <b>${E(hotelName())}</b>. Account passwords stay in GitHub secrets.</p><div class="iga-config"><label>Portal URL<input id="igPortalUrl" type="url" value="${E(S.discovery?.portalUrl||bound?.portalUrl||'https://app.fpg-ingauge.com/')}"></label><button class="btn" data-ig-discover ${S.busy||restoring?'disabled':''}>Connect IN-Gauge</button></div>
-      ${S.discovery?`<div class="iga-fields"><label>Exact property<select id="igProperty"><option value="">Choose hotel…</option>${option(S.discovery.hotels,bound?.propertyId||'',h=>h.name+' · ID '+h.id)}</select></label><label>Department<select id="igDepartment"></select></label></div><label class="iga-confirm"><input type="checkbox" id="igBindConfirmed"><span>I am linking this HotelOps space to the exact IN-Gauge hotel selected above.</span></label><button class="btn" data-ig-bind>Save hotel link</button>`:''}</details>`;
+    const bound=S.binding;root.innerHTML=`<p class="iga-guidance"><b>${bound?'Hotel connected':'Select a hotel'}</b> · ${bound?E(bound.property):S.discovery?'Choose the correct hotel and Front Desk below.':'Press Connect IN-Gauge. A progress window will open here.'}</p><details ${bound?'':'open'}><summary>${bound?'Linked to '+E(bound.property)+' · '+E(bound.department):'Connect this hotel to IN-Gauge'}</summary><p class="iga-hint">Choose any hotel available to this IN-Gauge account. No matching HotelOps space is required. Account passwords stay in GitHub secrets.</p><div class="iga-config"><label>Portal URL<input id="igPortalUrl" type="url" value="${E(S.discovery?.portalUrl||bound?.portalUrl||'https://app.fpg-ingauge.com/')}"></label><button class="btn" data-ig-discover ${S.busy||restoring||S.switching||S.uploading?'disabled':''}>Connect IN-Gauge</button></div>
+      ${S.discovery?`<div class="iga-fields"><label>Exact property<select id="igProperty" ${S.busy||restoring||S.switching||S.uploading?'disabled':''}><option value="">Choose hotel…</option>${option(S.discovery.hotels,bound?.propertyId||'',h=>h.name+' · ID '+h.id)}</select></label><label>Department<select id="igDepartment" ${S.busy||restoring||S.switching||S.uploading?'disabled':''}></select></label></div><label class="iga-confirm"><input type="checkbox" id="igBindConfirmed" ${S.busy||restoring||S.switching||S.uploading?'disabled':''}><span>I confirm this is the hotel and department I want to audit.</span></label><button class="btn" data-ig-bind ${S.busy||restoring||S.switching||S.uploading?'disabled':''}>Use selected hotel</button>`:''}</details>`;
     if(S.discovery)renderDepartments();refreshPickers(root);
   }
   function renderDepartments(){const h=S.discovery?.hotels.find(h=>h.id===el('igProperty')?.value),field=el('igDepartment');if(field)field.innerHTML='<option value="">Choose department…</option>'+option((h?.departments||[]).filter(d=>!d.retail&&!d.fnb),S.binding?.departmentId||'',g=>g.name);refreshPickers(el('igConfiguration'));}
@@ -319,8 +377,8 @@
       ['manual','Manual upsells only','Find missing journal sales and review manual requests.'],
       ['automatic','Automatic packages only','Fix imported packages, products and seller credit.'],
       ['all','Both','Review manual upsells and automatic packages together.']
-    ].map(([key,title,description])=>`<button type="button" class="iga-scope-option ${S.scope===key?'on':''}" data-ig-scope="${key}" aria-pressed="${S.scope===key}" ${S.busy||restoring?'disabled':''}><b>${S.task==='edit'?({manual:'Manual',automatic:'Automatic',all:'Both'})[key]:title}</b><span>${description}</span>${S.scope===key?'<small>Selected</small>':''}</button>`).join('')}</div>`;
-    D.querySelectorAll('[data-ig-upload]').forEach(label=>{const input=label.querySelector('input');if(input)input.disabled=S.busy||restoring;label.hidden=label.dataset.igUpload==='journal'&&S.scope==='automatic'||label.dataset.igUpload==='changes'&&S.scope==='manual';});
+    ].map(([key,title,description])=>`<button type="button" class="iga-scope-option ${S.scope===key?'on':''}" data-ig-scope="${key}" aria-pressed="${S.scope===key}" ${S.busy||restoring||S.switching||S.uploading?'disabled':''}><b>${S.task==='edit'?({manual:'Manual',automatic:'Automatic',all:'Both'})[key]:title}</b><span>${description}</span>${S.scope===key?'<small>Selected</small>':''}</button>`).join('')}</div>`;
+    D.querySelectorAll('[data-ig-upload]').forEach(label=>{const input=label.querySelector('input');if(input)input.disabled=S.busy||restoring||S.uploading||S.switching;label.hidden=label.dataset.igUpload==='journal'&&S.scope==='automatic'||label.dataset.igUpload==='changes'&&S.scope==='manual';});
     const help=el('igReportHelp');if(help)help.textContent=S.scope==='manual'?'Required: Opera Journal + Reservation Detail. Changes Log PDFs are not needed for this mode.':S.scope==='automatic'?'Required: both Changes Log PDFs (New Reservation + Update Reservation). Reservation Detail is recommended for matching extensions.':'Required: Opera Journal + Reservation Detail + both Changes Log PDFs.';
   }
   function selectedPreview(){
@@ -345,7 +403,7 @@
     if(!ix||ix.source!==snapshot.records||ix.catalog!==snapshot.products||ix.team!==snapshot.contributors){ix={source:snapshot.records,catalog:snapshot.products,team:snapshot.contributors,records:new Map(snapshot.records.map(r=>[r.id,r])),products:new Map(snapshot.products.map(p=>[p.id,p])),people:new Map(snapshot.contributors.map(p=>[p.id,p])),search:new Map(snapshot.records.map(r=>[r.id,[r.confirmation,r.id,r.room,r.product,r.seller].join(' ').toLowerCase()]))};snapshotIndexes.set(snapshot,ix);}return ix;
   }
   function renderProposals(rowsOnly=false){
-    const root=el('igProposals');if(!root)return;if(!rowsOnly){clearTimeout(searchTimer);searchTimer=0;}const canEdit=!S.busy&&S.snapshot?.complete&&Date.now()-S.snapshot.fetchedAt<=21600000;
+    const root=el('igProposals');if(!root)return;if(!rowsOnly){clearTimeout(searchTimer);searchTimer=0;}const canEdit=!S.busy&&!S.switching&&!S.uploading&&!restoring&&S.snapshot?.complete&&Date.now()-S.snapshot.fetchedAt<=21600000;
     const drafts=S.snapshot?[...S.drafts.values()].filter(inScopeOperation):[],records=S.snapshot?.records.filter(inScopeRecord)||[],pending=records.filter(r=>r.status==='PENDING');
     const visible=S.view==='proposals'?drafts:S.view==='pending'?pending:records;
     const ix=indexes(S.snapshot),q=S.query.toLowerCase(),matches=visible.filter(r=>!q||(S.view==='proposals'?[r.confirmation,r.recordId,r.values?.room,r.evidence,ix.products.get(r.productId)?.name,ix.people.get(r.contributorId)?.name].join(' ').toLowerCase():ix.search.get(r.id)||'').includes(q)),rows=matches.slice(0,S.limit);
@@ -365,12 +423,12 @@
   function historyValues(value){if(!value)return '<p>No previous record</p>';return `<p>${E(value.product||value.productId||'')} · ${E(value.seller||value.contributorId||'')}<br>${E(value.status||'')} · Unit ${E(money(value.unitCents))} · Total ${E(money(value.totalCents))}<br>${E(value.chargeDays??'')} days · Room ${E(value.room||'—')}<br>Stay ${E(value.arrival||'—')} → ${E(value.departure||'—')}<br>Business date ${E(value.businessDate||'—')}<br>Memo: ${E(value.memo||'(blank)')}</p>`;}
   function resultDetails(r){return `${r.differences?.length?`<div class="iga-error">${list(r.differences).map(d=>`<p><b>${E(d.field)}</b>: requested ${E(d.expected??'(empty)')} · returned ${E(d.actual??'(empty)')}</p>`).join('')}</div>`:''}${r.before||r.requested||r.after?`<details><summary>Before, requested and final values</summary><div class="iga-history-values"><div><b>Before</b>${historyValues(r.before)}</div><div><b>Requested</b>${historyValues(r.requested)}</div>${r.after?`<div><b>Observed in IN-Gauge</b>${historyValues(r.after)}</div>`:''}</div>${r.reason?`<p>Why: ${E(r.reason)}</p>`:''}</details>`:''}`;}
   async function loadHistory(){
-    if(!allowed()||!db()||S.historyLoading)return;const hid=hotel();S.historyLoading=true;S.historyError='';renderHistory();
-    try{const rows=(await db().child('ingauge/jobs').orderByChild('reviewedAt').limitToLast(40).once('value')).val();if(hotel()!==hid)return;S.history=Object.entries(rows||{}).map(([tag,j])=>({...j,tag})).filter(j=>{try{const p=JSON.parse(j.planJson);return p.mode==='apply'&&p.hotelId===hid;}catch(_){return false;}}).sort((a,b)=>b.reviewedAt-a.reviewedAt);S.historyLoaded=true;}
+    if(!allowed()||!db()||S.historyLoading)return;const hid=hotel(),binding=S.binding;S.historyLoading=true;S.historyError='';renderHistory();
+    try{const rows=(await db().child('ingauge/jobs').orderByChild('reviewedAt').limitToLast(40).once('value')).val();if(hotel()!==hid||!sameTarget(binding,S.binding))return;S.history=Object.entries(rows||{}).map(([tag,j])=>({...j,tag})).filter(j=>{try{const p=JSON.parse(j.planJson);return p.mode==='apply'&&p.hotelId===hid&&sameTarget(p.binding,binding);}catch(_){return false;}}).sort((a,b)=>b.reviewedAt-a.reviewedAt);S.historyLoaded=true;}
     catch(error){S.historyError=error.message;}finally{S.historyLoading=false;renderHistory();}
   }
   function renderHistory(){
-    const root=el('igHistory');if(!root)return;if(el('igHistoryDetails')&&!el('igHistoryDetails').open)return;root.innerHTML=`<header><div><h3>Change history</h3><p class="iga-hint">Saved runs for this HotelOps hotel, including readiness checks and changes. Older entries show the evidence saved at the time.</p></div><button class="btn" data-ig-history ${S.historyLoading?'disabled':''}>${S.historyLoading?'Loading…':'Refresh history'}</button></header>${S.historyError?`<p class="iga-error">${E(S.historyError)}</p>`:''}${S.history.length?S.history.map(j=>{let plan;try{plan=JSON.parse(j.planJson);}catch(_){return '';}const results=list(j.results),terminal=['done','error','stopped'].includes(j.state);return `<details class="iga-history-run"><summary><b>${E(new Date(j.reviewedAt).toLocaleString('en-GB',{timeZone:'Asia/Dubai'}))}</b> · ${j.test?'Readiness check':'Reviewed changes'} · ${E(terminal?'Finished':'In progress')} · ${results.length}/${plan.operations.length}</summary><p>${E(plan.binding?.property)} · ${E(scopeLabel(plan.scope||'all'))}<br>${E(j.note||j.state)}</p>${resultSummary(results)}${results.map(row=>{const op=plan.operations.find(o=>o.key===row.key),r={...row};if(op&&!r.requested){const product=S.snapshot?.products.find(p=>p.id===op.productId),person=S.snapshot?.contributors.find(p=>p.id===op.contributorId);r.requested={...op.values,status:op.statusAfter,product:product?.name||op.productId,seller:person?.name||op.contributorId};try{r.before=op.expected?JSON.parse(op.expected):null;}catch(_){}r.reason=op.reason||op.evidence||'';}const live=S.snapshot?.records.find(x=>x.id===(r.recordId||op?.recordId));const reconciled=r.state==='uncertain'&&live&&op&&S.snapshot.complete&&C.sameBinding(S.snapshot.binding,plan.binding)&&S.snapshot.fetchedAt>(j.at||j.reviewedAt)&&C.matches(op,live);if(reconciled)r.after=live;return `<article><b>Confirmation ${E(r.confirmation)} · ${E(actionLabel(r.action||op?.action))}</b><p>${reconciled?'✓ Verified by the latest refresh; the saved values match your reviewed change.':r.state==='applied'?'✓ Saved and verified':r.state==='held'?'Held; no request sent':r.state==='uncertain'?'Request sent; final outcome needs verification':E(r.state)}${r.recordId?' · Record '+E(r.recordId):''}<br>${E(r.note||'')}</p>${resultDetails(r)}</article>`;}).join('')}${terminal&&results.length<plan.operations.length?`<p>${plan.operations.length-results.length} remaining changes were not attempted.</p>`:''}</details>`;}).join(''):'<p class="iga-hint">No saved changes loaded yet. Refresh history to see earlier runs.</p>'}`;
+    const root=el('igHistory');if(!root)return;if(el('igHistoryDetails')&&!el('igHistoryDetails').open)return;root.innerHTML=`<header><div><h3>Change history</h3><p class="iga-hint">Saved runs for the selected IN-Gauge hotel, including earlier checks and changes. Older entries show the evidence saved at the time.</p></div><button class="btn" data-ig-history ${S.historyLoading?'disabled':''}>${S.historyLoading?'Loading…':'Refresh history'}</button></header>${S.historyError?`<p class="iga-error">${E(S.historyError)}</p>`:''}${S.history.length?S.history.map(j=>{let plan;try{plan=JSON.parse(j.planJson);}catch(_){return '';}const results=list(j.results),terminal=['done','error','stopped'].includes(j.state);return `<details class="iga-history-run"><summary><b>${E(new Date(j.reviewedAt).toLocaleString('en-GB',{timeZone:'Asia/Dubai'}))}</b> · ${j.test?'Readiness check':'Reviewed changes'} · ${E(terminal?'Finished':'In progress')} · ${results.length}/${plan.operations.length}</summary><p>${E(plan.binding?.property)} · ${E(scopeLabel(plan.scope||'all'))}<br>${E(j.note||j.state)}</p>${resultSummary(results)}${results.map(row=>{const op=plan.operations.find(o=>o.key===row.key),r={...row};if(op&&!r.requested){const product=S.snapshot?.products.find(p=>p.id===op.productId),person=S.snapshot?.contributors.find(p=>p.id===op.contributorId);r.requested={...op.values,status:op.statusAfter,product:product?.name||op.productId,seller:person?.name||op.contributorId};try{r.before=op.expected?JSON.parse(op.expected):null;}catch(_){}r.reason=op.reason||op.evidence||'';}const live=S.snapshot?.records.find(x=>x.id===(r.recordId||op?.recordId));const reconciled=r.state==='uncertain'&&live&&op&&S.snapshot.complete&&C.sameBinding(S.snapshot.binding,plan.binding)&&S.snapshot.fetchedAt>(j.at||j.reviewedAt)&&C.matches(op,live);if(reconciled)r.after=live;return `<article><b>Confirmation ${E(r.confirmation)} · ${E(actionLabel(r.action||op?.action))}</b><p>${reconciled?'✓ Verified by the latest refresh; the saved values match your reviewed change.':r.state==='applied'?'✓ Saved and verified':r.state==='held'?'Held; no request sent':r.state==='uncertain'?'Request sent; final outcome needs verification':E(r.state)}${r.recordId?' · Record '+E(r.recordId):''}<br>${E(r.note||'')}</p>${resultDetails(r)}</article>`;}).join('')}${terminal&&results.length<plan.operations.length?`<p>${plan.operations.length-results.length} remaining changes were not attempted.</p>`:''}</details>`;}).join(''):'<p class="iga-hint">No saved changes loaded yet. Refresh history to see earlier runs.</p>'}`;
   }
   const consoleUI={hidden:false,scroll:0,follow:true};
   try{consoleUI.hidden=localStorage.getItem('ho_ingauge_console_hidden_v1')==='1';}catch(_){}
@@ -410,7 +468,7 @@
   function renderRun(){
     renderGuide();const box=el('igRunBox');if(!box)return;const j=S.job;const empty=el('igRunEmpty');if(empty)empty.hidden=!!j;if(!j){box.hidden=true;return;}box.hidden=false;box.dataset.state=j.state;
     const terminal=['done','error','stopped'].includes(j.state),success=j.state==='done',results=list(j.results);
-    const next=success?(S.runMode==='snapshot'&&S.screen==='monthly'?'Your comparison is ready. Check the totals and any report-scope warnings below.':S.runMode==='snapshot'&&S.analysisDone?'Your '+scopeLabel(S.scope)+' results are ready. Review the suggested changes below.':S.runMode==='discover'?'Choose your hotel and Front Desk, then Save hotel link.':S.runMode==='snapshot'?'The records are loaded. Upload Opera reports, then Check Opera reports.':j.test?'This earlier check finished without changing financial records. Review your selection before applying.':'Review the results below, then refresh IN-Gauge before another audit.') : '';
+    const next=success?(S.runMode==='snapshot'&&S.screen==='monthly'?'Your comparison is ready. Check the totals and any report-scope warnings below.':S.runMode==='snapshot'&&S.analysisDone?'Your '+scopeLabel(S.scope)+' results are ready. Review the suggested changes below.':S.runMode==='discover'?'Choose the hotel and Front Desk department, then press Use selected hotel.':S.runMode==='snapshot'?'The records are loaded. Upload Opera reports, then Check Opera reports.':j.test?'This earlier check finished without changing financial records. Review your selection before applying.':'Review the results below, then refresh IN-Gauge before another audit.') : '';
     const stopping=!terminal&&(j.stopRequested||cancellingTag===S.tag),label=stopping?'Cancelling':success?'Completed':j.state==='error'?'Stopped with a problem':j.state==='stopped'?'Stopped':j.state==='queued'?'Starting cloud computer':'Working';
     const signature=JSON.stringify([S.tag,j.state,j.note,j.stage,j.trace,j.results,j.stopRequested,cancellingTag===S.tag,next]);
     if(box.dataset.signature!==signature){box.dataset.signature=signature;box.innerHTML=`<header><div><span class="iga-eyebrow">IN-GAUGE CLOUD RUN</span><h3>${E(runTitle())} · ${E(label)}</h3></div><div class="iga-actions"><button class="btn" data-ig-open-run>${terminal?'View result':'Show progress'}</button>${!terminal?`<button type="button" class="btn" data-ig-stop ${stopping?'disabled':''}>${stopping?'Cancel requested':'Cancel automation'}</button>`:''}</div></header><p>${E(stopping?'Cancel requested. Stopping at the next safe point; an already sent request will be verified.':j.note||'Starting the cloud computer. Browser setup and sign-in can take a moment.')}</p>${next?`<p class="iga-next"><b>Next step</b> ${E(next)}</p>`:''}`;}
@@ -432,18 +490,18 @@
     if(!db()||!hotel()||restoring||restoredHotel===hotel())return;
     const hid=hotel(),ref=db();restoring=true;
     try {
-      if(restoredHotel&&restoredHotel!==hid){if(S.unwatch)S.unwatch();S.binding=null;S.discovery=null;S.snapshot=null;S.drafts.clear();S.selected.clear();S.job=null;S.busy=false;S.history=[];S.historyError='';S.historyLoaded=false;S.task='edit';S.screen='monthly';S.findAfterFetch=false;S.cycleAt=0;invalidate();}
+      if(restoredHotel&&restoredHotel!==hid){closeEditor(false);if(S.unwatch)S.unwatch();S.binding=null;S.discovery=null;S.snapshot=null;S.uploading=false;S.switching=false;S.drafts.clear();S.selected.clear();S.job=null;S.busy=false;S.history=[];S.historyError='';S.historyLoaded=false;S.task='edit';S.screen='monthly';S.targetKey='';S.independent=false;S.targetContext={};S.reports={};S.reportFiles={};S.targetPdf={events:{},files:[]};S.reservationText='';S.targetIngauge=null;S.manualResult=null;S.autoResults=[];S.findAfterFetch=false;S.cycleAt=0;invalidate();}
       const [bindingValue,latestValue,jobValue,discoveryValue]=await Promise.all(['ingauge/binding','ingauge/latestSnapshot','ingauge/latestJob','ingauge/discovery'].map(key=>ref.child(key).once('value')));
       const binding=bindingValue.val(),latest=latestValue.val();let latestTag=jobValue.val();
       const [snapshotValue,runValue]=await Promise.all([latest?ref.child('ingauge/snapshots/'+latest).once('value'):null,latestTag?ref.child('ingauge/jobs/'+latestTag).once('value'):null]);
       const snapshot=snapshotValue?.val();let job=runValue?.val();const discovery=discoveryValue.val();
       if(hotel()!==hid)return;
       try{const mode=localStorage.getItem('ho_ingauge_scope_v1:'+hid);if(['manual','automatic','all'].includes(mode))S.scope=mode;}catch(_){}
-      S.binding=binding;try{S.task=localStorage.getItem('ho_ingauge_task_v1:'+hid)==='audit'?'audit':'edit';}catch(_){}if(!S.drafts.size)S.view=S.task==='edit'?'records':'proposals';
+      S.legacyBinding=await legacyContext(ref);if(hotel()!==hid)return;S.binding=binding;if(binding){const target=await prepareTarget(binding,ref);if(hotel()!==hid)return;S.targetKey=target.key;S.independent=target.independent;S.targetContext=target.context;}try{S.task=localStorage.getItem('ho_ingauge_task_v1:'+hid)==='audit'?'audit':'edit';}catch(_){}if(!S.drafts.size)S.view=S.task==='edit'?'records':'proposals';
       if(!job){const jobs=(await ref.child('ingauge/jobs').orderByChild('reviewedAt').limitToLast(1).once('value')).val();const last=Object.entries(jobs||{})[0];if(last){latestTag=last[0];job=last[1];}}
       if(hotel()!==hid)return;
       if(discovery)S.discovery=hydrateDiscovery(discovery);
-      if(job){let plan;try{plan=JSON.parse(job.planJson);}catch(_){}if(plan?.hotelId===hid){S.tag=latestTag;S.job=job;S.runMode=plan.mode;S.busy=['queued','running'].includes(job.state);if(plan.mode==='discover'&&job.state==='done'&&job.result)S.discovery=hydrateDiscovery(job.result);if(S.busy)watchJob(latestTag,plan);}}
+      if(job){let plan;try{plan=JSON.parse(job.planJson);}catch(_){}if(plan?.hotelId===hid&&(plan.mode==='discover'||C.sameBinding(plan.binding,binding))){S.tag=latestTag;S.job=job;S.runMode=plan.mode;S.busy=['queued','running'].includes(job.state);if(plan.mode==='discover'&&job.state==='done'&&job.result)S.discovery=hydrateDiscovery(job.result);if(S.busy)watchJob(latestTag,plan);}}
       if(snapshot?.complete&&snapshot.hotelId===hid&&C.sameBinding(snapshot.binding,binding)){S.snapshot=hydrate(snapshot);S.from=snapshot.from;S.to=snapshot.to;importSnapshot();}
       restoredHotel=hid;render();if(el('igHistoryDetails')?.open)loadHistory();
     }finally{restoring=false;renderScope();renderConfiguration();renderControls();}
@@ -479,6 +537,6 @@
     render();return true;
   }
   async function fetchMonth(p){if(S.busy)throw Error('Wait for the current run.');if(S.selected.size)throw Error('Apply or unselect your saved changes before refreshing the monthly comparison.');S.from=p.from;S.to=p.to;renderControls();return fetchSnapshot();}
-  W.InGaugeWorkspace={showMonthly,fetchMonth,state:S,setTask,findPackage,setScope,checkReports,reportRequirements,loadHistory,renderHistory,renderGuide,runSteps,liveConsole,open,openRun,closeRun,cancelRun,renderRun,fromAudit,upload,mount,tableRows,buildProposals,hydrate};
+  W.InGaugeWorkspace={sameTarget,showMonthly,fetchMonth,state:S,setTask,findPackage,setScope,checkReports,reportRequirements,loadHistory,renderHistory,renderGuide,runSteps,liveConsole,open,openRun,closeRun,cancelRun,renderRun,fromAudit,upload,mount,tableRows,buildProposals,hydrate};
   if(D.readyState==='loading')D.addEventListener('DOMContentLoaded',mount);else mount();
 })(window);
