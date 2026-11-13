@@ -9,6 +9,54 @@
   const DIAGNOSTIC_KEY = "__accor_diagnostic_only";
   const CURRENT_KEY    = "__accor_current_guest";
 
+  // A portal redirect can destroy this worker immediately after the enrollment
+  // response. Keep a small receipt before navigation; never submit that attempt
+  // again merely because its normal result-writing code did not finish.
+  function createEnrollmentReceipts(storage) {
+    const key = "__accor_submission_receipt_v1";
+    let active = null;
+    const identity = (rec, index) => JSON.stringify([storage.run, index, rec.conf, rec.email]);
+    function classify(response) {
+      let body = {};
+      try { body = JSON.parse(response.body || "{}"); } catch (_) {}
+      const message = String(body.Message || body.message || "").toLowerCase();
+      if (/undeliverable|invalid email|cannot be delivered/.test(message)) return "bad_email";
+      if (/already|existing account/.test(message)) return "already_member";
+      if (/invalid|error|failed/.test(message) || body.success === false) return "bad_data";
+      if (!response.status || response.status >= 500) return "submission_uncertain";
+      return response.status >= 200 && response.status < 300 ? "success" : "bad_data";
+    }
+    function sessionRead() { try { return JSON.parse(storage.session.getItem(key) || "null"); } catch (_) { return null; } }
+    function sessionWrite(value) { try { storage.session.setItem(key, JSON.stringify(value)); } catch (_) {} }
+    async function write(value) {
+      sessionWrite(value); // synchronous: survives a redirect in the same event turn
+      await storage.set(key, value);
+    }
+    return {
+      classify,
+      async begin(rec, index) {
+        active = { key: identity(rec, index), id: Date.now() + ":" + Math.random().toString(36).slice(2), index, at: Date.now(), outcome: null };
+        await write(active); // persisted BEFORE clicking submit
+      },
+      current() { return active && { ...active }; },
+      capture(response, attempt) {
+        if (!attempt || !active || attempt.key !== active.key || attempt.id !== active.id) return;
+        const value = { ...attempt, outcome: classify(response), httpStatus: response.status, receivedAt: Date.now() };
+        active = value;
+        // Do not persist response bodies, account tokens or membership numbers.
+        sessionWrite(value);
+        try { Promise.resolve(storage.set(key, value)).catch(() => {}); } catch (_) {}
+      },
+      async recover(rec, index) {
+        const wanted = identity(rec, index), candidates = [sessionRead(), await storage.get(key)].filter(r => r && r.key === wanted).sort((a,b) => b.at - a.at);
+        const latest = candidates[0], receipt = latest && (candidates.find(r => r.id === latest.id && r.outcome) || latest);
+        if (!receipt) return null;
+        return { status: receipt.outcome || "submission_uncertain", recovered: true, httpStatus: receipt.httpStatus || null };
+      },
+      async clear() { active = null; await write(null); }
+    };
+  }
+
   const DEFAULT_TITLE    = "Mr.";
   // Portal options are exactly: Ms. | Prof. | Mr. | Mrs | Dr.
   const TITLE_ALIASES = {
@@ -230,7 +278,7 @@
     const email = fixEmail(emailRaw);
     const nm = splitName(name), nameOk = latinOnly(name).split(" ").filter(Boolean).length >= 2;
     const cleanPhone = sanitizePhone(phone);
-    return { conf: conf, title: title || DEFAULT_TITLE,
+    return { conf: conf, originalName: name, title: title || DEFAULT_TITLE,
              first_name: nm.first, last_name: nm.last, nameOk: nameOk,
              email: email, emailFixedFrom: (email !== String(emailRaw).trim() ? emailRaw : ""), phone: cleanPhone, phoneRaw: phone,
              country: mapCountry(countryRaw), countryRaw: countryRaw };
@@ -260,6 +308,13 @@
       }
     });
   }
+
+  const receipts = createEnrollmentReceipts({
+    run: loopState.startedAt,
+    session: window.sessionStorage,
+    get: async key => (await cget([key]))[key],
+    set: async (key, value) => cset({ [key]: value })
+  });
 
   function waitFor(fn, opts) {
     opts = opts || {};
@@ -789,13 +844,16 @@
     const oSend = XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.open = function (m, u) {
       this.__url = u;
+      this.__method = String(m || "GET").toUpperCase();
       return oOpen.apply(this, arguments);
     };
     XMLHttpRequest.prototype.send = function (body) {
       const u = this.__url || "";
-      if (u.indexOf("/accor/enroll") >= 0) {
+      if (this.__method === "POST" && u.indexOf("/accor/enroll") >= 0) {
+        const attempt = receipts.current();
         this.addEventListener("load", function () {
           window.__lastEnrollResult = { status: this.status, body: this.responseText, attempted: true };
+          receipts.capture(window.__lastEnrollResult, attempt);
           log("enroll response: " + this.status);
         });
       }
@@ -805,10 +863,12 @@
     if (oFetch) {
       window.fetch = function (input, init) {
         const url = (typeof input === "string") ? input : (input && input.url) || "";
+        const attempt = receipts.current();
         const p = oFetch.apply(this, arguments);
-        if (url.indexOf("/accor/enroll") >= 0) {
+        if (String(init && init.method || input && input.method || "GET").toUpperCase() === "POST" && url.indexOf("/accor/enroll") >= 0) {
           p.then(res => res.clone().text().then(t => {
             window.__lastEnrollResult = { status: res.status, body: t, attempted: true };
+            receipts.capture(window.__lastEnrollResult, attempt);
             log("enroll fetch response: " + res.status);
           })).catch(() => {});
         }
@@ -887,10 +947,20 @@
     window.__lastModalText    = null;
     window.__lastSuccessUrl   = null;
 
+    const recovered = await receipts.recover(rec, idx);
+    if (recovered) {
+      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: recovered.status });
+      log("  GUEST RESULT · " + (recovered.status === "success" ? "ENROLLED" : "REVIEW") + " · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · " + recovered.status + " · recovered after portal reload; not submitted again");
+      await persist(idx + 1);
+      await receipts.clear();
+      return recovered;
+    }
+
     if (!rec.nameOk) {
       log("  name has no first AND last name in Latin letters — skipped (the portal accepts only A–Z)", "warn");
-      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: "skipped: name_not_latin" });
-      log("  GUEST RESULT · SKIPPED · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · name not in Latin letters");
+      const actualName = rec.originalName || rec.first_name + " " + rec.last_name;
+      results.push({ email: rec.email, conf: rec.conf, name: actualName, status: "skipped: name_not_latin" });
+      log("  GUEST RESULT · SKIPPED · " + actualName + " · " + (rec.conf || "no confirmation") + " · no usable first/family name pair; nothing submitted");
       await persist(idx + 1);
       return { status: "skipped: name_not_latin" };
     }
@@ -961,7 +1031,7 @@
              findByText("button", "Become a member");
     }, { name: "submit", timeout: 10000 });
 
-    if (submit.disabled) return { status: "disabled" };
+    if (submit.disabled) throw new Error("The portal submit button is disabled; nothing was submitted");
 
     await sleep(120 + Math.random() * 120);
     await persist(idx);
@@ -972,6 +1042,7 @@
     log("  form has · first=" + vOf("First name") + " · family=" + vOf("Family name") + " · email=" + vOf("Email address") + " · country=" + (function(){ const c = reactSelectInputByLabel("Country"); const ctl = c && c.closest("[class*='-control']"); const t = ctl && ctl.querySelector("[class*='singleValue']"); return t ? t.textContent.trim() : "(empty)"; })());
     submit.scrollIntoView({ block: "center" });
     await sleep(60 + Math.random() * 60);
+    await receipts.begin(rec, idx);
     submit.click();
     log("  clicked submit");
 
@@ -979,10 +1050,12 @@
     await dismissModalIfPresent(800);
 
     let status = detectResult();
+    if (["unclear", "auth_hang", "modal_other", "success_stuck"].includes(status)) status = "submission_uncertain";
     // the portal refused the family name ("must be in latin characters"): nothing was created, so try once more with
     // only the last word of the family name (long multi-word family names are refused too)
     const refusedName = status === "bad_data" && /latin/i.test(String((window.__lastEnrollResult || {}).body || ""));
     if (refusedName && !rec.retriedName && /\s/.test(rec.last_name)) {
+      await receipts.clear(); // explicit rejection: the existing name correction may proceed
       rec.retriedName = true;
       rec.last_name = rec.last_name.split(/\s+/).pop();
       log("  ↻ portal refused the family name — trying once more with \"" + rec.last_name + "\"");
@@ -996,6 +1069,7 @@
     const enrolled = status === "success" || status === "success_stuck";
     log("  GUEST RESULT · " + (enrolled ? "ENROLLED" : status === "already_member" ? "ALREADY ENROLLED" : "NOT ENROLLED") + " · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · " + status);
     await persist(idx + 1);
+    await receipts.clear();
 
     if (status === "success" || status === "success_stuck" ||
         status === "auth_hang" || status === "already_member" ||
@@ -1028,8 +1102,11 @@
     } catch (e) {
       log("  ❌ " + records[i].email + ": " + e.message, "error");
       status = "error: " + e.message;
-      results.push({ email: records[i].email, conf: records[i].conf, name: records[i].first_name + " " + records[i].last_name, status: "skipped: " + status });
+      const inFlight = await receipts.recover(records[i], i);
+      if (inFlight) status = inFlight.status;
+      results.push({ email: records[i].email, conf: records[i].conf, name: records[i].first_name + " " + records[i].last_name, status: inFlight ? status : "skipped: " + status });
       await persist(i + 1);   // advance past the failed record
+      await receipts.clear();
       log("  GUEST RESULT · SKIPPED · " + records[i].first_name + " " + records[i].last_name + " · " + (records[i].conf || "no confirmation") + " · " + status);
       log("  ⏭ skipping failed record, continuing to next...");
     }

@@ -130,7 +130,7 @@ function resultReport(results, total) {
     if (/^(success|success_stuck)$/.test(st)) return 'enrolled';
     if (st === 'already_member') return 'already';
     if (st === 'pending-account') return 'pending';
-    if (/error|timeout|unclear|bad_data|bad_email|bad_name|auth_hang|modal_other/i.test(st)) return 'error';
+    if (/error|timeout|unclear|uncertain|bad_data|bad_email|bad_name|auth_hang|modal_other/i.test(st)) return 'error';
     if (/^skipped:|^title_not_committed|^country_(not_found|missing)|name_not_latin/.test(st)) return 'skipped';
     return 'other';
   };

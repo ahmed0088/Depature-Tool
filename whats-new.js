@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 580, items: [
+    { ico: '✍️', title: 'Enrolment results survive portal reloads',
+      what: 'The cloud keeps each submission receipt before a portal redirect can erase it. A recovered response is recorded without submitting that guest again.',
+      does: 'Uncertain outcomes are held for verification instead of retried automatically. Portal email rejections and name skips remain separate, with clearer reasons. This fixes lost accepted responses being reported as already members after an automatic retry.' }
+  ] },
   { v: 579, items: [
     { ico: '🏨', title: 'Mercure Neorcha collection restored',
       what: 'Mercure now uses its new Tweak portal. A saved short name such as Mercure resolves to the portal property only when there is one matching hotel; full property names still match exactly.',
