@@ -55,6 +55,9 @@ jobs:
           node tests/monthly-tally.test.js
           node tests/monthly-tally.browser.test.js
 
+      - name: Simple IN-Gauge task screens
+        run: node tests/ingauge-simple-ui.browser.test.js
+
       - name: Save package without navigation jumps
         run: node tests/ingauge-save-position.browser.test.js
 

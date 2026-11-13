@@ -21,7 +21,7 @@ async function fixture(browser,phone,nested){
   const C=InGaugeAuditCore,S=InGaugeWorkspace.state,binding=C.binding({portalUrl:'https://app.fpg-ingauge.com/',tenantId:'1',propertyId:'2',departmentId:'3',property:'Example Hotel',department:'Front Desk'});
   const records=Array.from({length:20},(_,i)=>C.record({id:100+i,confirmationNumber:String(12345600+i),tenantLocationId:2,locationGroupId:3,locationGroupProductId:4,userId:5,pname:'Late Check Out',userName:'Jordan River',auditStatus:i%2?'APPROVED':'PENDING',upsellCharge:100,totalUpsellAmount:100,roomNights:1,arrivalDate:'2026-11-01',departureDate:'2026-11-03',businessDate:'2026-11-01',roomNumber:String(100+i),memo:'Synthetic fixture',updatedOn:1}));
   S.binding=binding;S.snapshot={schema:1,id:'save-position',hotelId:'example',binding,complete:true,pagination:{verified:true,total:records.length,read:records.length},fetchedAt:Date.now(),from:'2026-11-01',to:'2026-11-07',settings:{currency:'AED',validation:'BUSINESS_DATE',metricType:'DAILY',maxChargeCents:100000},permissions:{canAdd:true,canEdit:true,canApprove:true,canDeny:true,canDelete:true,canReassign:true},products:[{id:'4',name:'Late Check Out',code:'1062',activeStatus:'NORMAL',recurring:false}],contributors:[{id:'5',name:'Jordan River',pulseId:'JR001',activeStatus:'NORMAL'}],records};S.scope='all';
-  InGaugeWorkspace.open();
+  InGaugeWorkspace.open();InGaugeWorkspace.setTask('edit');
  });
  return {page,errors};
 }

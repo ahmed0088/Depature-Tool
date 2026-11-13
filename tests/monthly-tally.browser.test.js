@@ -13,6 +13,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
  assert((await page.locator('.mt-metrics').innerText()).includes('AED 500.00'));
  assert.equal(await page.locator('.mt-table tbody tr').count(),2);
  await page.locator('[data-mt-confirm]').check();assert((await page.locator('.mt-state').innerText()).includes('Difference found'));
+ await page.locator('.mt-scope-options summary').tap();
  await page.locator('[data-mt-scope=automatic]').tap();assert.equal(await page.locator('[data-mt-confirm]').isChecked(),false);
  await page.locator('[data-mt-scope=all]').tap();
  await page.locator('[data-mt-fetch]').tap();assert.deepEqual(await page.evaluate(()=>fetches),[{from:'2026-10-01',to:'2026-10-31'}]);

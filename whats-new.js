@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 573, items: [
+    { ico: '✨', title: 'A simpler place to manage your upsells',
+      what: 'Choose Monthly totals, Review & fix, or Find a sale. Each task now has its own focused view instead of one long page of controls.',
+      does: 'Monthly totals starts with Upload journal and Compare totals. Extra graphs, mappings and filters are tucked away. Apply appears for saved selections, errors and progress stay easy to find, and Save still keeps your place. Seller confirmation and live financial checks stay enforced.' }
+  ] },
   { v: 572, items: [
     { ico: '✓', title: 'Save without losing your place',
       what: 'Saving a package keeps the current list tab, search and scroll position. It no longer jumps to Apply or switches you to Suggested changes.',

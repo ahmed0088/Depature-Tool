@@ -19,7 +19,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
  assert.equal(await page.evaluate(()=>ManualUpsells.state.result.rows[0].bucket),'review');
  assert.equal(await page.evaluate(()=>InGaugeWorkspace.state.drafts.get('t-1').contributorId),'5','note seller stays primary despite another posting cashier');
  assert.equal(await page.evaluate(()=>InGaugeWorkspace.state.drafts.get('t-1').requireAssignment),true);
- await page.locator('[data-ig-select-ready]').tap();assert.equal(await page.evaluate(()=>InGaugeWorkspace.state.selected.size),0,'bulk ready selection cannot bypass attribution review');
+ assert(await page.locator('[data-ig-select-ready]').isDisabled());assert.equal(await page.evaluate(()=>InGaugeWorkspace.state.selected.size),0,'bulk ready selection cannot bypass attribution review');
  await page.locator('[data-ig-edit="t-1"]').tap();
  assert((await page.locator('#igSellerCredit').innerText()).includes('Jordan River'));assert((await page.locator('#igSellerCredit').innerText()).includes('Other Poster'));
  await page.locator('[data-ig-save]').tap();assert((await page.locator('#igEditError').innerText()).includes('explicitly assign'));assert.equal(await page.evaluate(()=>InGaugeWorkspace.state.selected.size),0);
@@ -37,7 +37,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
  // Even a clear name shared by note and posting cashier remains a suggestion until reviewed.
  await page.evaluate(()=>{ManualUpsells.state.result=ManualUpsells.reconcile([{...post,TRX_NO:'3',CASHIER_NAME:'Jordan River',USER_NAME:'JORDAN'}],[reservation],[],{contributors:InGaugeWorkspace.state.snapshot.contributors,coverage:{complete:true,from:'2026-11-01',to:'2026-11-07'}});InGaugeWorkspace.buildProposals();});
  assert.equal(await page.evaluate(()=>InGaugeWorkspace.state.drafts.get('t-3').requireAssignment),true);
- await page.locator('[data-ig-select-ready]').tap();assert.equal(await page.evaluate(()=>InGaugeWorkspace.state.selected.size),0);
+ assert(await page.locator('[data-ig-select-ready]').isDisabled());assert.equal(await page.evaluate(()=>InGaugeWorkspace.state.selected.size),0);
  // Extension/memory/pinned seller decisions must survive importing into automation.
  await page.evaluate(()=>{
   const S=InGaugeWorkspace.state,C=InGaugeAuditCore;S.scope='automatic';S.snapshot.records=[C.record({id:100,confirmationNumber:'12345678',tenantLocationId:2,locationGroupId:3,locationGroupProductId:4,userId:9,pname:'Late Check Out',userName:'Other Poster',auditStatus:'APPROVED',upsellCharge:100,totalUpsellAmount:100,roomNights:1,arrivalDate:'2026-11-01',departureDate:'2026-11-03',businessDate:'2026-11-01',roomNumber:'101',memo:'Original',updatedOn:1})];

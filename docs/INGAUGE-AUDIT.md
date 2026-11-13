@@ -112,3 +112,13 @@ Independent private reads at startup run in parallel; older history is queried a
 Save & select retains the current records, pending or suggested-changes tab, search and loaded list limit. It updates the saved draft and selection count without scrolling to Apply. The entry page and ancestor scroll positions are restored, including nested scroll containers, and focus returns without scrolling. Cancel restores the same entry context. A saved-selection toast provides feedback; users navigate to Apply when ready. Financial validation and seller-confirmation gates are unchanged.
 
 `node tests/ingauge-save-position.browser.test.js` verifies desktop and phone saves in document and nested scrolling across all three views, including list/search/selection retention and zero external requests.
+
+## Focused task screens (v573)
+
+The workspace opens on Monthly totals. Three navigation choices separate Monthly totals, Review & fix and Find a sale; switching tasks preserves saved selections and does not start a job. The old duplicated step navigation is hidden.
+
+Monthly totals shows journal upload and Compare totals, monthly amount bars, pending amounts when present, and visible report-scope checks. Extra daily charts, detailed tables, code mappings and scope choices are disclosures. A read-only monthly refresh is blocked while saved selections are waiting, preventing that refresh from silently discarding edited drafts. The next action opens individual-sale review without submitting changes.
+
+Review & fix shows required reports and compact scope choices. Report/date settings collapse after analysis; held and ready cases remain distinct, with bulk selection next to the proposals. Find a sale keeps direct search visible and places dates/type/refresh controls in Search options. Saved Apply controls appear only for selections or relevant Apply activity, and saving still preserves tab/search/scroll. Common errors and compact run status remain accessible from every screen; monthly fetch results return to Monthly totals. Hotel setup opens when unlinked and stays tucked away once linked.
+
+The presentation changes do not weaken seller confirmation, reviewed-plan validation, identity matching, duplicate checks or live financial safeguards. `tests/ingauge-simple-ui.browser.test.js` covers task separation, draft retention, contextual Apply, desktop/phone layout and no external actions from navigation.

@@ -1,6 +1,6 @@
 # Monthly Opera / IN-Gauge reconciliation
 
-Open Package Audit → IN-Gauge automation. The monthly graphic sits above the editing/audit steps. Choose the month, upload the Journal by Transaction Code, and fetch that month's IN-Gauge records. Reservation Detail / Changes Logs remain required by the existing audit rules when preparing changes; they are not posting-revenue reports and cannot establish monthly posted totals.
+Open Package Audit → IN-Gauge automation → Monthly totals. Choose the month, upload the Journal by Transaction Code, and press Compare totals. Review & fix opens the report audit; Find a sale opens direct search. Reservation Detail / Changes Logs remain required by the existing audit rules when preparing changes; they are not posting-revenue reports and cannot establish monthly posted totals.
 
 The default comparison includes both manual and automatic sales. Opera uses the posting business date and debit minus credit, including reversals. IN-Gauge uses each record's `totalCents` once, by business date, without multiplying unit charge by nights. Approved revenue and pending requests are separate. Denied/deleted/purged records are excluded. The primary difference is Opera less approved; a secondary figure shows the difference after pending. A difference is evidence to investigate, never an automatic add instruction.
 
