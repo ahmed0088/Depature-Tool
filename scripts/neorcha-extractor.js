@@ -27,7 +27,7 @@
   if (location.protocol !== 'https:' || !/(^|\.)myneorcha\.com$/i.test(location.hostname) || !/^\/tweak(?:\/|$)/.test(location.pathname)) throw Error('Open a verified Neorcha Tweak portal.');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(O.from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(O.to || '') || O.from > O.to) throw Error('Choose a valid arrival date range.');
   const version = sessionStorage.getItem('tweak.tenantContextVersion');
-  if (!version) throw Error('Sign in to the Ibis Tweak portal before collecting.');
+  if (!version) throw Error('Sign in to this Neorcha Tweak portal before collecting.');
   const progress = (n, total) => { if (O.progress) O.progress({ n, prog: total ? Math.min(97, Math.round(n / total * 95)) : 3, note: 'Reading registration cards: ' + n + (total ? ' / ' + total : '') }); };
   async function request(path, body) {
     if (O.stopped && O.stopped()) throw Error('Collection stopped.');
@@ -54,10 +54,20 @@
   const options = Array.isArray(hotels) ? hotels : hotels.options || hotels.values || [];
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const brand = location.hostname.split('.')[0].toLowerCase();
-  const matches = options.filter(h => O.hotelId ? String(h.value ?? h.id) === String(O.hotelId) : O.hotelName ? norm(h.label || h.name || h.hotel_name) === norm(O.hotelName) : norm(h.label || h.name || h.hotel_name).startsWith(brand));
-  if (matches.length !== 1) throw Error('The link does not identify one exact hotel. Choose its exact hotel name; All Hotels is never used.');
-  const hotel = matches[0], hotelId = hotel.value ?? hotel.id;
-  if (hotelId == null || String(hotelId) === '' || String(hotelId).toLowerCase() === 'all') throw Error('A specific hotel is required.');
+  const label = h => String(h.label || h.name || h.hotel_name || '').trim();
+  const specific = h => { const id = h.value ?? h.id; return id != null && String(id).trim() !== '' && !/^(all|\*|-1|0)$/i.test(String(id)) && !/^(all hotels?|all properties|all locations)$/i.test(label(h)); };
+  const choices = options.filter(specific), requested = norm(O.hotelName);
+  // A saved display name such as "Mercure" is a brand alias, not an exact portal property name.
+  // Only that unqualified alias (or no name) can use the link's brand, and only when one property remains.
+  let matches = choices.filter(h => O.hotelId ? String(h.value ?? h.id) === String(O.hotelId) : requested ? norm(label(h)) === requested : norm(label(h)).startsWith(brand));
+  if (!O.hotelId && !matches.length && requested === norm(brand)) matches = choices.filter(h => norm(label(h)).startsWith(brand));
+  const unique = new Map(matches.map(h => [String(h.value ?? h.id), h]));
+  if (unique.size !== 1) {
+    const names = choices.map(label).filter(Boolean).slice(0, 8).join(' · ');
+    throw Error('The link does not identify one exact hotel. Choose its full Neorcha hotel name'+(names?' (available: '+names+')':'')+'. All Hotels is never used.');
+  }
+  const hotel = [...unique.values()][0], hotelId = hotel.value ?? hotel.id;
+  if (O.progress) O.progress({ n: 0, prog: 2, note: 'Hotel confirmed: ' + label(hotel) });
   const filters = [{ key: 'hotel_id', operator: '=', value: hotelId }, { key: 'arrival_date__from', operator: '>=', value: O.from }, { key: 'arrival_date__to', operator: '<=', value: O.to }, { key: 'enum_id', operator: '=', value: 200 }];
   const rows = [], seen = new Set(); let total = null, offset = 0;
   for (;;) {
@@ -85,15 +95,15 @@
 }
 
     const now = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Dubai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-    const from = prompt('Ibis registration arrivals from (YYYY-MM-DD)', now.slice(0,7)+'-01'); if (!from) return;
-    const to = prompt('Ibis registration arrivals to (YYYY-MM-DD)', now); if (!to) return;
+    const from = prompt('Neorcha registration arrivals from (YYYY-MM-DD)', now.slice(0,7)+'-01'); if (!from) return;
+    const to = prompt('Neorcha registration arrivals to (YYYY-MM-DD)', now); if (!to) return;
     try {
       const rows = await TWEAK_COLLECT({from,to,progress:p=>console.log('[Neorcha] '+p.note)});
       const clean = v => String(v || '').replace(/[\t\r\n]/g,' ');
       const relay = email => /(?:^|\.)(?:trip\.com|booking\.com|expedia(?:partnercentral)?\.com|airbnb\.com|hotels\.com|agoda\.com)$/i.test(String(email).split('@')[1] || '');
       const output = ['Confirmation_Number\tName\tEmail\tPhone\tNationality', ...rows.map(r=>[r['Confirmation Number'],[r['First Name'],r['Last Name']].filter(Boolean).join(' '),relay(r.Email)?'No@email.com':r.Email||'No email',r.Phone||'No phone',/united arab emirates|^u[ .]*a[ .]*e$/i.test(r.Nationality)?'UAE':r.Nationality].map(clean).join('\t'))].join('\n');
       const box = document.createElement('section');box.style.cssText='position:fixed;inset:5vh 5vw;z-index:2147483647;background:#fff;color:#172033;padding:20px;border:1px solid #cdd3df;border-radius:16px;box-shadow:0 20px 80px #0005;display:flex;flex-direction:column;gap:12px;font:14px system-ui';
-      const header = document.createElement('b');header.textContent=rows.length+' Ibis registrations — copy into HotelOps Guest Pipeline';
+      const header = document.createElement('b');header.textContent=rows.length+' Neorcha registrations — copy into HotelOps Guest Pipeline';
       const close = document.createElement('button');close.textContent='Close';close.style.alignSelf='end';close.onclick=()=>box.remove();
       const area = document.createElement('textarea');area.value=output;area.readOnly=true;area.style.cssText='flex:1;min-height:0;width:100%;font:12px monospace';
       const copy = document.createElement('button');copy.textContent='Copy registration list';copy.onclick=async()=>{area.select();try{await navigator.clipboard.writeText(output);copy.textContent='Copied';}catch(_){copy.textContent='Select and copy the text above';}};

@@ -54,3 +54,33 @@ test('explicit hotel names resolve within the linked portal and ambiguous hotels
 test('cloud URL selection preserves explicit legacy links and recognizes Tweak links',()=>{
  const cloud=require('../scripts/neorcha-cloud.js');assert.equal(cloud.readerFor('https://ibis.myneorcha.com/neorchaWEBPlatform/#/login'),'legacy');assert.equal(cloud.readerFor('https://mercure.myneorcha.com/tweak/'),'tweak');assert.throws(()=>cloud.readerFor('https://evil.test/tweak/'));assert.throws(()=>cloud.readerFor('https://ibis.myneorcha.com/unknown'));
 });
+test('saved short Mercure name resolves one property on its portal and sends that exact ID',async()=>{
+ const progress=[],f=fixture({location:{hostname:'mercure.myneorcha.com'},respond:(p,d)=>p.includes('/lookup-values')?{options:[{label:'All Hotels',value:0},{label:'Ibis Styles Dubai Deira',value:'2002'},{label:'Mercure Dubai Deira',value:'1001'}]}:d});
+ const rows=await f.run({hotelName:'Mercure',progress:p=>progress.push(p)});assert.equal(rows.length,1);
+ assert.equal(JSON.parse(f.calls.find(c=>c.options.method==='POST').options.body).filters[0].value,'1001');
+ assert(progress.some(p=>p.note==='Hotel confirmed: Mercure Dubai Deira'));
+});
+test('short brand alias never chooses among several properties or another brand',async()=>{
+ for(const options of [[{label:'Mercure Dubai Deira',value:'1001'},{label:'Mercure Other Property',value:'1002'}],[{label:'Ibis Styles Dubai Deira',value:'1001'}],[{label:'Mercure',value:'all'},{label:'All Hotels',value:0}]]){
+  const f=fixture({location:{hostname:'mercure.myneorcha.com'},respond:(p,d)=>p.includes('/lookup-values')?{options}:d});await assert.rejects(f.run({hotelName:'Mercure'}),/one exact hotel/);assert(!f.calls.some(c=>c.options.method==='POST'));
+ }
+});
+test('qualified names and arbitrary nicknames cannot fall back to another property',async()=>{
+ for(const hotelName of ['Mercure Other Property','Dubai','Ibis']){
+  const f=fixture({location:{hostname:'mercure.myneorcha.com'},respond:(p,d)=>p.includes('/lookup-values')?{options:[{label:'Mercure Dubai Deira',value:'1001'}]}:d});await assert.rejects(f.run({hotelName}),/full Neorcha hotel name/);assert(!f.calls.some(c=>c.options.method==='POST'));
+ }
+});
+test('exact property names disambiguate multiple Mercure options and duplicates of one ID do not',async()=>{
+ const f=fixture({location:{hostname:'mercure.myneorcha.com'},respond:(p,d)=>p.includes('/lookup-values')?{options:[{label:'Mercure Dubai Deira',value:'1001'},{label:'Mercure Other Property',value:'1002'}]}:d});assert.equal((await f.run({hotelName:'Mercure Dubai Deira'})).length,1);
+ const same=fixture({location:{hostname:'mercure.myneorcha.com'},respond:(p,d)=>p.includes('/lookup-values')?{options:[{label:'Mercure Dubai Deira',value:'1001'},{label:'Mercure Dubai Deira',value:'1001'}]}:d});assert.equal((await same.run({hotelName:'Mercure'})).length,1);
+});
+test('Mercure retired links migrate in UI/cloud while other explicit legacy links are preserved',()=>{
+ const cloud=require('../scripts/neorcha-cloud.js'),ctx={window:{},document:{readyState:'loading',addEventListener(){}},localStorage:{getItem(){return null}},URL,console};ctx.window=ctx;vm.createContext(ctx);vm.runInContext(source,ctx);const N=ctx.hoNeorcha;
+ const old='https://mercure.myneorcha.com/neorchaWEBPlatform/#/login',current='https://mercure.myneorcha.com/tweak/';
+ assert.equal(N.linkFor('Mercure Dubai Deira'),current);assert.equal(N.linkFor('Adagio Dubai Deira'),'https://adagio.myneorcha.com/neorchaWEBPlatform/#/login');
+ for(const migrate of [N.migrateIbisLink,cloud.portalLink]){assert.equal(migrate(old),current);for(const url of ['https://ibis.myneorcha.com/neorchaWEBPlatform/#/login','https://adagio.myneorcha.com/neorchaWEBPlatform/#/login','https://mercure.myneorcha.com/tweak','https://other.test/neorchaWEBPlatform/'])assert.equal(migrate(url),url);}
+ const env={NEORCHA_USER_ACC:'mercure-user',NEORCHA_PASS_ACC:'mercure-pass',URL_IN:old};assert.equal(cloud.resolveLogin('MERCURE',env).url,current);assert.equal(cloud.resolveLogin('MERCURE',{...env,URL_IN:''}).url,current);assert.equal(cloud.resolveLogin('ADAGIO',{...env,URL_IN:''}).url,'https://adagio.myneorcha.com/neorchaWEBPlatform/#/login');assert(cloud.resolveLogin('MERCURE',{NEORCHA_USER:'ibis-user',NEORCHA_PASS:'ibis-pass'}).err);
+});
+test('standalone extractor shares the exact scoped Tweak implementation',()=>{
+ const standalone=fs.readFileSync('scripts/neorcha-extractor.js','utf8'),a=standalone.indexOf('async function TWEAK_COLLECT('),b=standalone.indexOf('\n\n    const now =',a);assert.equal(standalone.slice(a,b).trim(),collector.trim());
+});

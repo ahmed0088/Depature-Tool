@@ -119,7 +119,7 @@ async function TWEAK_COLLECT(O) {
   if (location.protocol !== 'https:' || !/(^|\.)myneorcha\.com$/i.test(location.hostname) || !/^\/tweak(?:\/|$)/.test(location.pathname)) throw Error('Open a verified Neorcha Tweak portal.');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(O.from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(O.to || '') || O.from > O.to) throw Error('Choose a valid arrival date range.');
   const version = sessionStorage.getItem('tweak.tenantContextVersion');
-  if (!version) throw Error('Sign in to the Ibis Tweak portal before collecting.');
+  if (!version) throw Error('Sign in to this Neorcha Tweak portal before collecting.');
   const progress = (n, total) => { if (O.progress) O.progress({ n, prog: total ? Math.min(97, Math.round(n / total * 95)) : 3, note: 'Reading registration cards: ' + n + (total ? ' / ' + total : '') }); };
   async function request(path, body) {
     if (O.stopped && O.stopped()) throw Error('Collection stopped.');
@@ -146,10 +146,20 @@ async function TWEAK_COLLECT(O) {
   const options = Array.isArray(hotels) ? hotels : hotels.options || hotels.values || [];
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const brand = location.hostname.split('.')[0].toLowerCase();
-  const matches = options.filter(h => O.hotelId ? String(h.value ?? h.id) === String(O.hotelId) : O.hotelName ? norm(h.label || h.name || h.hotel_name) === norm(O.hotelName) : norm(h.label || h.name || h.hotel_name).startsWith(brand));
-  if (matches.length !== 1) throw Error('The link does not identify one exact hotel. Choose its exact hotel name; All Hotels is never used.');
-  const hotel = matches[0], hotelId = hotel.value ?? hotel.id;
-  if (hotelId == null || String(hotelId) === '' || String(hotelId).toLowerCase() === 'all') throw Error('A specific hotel is required.');
+  const label = h => String(h.label || h.name || h.hotel_name || '').trim();
+  const specific = h => { const id = h.value ?? h.id; return id != null && String(id).trim() !== '' && !/^(all|\*|-1|0)$/i.test(String(id)) && !/^(all hotels?|all properties|all locations)$/i.test(label(h)); };
+  const choices = options.filter(specific), requested = norm(O.hotelName);
+  // A saved display name such as "Mercure" is a brand alias, not an exact portal property name.
+  // Only that unqualified alias (or no name) can use the link's brand, and only when one property remains.
+  let matches = choices.filter(h => O.hotelId ? String(h.value ?? h.id) === String(O.hotelId) : requested ? norm(label(h)) === requested : norm(label(h)).startsWith(brand));
+  if (!O.hotelId && !matches.length && requested === norm(brand)) matches = choices.filter(h => norm(label(h)).startsWith(brand));
+  const unique = new Map(matches.map(h => [String(h.value ?? h.id), h]));
+  if (unique.size !== 1) {
+    const names = choices.map(label).filter(Boolean).slice(0, 8).join(' · ');
+    throw Error('The link does not identify one exact hotel. Choose its full Neorcha hotel name'+(names?' (available: '+names+')':'')+'. All Hotels is never used.');
+  }
+  const hotel = [...unique.values()][0], hotelId = hotel.value ?? hotel.id;
+  if (O.progress) O.progress({ n: 0, prog: 2, note: 'Hotel confirmed: ' + label(hotel) });
   const filters = [{ key: 'hotel_id', operator: '=', value: hotelId }, { key: 'arrival_date__from', operator: '>=', value: O.from }, { key: 'arrival_date__to', operator: '<=', value: O.to }, { key: 'enum_id', operator: '=', value: 200 }];
   const rows = [], seen = new Set(); let total = null, offset = 0;
   for (;;) {
@@ -568,7 +578,10 @@ const CSS = `
 const BRANDS = [['mercure', /\bmercure\b/i], ['novotel', /\bnovotel\b/i], ['pullman', /\bpullman\b/i], ['sofitel', /\bsofitel\b/i], ['swissotel', /swiss[oô]tel/i],
   ['movenpick', /m[oö]venpick/i], ['adagio', /\badagio\b/i], ['mgallery', /\bmgallery\b/i], ['fairmont', /\bfairmont\b/i], ['raffles', /\braffles\b/i], ['ibis', /\bibis\b/i]];
 /** the hotel's Neorcha link from its name ('' when the brand is not known) (pure) */
-function migrateIbisLink(value) { return value; }
+function migrateIbisLink(value) {
+  try { const u=new URL(value);if(u.protocol==='https:'&&!u.username&&!u.password&&u.hostname==='mercure.myneorcha.com'&&/^\/neorchaWEBPlatform(?:\/|$)/i.test(u.pathname))return u.origin+'/tweak/'; } catch (_) {}
+  return value;
+}
 function readerFor(value) {
   const u = new URL(value);
   if(u.protocol !== 'https:' || u.username || u.password || !/(^|\.)myneorcha\.com$/i.test(u.hostname)) throw Error('Use a Neorcha HTTPS link.');
@@ -576,7 +589,7 @@ function readerFor(value) {
   if(/^\/neorchaWEBPlatform(?:\/|$)/i.test(u.pathname)) return 'legacy';
   throw Error('Use the portal link containing /tweak/ or /neorchaWEBPlatform/.');
 }
-function linkFor(name) { const b = BRANDS.find(([, re]) => re.test(String(name || ''))); return b ? 'https://' + b[0] + '.myneorcha.com/' + (b[0] === 'ibis' ? 'tweak/' : 'neorchaWEBPlatform/#/login') : ''; }
+function linkFor(name) { const b = BRANDS.find(([, re]) => re.test(String(name || ''))); return b ? 'https://' + b[0] + '.myneorcha.com/' + (['ibis','mercure'].includes(b[0]) ? 'tweak/' : 'neorchaWEBPlatform/#/login') : ''; }
 /** the cloud account for a Neorcha link: its first part in capitals (mercure.myneorcha.com → MERCURE) (pure) */
 function acctOf(url) { const m = String(url || '').match(/^https?:\/\/([a-z0-9-]+)\.myneorcha\.com(\/|$)/i); return m ? m[1].toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 30) : ''; }
 /** the one-time GitHub set-up for that account: the exact secret names, each with a copy button */
@@ -765,7 +778,7 @@ function mount() {
           <p><b>The start key</b> (so ☁️ Run in the cloud can start it from this device) — press the button and follow the steps; it is kept on this device only.</p>
           <p><a href="https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml" target="_blank" rel="noopener">All cloud runs on GitHub ↗</a> · <a href="#" id="nx-cl-forget">Forget the start key on this device</a></p></details></div>
       <details class="nx-man"><summary>No helper on this PC? Run it by hand</summary>
-        <ol><li>Open <b>ibis.myneorcha.com</b>, log in, go to <b>Guest Documents</b> and pick your <b>hotel</b>.</li>
+        <ol><li>Open <b>your selected Neorcha link</b>, log in, go to <b>Guest Documents</b> and pick your <b>hotel</b>.</li>
           <li>Press <b>📋 Copy the collector</b>, then on Neorcha press <b>F12 → Console</b>, paste and press <b>Enter</b> <small>(first time: type <code>allow pasting</code>)</small> — or click the bookmark.</li>
           <li>Choose the dates and press <b>▶ Collect</b>. It saves a file at the end: drop it here.</li></ol>
         <div class="nx-col-b"><button type="button" class="btn" id="nx-copycol">📋 Copy the collector</button><a class="btn" id="nx-bm" href="#">⭐ Drag to bookmarks</a></div>
@@ -839,9 +852,15 @@ function mount() {
   };
   const paintList = () => {
     const short = n => String(n || '').replace(/\s+(hotel|dubai|resort)\b.*$/i, '').slice(0, 26) || n;
-    $('hl').innerHTML = [`<button type="button" role="tab" data-hs="" class="${SEL === '' ? 'on' : ''}" aria-selected="${SEL === ''}"><b>${esc(short(hotelName()))}</b><small>this hotel</small></button>`]
-      .concat(LIST.map((h, i) => `<button type="button" role="tab" data-hs="${i}" class="${SEL === String(i) ? 'on' : ''}" aria-selected="${SEL === String(i)}"><b>${esc(h.name)}</b><small>${esc(h.acct || acctOf(h.url))}</small><span class="x" data-hdel="${i}" title="Remove ${esc(h.name)}">×</span></button>`))
-      .join('') + '<button type="button" class="add" data-hadd="1">＋ Add hotel</button>';
+    const items=[{key:'',name:short(hotelName()),account:'this hotel'},...LIST.map((h,i)=>({key:String(i),name:h.name,account:h.acct||acctOf(h.url)}))];
+    let buttons=Array.from($('hl').querySelectorAll('button[data-hs]'));
+    if(buttons.length!==items.length||buttons.some((b,i)=>b.dataset.hs!==items[i].key)){
+      $('hl').innerHTML=items.map(h=>`<button type="button" role="tab" data-hs="${h.key}"><b></b><small></small>${h.key!==''?`<span class="x" data-hdel="${h.key}">×</span>`:''}</button>`).join('')+'<button type="button" class="add" data-hadd="1">＋ Add hotel</button>';
+      buttons=Array.from($('hl').querySelectorAll('button[data-hs]'));
+    }
+    // Input blur can save a link during pointer-down on another button. Preserve
+    // those buttons so repainting account labels cannot swallow the click.
+    buttons.forEach((b,i)=>{const h=items[i];b.classList.toggle('on',SEL===h.key);b.setAttribute('aria-selected',String(SEL===h.key));b.querySelector('b').textContent=h.name;b.querySelector('small').textContent=h.account;const del=b.querySelector('[data-hdel]');if(del)del.title='Remove '+h.name;});
   };
   const paintHotel = () => {
     paintReader();if(profilesReady)loadFields();
@@ -862,7 +881,7 @@ function mount() {
   $('h-auto').onclick = () => { const h = cur(); if (h) { h.acct = acctOf(h.url); saveList(); } else { put(urlKey(), ''); put(acctKey(), ''); } loadInputs(); paintHotel(); toast('Back to automatic', 'ok'); };
   // ＋ Add hotel: pick the brand (the link and account follow), give it a name
   $('hb').innerHTML = BRANDS.map(([b]) => `<option value="${b}">${b === 'movenpick' ? 'Mövenpick' : b === 'swissotel' ? 'Swissôtel' : b === 'mgallery' ? 'MGallery' : b[0].toUpperCase() + b.slice(1)}</option>`).join('') + '<option value="">Other — paste its link</option>';
-  const addFill = () => { const b = $('hb').value; if (b) { $('hurl').value = 'https://' + b + '.myneorcha.com/' + (b === 'ibis' ? 'tweak/' : 'neorchaWEBPlatform/#/login'); if (!$('hname').value.trim() || $('hname').dataset.auto) { $('hname').value = $('hb').selectedOptions[0].textContent; $('hname').dataset.auto = '1'; } } else { $('hurl').value = ''; $('hurl').focus(); } };
+  const addFill = () => { const b = $('hb').value; if (b) { $('hurl').value = 'https://' + b + '.myneorcha.com/' + (['ibis','mercure'].includes(b) ? 'tweak/' : 'neorchaWEBPlatform/#/login'); if (!$('hname').value.trim() || $('hname').dataset.auto) { $('hname').value = $('hb').selectedOptions[0].textContent; $('hname').dataset.auto = '1'; } } else { $('hurl').value = ''; $('hurl').focus(); } };
   $('hb').onchange = addFill; $('hname').oninput = () => { delete $('hname').dataset.auto; };
   $('hno').onclick = () => { $('hadd').hidden = true; };
   $('hok').onclick = () => {

@@ -70,6 +70,7 @@ jobs:
           node tests/ingauge-modes.test.js
           node tests/ingauge-reference-cache.test.js
           node tests/neorcha-tweak.test.js
+          node tests/neorcha-hotels.browser.test.js
 
       - name: Monthly revenue reconciliation
         run: |
