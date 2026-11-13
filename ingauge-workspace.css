@@ -117,3 +117,24 @@
 #igSettingsOverlay .iga-settings-landing-options input[type=radio]{appearance:auto;-webkit-appearance:radio;display:block;position:static;flex:0 0 18px;width:18px;height:18px;min-width:18px;min-height:18px;margin:0;padding:0;border:0;box-shadow:none;accent-color:var(--ig-accent);cursor:inherit}
 #igSettingsOverlay .iga-settings-error{position:sticky;top:0;z-index:2;background:var(--card,#fff);box-shadow:0 3px 14px #0002}
 body:has(>#igSettingsOverlay:not([hidden])){overflow:hidden;overscroll-behavior:none}
+
+/* Explain the same monthly amounts, without initiating financial changes. */
+.mt-gap-meaning{font-size:.84rem;line-height:1.65;margin:16px 0;color:var(--text)}
+.mt-difference{border:1px solid var(--border);border-radius:14px;margin:16px 0;overflow:hidden;background:var(--card);font-size:.8rem;line-height:1.6}
+.mt-difference>summary{padding:15px 17px;min-height:46px;box-sizing:border-box;cursor:pointer;font-weight:700;background:var(--bg2);touch-action:manipulation}
+.mt-difference summary:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
+.mt-diff-body{padding:0 16px 16px;overflow-wrap:anywhere}.mt-diff-body>p{color:var(--text2)}
+.mt-diff-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}
+.mt-diff-summary section{border:1px solid var(--border);border-radius:11px;padding:12px;min-width:0;background:var(--bg2)}
+.mt-diff-summary h4{font-size:.8rem;margin:0 0 10px}.mt-diff-summary p{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:8px 0;font-size:.76rem}
+.mt-diff-summary p span{min-width:0;overflow-wrap:anywhere}.mt-diff-summary p b{flex:none;font-variant-numeric:tabular-nums}
+.mt-reservation-upload{position:relative;overflow:hidden;cursor:pointer}.mt-reservation-upload input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.mt-diff-tools{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin:16px 0}
+.mt-diff-tools>button,.mt-diff-tools>label{display:flex;align-items:center;justify-content:center;box-sizing:border-box;border:1px solid var(--border);border-radius:10px;min-height:44px;padding:10px 12px;font-size:.78rem;background:var(--bg2);color:var(--text);text-align:center}
+.mt-diff-row{border:1px solid var(--border);border-radius:12px;padding:14px;margin:12px 0;background:var(--bg2);min-width:0}
+.mt-diff-row header{display:flex;justify-content:space-between;align-items:baseline;gap:12px}.mt-diff-row header>b{min-width:0}.mt-diff-row header>strong{flex:none;font-size:.9rem;font-variant-numeric:tabular-nums}
+.mt-diff-row>p{margin:7px 0;color:var(--text2)}.mt-diff-row dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.mt-diff-row dl>div{min-width:0}.mt-diff-row dt{font-size:.72rem;color:var(--text2)}.mt-diff-row dd{margin:3px 0 0;font-variant-numeric:tabular-nums;font-weight:650;overflow-wrap:anywhere}
+.mt-diff-row .mt-diff-reason{color:var(--text);line-height:1.7}.mt-diff-row details{font-size:.75rem;color:var(--text2);margin-top:10px}.mt-diff-row details>summary{cursor:pointer;min-height:36px;padding:7px 0;box-sizing:border-box;color:var(--text)}
+.mt-diff-row details p{overflow-wrap:anywhere}.mt-diff-footnote{font-size:.74rem;line-height:1.65;margin:14px 0 0}
+@media(max-width:650px){.mt-diff-summary{grid-template-columns:1fr}.mt-diff-body{padding:0 12px 12px}.mt-difference>summary{padding:14px 12px}.mt-diff-tools>*{width:100%}.mt-diff-row{padding:12px}.mt-diff-row header{flex-wrap:wrap;gap:4px}.mt-diff-row dl{grid-template-columns:repeat(2,minmax(0,1fr))}.mt-diff-row dd{font-size:.8rem}}

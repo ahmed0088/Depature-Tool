@@ -75,6 +75,8 @@ jobs:
         run: |
           node tests/monthly-tally.test.js
           node tests/monthly-tally.browser.test.js
+          node tests/monthly-difference.test.js
+          node tests/monthly-difference.browser.test.js
 
       - name: Simple IN-Gauge task screens
         run: node tests/ingauge-simple-ui.browser.test.js

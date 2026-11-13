@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 578, items: [
+    { ico: '🔎', title: 'Explain the monthly revenue difference',
+      what: 'Monthly totals now explains the gap by product, business date and confirmation, with Opera transaction IDs, IN-Gauge record IDs, amounts and pending requests shown separately.',
+      does: 'Add Reservation Detail to match Opera postings to a unique guest, room and stay. Ambiguous matches stay unresolved. Download the full evidence breakdown; seller changes alone do not change revenue totals, and this comparison never submits financial changes.' }
+  ] },
   { v: 577, items: [
     { ico: '🌍', title: 'Enrolment country matching and clearer results',
       what: 'Türkiye now matches Turkey, alongside verified alternate country names. A country must match exactly or through a known equivalent before the cloud submits it.',
