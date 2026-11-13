@@ -41,6 +41,21 @@
   }
 
   const COUNTRY_ALIASES = {
+    "gb": "United Kingdom", "syrian arab republic": "Syria",
+    "korea, republic of": "South Korea", "brunei darussalam": "Brunei",
+    "moldova, republic of": "Moldova", "macedonia, the former yugoslav republic of": "North Macedonia",
+    "palestinian territory, occupied": "Palestine", "palestinian territory": "Palestine",
+    "taiwan, province of china": "Taiwan", "venezuela, bolivarian republic of": "Venezuela",
+    "bolivia, plurinational state of": "Bolivia", "people's republic of china": "China", "macau": "Macao",
+    "dr congo": "Congo, the Democratic Republic of the",
+    "türkiye": "Turkey", "turkiye": "Turkey", "republic of turkey": "Turkey",
+    "libyan arab jamahiriya": "Libya", "libyan arab republic": "Libya",
+    "burkina fasa": "Burkina Faso", "burkina-faso": "Burkina Faso",
+    "czech republic": "Czechia", "czechia": "Czechia",
+    "united states of america": "United States",
+    "viet nam": "Vietnam", "vietnam": "Vietnam",
+    "iran, islamic republic of": "Iran", "iran (islamic republic of)": "Iran",
+    "tanzania, united republic of": "Tanzania", "united republic of tanzania": "Tanzania",
     "uae": "United Arab Emirates",
     "u.a.e.": "United Arab Emirates",
     "u.a.e": "United Arab Emirates",
@@ -73,10 +88,18 @@
   };
 
   function mapCountry(raw) {
-    if (!raw) return raw;
-    const key = String(raw).trim().toLowerCase();
-    return COUNTRY_ALIASES[key] || raw;
+    const value = String(raw || "").trim();
+    const key = value.toLowerCase();
+    const plain = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return COUNTRY_ALIASES[key] || COUNTRY_ALIASES[plain] || value;
   }
+  // Only an exact name or a known equivalent can establish a country.
+  // Fuzzy overlap can confuse Guinea with Guinea-Bissau or the two Congos.
+  function countryKey(raw) {
+    return mapCountry(raw).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function sameCountry(a, b) { const key = countryKey(a); return !!key && key === countryKey(b); }
 
   function sanitizePhone(raw) {
     if (!raw) return "";
@@ -453,6 +476,9 @@
   }
 
   async function pickReactSelectByLabel(labelText, text) {
+    text = String(text || "").trim();
+    const isCountry = String(labelText).toLowerCase() === "country";
+    if (isCountry && !text) return false;
     log("  -> " + labelText + ": \"" + text + "\"");
     await clearReactSelect(labelText);
     const input = await waitFor(() => reactSelectInputByLabel(labelText),
@@ -562,6 +588,7 @@
       return 1 - lev(A, B) / Math.max(A.length, B.length);
     }
     function scoreOption(optTxt) {
+      if (isCountry) return sameCountry(optTxt, text) ? 1000 : 0;
       const a = norm(optTxt), b = norm(text);
       const titleA = normTitle(optTxt), titleB = normTitle(text);
       if (titleA === titleB) return 1000;
@@ -582,7 +609,7 @@
     }
     log("     best match: \"" + (best ? best.txt : "none") + "\" (score " + bestScore.toFixed(1) + ")");
 
-    if (best && bestScore < 30 && similarity(best.txt, text) >= 0.8) {
+    if (!isCountry && best && bestScore < 30 && similarity(best.txt, text) >= 0.8) {
       log("     close spelling: \"" + text + "\" → \"" + best.txt + "\"");
       bestScore = 30;
     }
@@ -594,7 +621,8 @@
       const selected = input.closest("[class*='-control']")?.querySelector("[class*='singleValue']");
       const selectedNorm = selected ? normTitle(selected.textContent) : "";
       const wantedNorm = normTitle(text);
-      const ok = selected && (selectedNorm === wantedNorm ||
+      const ok = selected && (isCountry ? sameCountry(selected.textContent, text) :
+                              selectedNorm === wantedNorm ||
                               selectedNorm.indexOf(wantedNorm) >= 0 ||
                               wantedNorm.indexOf(selectedNorm) >= 0);
       if (!ok) {
@@ -604,7 +632,8 @@
       }
       const selectedAfter = input.closest("[class*='-control']")?.querySelector("[class*='singleValue']");
       const afterNorm = selectedAfter ? normTitle(selectedAfter.textContent) : "";
-      const okAfter = selectedAfter && (afterNorm === wantedNorm ||
+      const okAfter = selectedAfter && (isCountry ? sameCountry(selectedAfter.textContent, text) :
+                                        afterNorm === wantedNorm ||
                                         afterNorm.indexOf(wantedNorm) >= 0 ||
                                         wantedNorm.indexOf(afterNorm) >= 0);
       if (!okAfter) {
@@ -865,6 +894,12 @@
       await persist(idx + 1);
       return { status: "skipped: name_not_latin" };
     }
+    if (!String(rec.country || "").trim()) {
+      const status = "skipped: country_missing";
+      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status });
+      log("  GUEST RESULT · SKIPPED · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · country missing; nothing submitted");
+      await persist(idx + 1); return { status };
+    }
     await goHome();
     await openSignupForm();
 
@@ -894,11 +929,18 @@
       return { status: "title_not_committed" };
     }
     if (diagnosticOnly) {
-      log("DIAGNOSTIC: title selection committed; stopping before any submission", "info");
-      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: "test: title_ok" });
+      const countryOk = await pickReactSelectByLabel("Country", rec.country);
+      if (!countryOk) {
+        const status = "skipped: country_not_found: " + rec.country;
+        results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status });
+        log("  DIAGNOSTIC: country could not be selected; nothing submitted", "warn");
+        await persist(idx + 1); return { status };
+      }
+      log("DIAGNOSTIC: title and country selection committed; stopping before typing or submission", "info");
+      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: "test: form_ready" });
       log("  GUEST RESULT · TEST ONLY · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · no submission made");
       await persist(idx + 1);
-      return { status: "diagnostic_title_ok" };
+      return { status: "diagnostic_form_ready" };
     }
     await humanType(inputByLabel("First name"), rec.first_name);
     await humanType(inputByLabel("Family name"), rec.last_name);

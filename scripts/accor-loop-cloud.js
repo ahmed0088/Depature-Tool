@@ -123,16 +123,20 @@ function pipeRows(rows) {
     .map(x => String(x || '').replace(/[|\r\n]/g, '/')).join('|')).join('\n') + '\n';
 }
 function resultReport(results, total) {
-  const count = status => results.filter(r => r.status === status).length;
-  const submitted = count('success') + count('success_stuck');
-  const already = count('already_member');
-  const pending = count('pending-account');
-  const skipped = results.filter(r => /^skipped:|^title_not_committed|^country_not_found/.test(String(r.status || ''))).length;
-  const errors = results.filter(r => /error|timeout|unclear|bad_data|bad_email|bad_name|auth_hang|modal_other/i.test(String(r.status || ''))).length;
-  const other = Math.max(0, results.length - submitted - already - pending - skipped - errors);
-  const cat = st => /^(success|success_stuck)$/.test(st) ? 'enrolled' : st === 'already_member' ? 'already'
-    : st === 'pending-account' ? 'pending' : /^skipped:|^title_not_committed|^country_not_found|name_not_latin/.test(st) ? 'skipped'
-    : /error|timeout|unclear|bad_data|bad_email|bad_name|auth_hang|modal_other/i.test(st) ? 'error' : 'other';
+  // Every result belongs to one bucket, including a skipped exception.
+  // The old overlapping regexes counted "skipped: error: ..." twice.
+  const cat = status => {
+    const st = String(status || 'unknown');
+    if (/^(success|success_stuck)$/.test(st)) return 'enrolled';
+    if (st === 'already_member') return 'already';
+    if (st === 'pending-account') return 'pending';
+    if (/error|timeout|unclear|bad_data|bad_email|bad_name|auth_hang|modal_other/i.test(st)) return 'error';
+    if (/^skipped:|^title_not_committed|^country_(not_found|missing)|name_not_latin/.test(st)) return 'skipped';
+    return 'other';
+  };
+  const count = category => results.filter(r => cat(r.status) === category).length;
+  const submitted = count('enrolled'), already = count('already'), pending = count('pending');
+  const skipped = count('skipped'), errors = count('error'), other = count('other');
   return {
     processed: results.length, total, submitted, alreadyMember: already, pending,
     skipped, errors, other, complete: results.length >= total,
@@ -206,6 +210,7 @@ async function main() {
     void live({ step: 'browser-error', action: safe, note: safe });
   });
   page.on('requestfailed', request => {
+    if (/^(image|media|font)$/.test(request.resourceType())) return; // intentionally blocked above
     let host = 'portal resource';
     try { host = new URL(request.url()).hostname; } catch (_) {}
     const safe = tlog('WARN', `Portal request failed (${host}): ${(request.failure() || {}).errorText || 'unknown'}`);

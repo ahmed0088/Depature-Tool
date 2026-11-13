@@ -182,7 +182,8 @@ function gpAccRenderCat() {
 }
 function gpTryWords(st) {
   const s = String(st || '');
-  return /^success/.test(s) ? 'enrolled' : /already/.test(s) ? 'already an ALL member' : /bad_email/.test(s) ? 'Accor says this e-mail cannot receive mail — check the address'
+  return /^success/.test(s) ? 'enrolled' : /already/.test(s) ? 'already an ALL member' : /bad_email/.test(s) ? 'The cloud portal returned “email undeliverable”; not enrolled. Compare with the working PC portal before changing the address.'
+    : /country_missing/.test(s) ? 'country missing — enter it before retrying; nothing was submitted'
     : /bad_name|name_not_latin/.test(s) ? 'name refused (Latin letters A–Z only)' : /country_not_found/.test(s) ? 'country not found in the portal list'
     : /bad_data/.test(s) ? 'the portal refused the data' : /title/.test(s) ? 'title could not be set' : s.replace(/^skipped:\s*/, '').replace(/_/g, ' ');
 }
@@ -220,7 +221,8 @@ function gpRenderSummary() {
     <span class="gp-stat ok"><b>${n(r => gpEligible(r))}</b> usable emails</span>
     <span class="gp-stat warn"><b>${n(r => !r.email)}</b> no email / OTA</span>
     <span class="gp-stat info"><b>${n(r => gpTracked(r))}</b> already in the tracker</span>
-    <span class="gp-stat ${ready ? 'ok' : ''}"><b>${ready}</b> ready to enroll (agreed + civility)</span>`;
+    <span class="gp-stat ${ready ? 'ok' : ''}"><b>${ready}</b> selected with agreement + civility</span>
+    ${n(r=>gpCanEnroll(r)&&r.consent&&r.civility&&!String(r.nat||'').trim())?`<span class="gp-stat warn"><b>${n(r=>gpCanEnroll(r)&&r.consent&&r.civility&&!String(r.nat||'').trim())}</b> selected without a country — cloud enrolment will skip these</span>`:''}`;
   const all = document.getElementById('gpAllConsent');
   if (all) { const can = gpRows.filter(gpCanEnroll); all.checked = can.length > 0 && can.every(r => r.consent); }
   const btn = document.getElementById('gpCopyEnroll');

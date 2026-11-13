@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 577, items: [
+    { ico: '🌍', title: 'Enrolment country matching and clearer results',
+      what: 'Türkiye now matches Turkey, alongside verified alternate country names. A country must match exactly or through a known equivalent before the cloud submits it.',
+      does: 'Missing countries are held before form entry, and read-only diagnostics check the country too. Results count each guest once. Portal email rejections remain visible for review; no address is changed or retried automatically. The PC-script button now identifies its fc.accor.net portal.' }
+  ] },
   { v: 576, items: [
     { ico: '📅', title: 'Purpose of Stay follows Opera’s business date',
       what: 'The report and Excel export now use the same saved weekday and date. They stay on Opera’s business day until Opera rolls it forward, including after midnight.',
