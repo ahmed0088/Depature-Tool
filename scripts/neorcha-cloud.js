@@ -139,14 +139,19 @@ async function steps(page) {
   } catch (_) {}
 }
 
+function portalLink(value) {
+  try { const u=new URL(value);if(u.protocol==='https:'&&!u.username&&!u.password&&u.hostname==='mercure.myneorcha.com'&&/^\/neorchaWEBPlatform(?:\/|$)/i.test(u.pathname))return u.origin+'/tweak/'; } catch (_) {}
+  return value;
+}
+
 /** whose Neorcha login and link (pure): the account's own secrets; the main ones for no account or the main hotel's brand
  *  (the brand = the first part of the main link, ibis when there is none); anything else must have its own */
 function resolveLogin(acct, env) {
   const DEF = 'https://ibis.myneorcha.com/tweak/', t = v => String(v || '').trim();
   const sub = u => { try { return new URL(u).hostname.split('.')[0].toUpperCase(); } catch (_) { return ''; } };
-  const mainUrl = t(env.NEORCHA_URL) || DEF, mainBrand = sub(mainUrl), urlIn = t(env.URL_IN);
+  const mainUrl = portalLink(t(env.NEORCHA_URL)) || DEF, mainBrand = sub(mainUrl), urlIn = portalLink(t(env.URL_IN));
   if (acct && t(env.NEORCHA_USER_ACC) && t(env.NEORCHA_PASS_ACC))
-    return { user: env.NEORCHA_USER_ACC, pass: env.NEORCHA_PASS_ACC, url: urlIn || t(env.NEORCHA_URL_ACC) || 'https://' + acct.toLowerCase().replace(/_.*$/, '') + '.myneorcha.com/' + (acct.replace(/_.*$/, '') === 'IBIS' ? 'tweak/' : 'neorchaWEBPlatform/#/login'), who: acct };
+    return { user: env.NEORCHA_USER_ACC, pass: env.NEORCHA_PASS_ACC, url: urlIn || portalLink(t(env.NEORCHA_URL_ACC)) || 'https://' + acct.toLowerCase().replace(/_.*$/, '') + '.myneorcha.com/' + (['IBIS','MERCURE'].includes(acct.replace(/_.*$/, '')) ? 'tweak/' : 'neorchaWEBPlatform/#/login'), who: acct };
   if (!acct || acct === mainBrand) return { user: env.NEORCHA_USER || '', pass: env.NEORCHA_PASS || '', url: urlIn || mainUrl, who: 'main' };
   return { err: 'The ' + acct + ' hotel is not set up on GitHub yet — add the secrets NEORCHA_USER_' + acct + ' and NEORCHA_PASS_' + acct + ' (Settings → Secrets and variables → Actions → New repository secret).' };
 }
@@ -200,13 +205,13 @@ async function main() {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
       const user = page.locator('input[formcontrolname=username]:visible');
       await user.waitFor({ state: 'visible', timeout: 60000 });
-      await live({ step: 'login', note: 'Signing in to the Ibis Tweak portal…' });
+      await live({ step: 'login', note: 'Signing in to the Neorcha Tweak portal…' });
       try {
         await user.fill(String(E.NEORCHA_USER).trim());
         await page.locator('#userPassword').fill(String(E.NEORCHA_PASS));
         await page.locator('button.login-btn[type=submit]').click();
         await page.waitForURL(u => /^\/tweak\/dashboard(?:\/|$)/.test(u.pathname), { timeout: 45000 });
-      } catch (_) { throw Error('The Ibis Tweak sign-in did not complete. Check the Neorcha account or any verification prompt.'); }
+      } catch (_) { throw Error('The Neorcha Tweak sign-in did not complete. Check the Neorcha account or any verification prompt.'); }
     } else {
     // the login box can be slow or Neorcha can be down: try twice, and say what the page showed (no guessing)
     const openLogin = async n => {
@@ -259,4 +264,4 @@ async function main() {
   } finally { await browser.close().catch(() => {}); }
 }
 if (require.main === module) main().catch(e => fail('Stopped: ' + String(e && e.message || e).split('\n')[0].replace(/\d{6,}/g, '#')));
-module.exports = { datesOf, fbConfig, resolveLogin, readerFor };
+module.exports = { datesOf, fbConfig, resolveLogin, readerFor, portalLink };
