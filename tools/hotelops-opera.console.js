@@ -65,7 +65,7 @@
   'use strict';
   var APP_URL = '__HO_APP_URL__';
   var VERSION = '1';
-  var READER_REV = 2;   // report layout revision; screen classification fixes use the app release version
+  var READER_REV = 3;   // report layout revision; screen classification fixes use the app release version
 
   // ── pure helpers (tested in Node) ────────────────────────
   var sp = function (s) { return String(s == null ? '' : s).replace(/[   ]/g, ' ').replace(/[​-‏⁦-⁩﻿]/g, ''); };
@@ -315,6 +315,15 @@
     var rx = /(\d{4}-\d{1,2}-\d{1,2})|(\d{1,2}[-\/. ][A-Za-z]{3,9}\.?[-\/. ,]+\d{2,4})|([A-Za-z]{3,9}\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})|(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4})/g, m;
     while ((m = rx.exec(t))) { var iso = parseDate(m[0], order); if (iso) return iso; }
     return '';
+  }
+
+
+  /** Only the labelled operating date is an authority. Search dates and
+   * reservation arrival/departure dates must never change the report day. */
+  function businessDateFromText(text, order) {
+    var t = sp(text).replace(/businessDate/gi, 'Business Date');
+    var m = t.match(/\bbusiness\s+date(?=\b|\d)\s*[:=–-]?\s*(.*)/i);
+    return m ? findDate(m[1], order) : '';
   }
 
   /** what Opera's status words mean → 'due_in' | 'in_house' | 'due_out' | 'checked_out' | 'cancelled' | 'no_show' | 'waitlist' | '' */
@@ -1094,7 +1103,7 @@
     setTaught: setTaught, screenKey: screenKey, shapeOf: shapeOf, headText: headText, structText: structText, pathShape: pathShape, classShape: classShape, mapName: mapName, reportLeaks: reportLeaks, makeReport: makeReport, reportText: reportText, linkDiag: linkDiag,
     maskCards: maskCards, secretLabel: secretLabel, scrub: scrub, payType: payType, normRoomStatus: normRoomStatus, postFieldOf: postFieldOf, traceFieldOf: traceFieldOf, usablePost: usablePost, usableTrace: usableTrace,
     postingsFrom: postingsFrom, folioFrom: folioFrom, tracesFrom: tracesFrom, tableFrom: tableFrom, pairsExtra: pairsExtra, auditState: auditState, cleanLabel: cleanLabel, safeTitle: safeTitle,
-    isRoomStatusSummary: isRoomStatusSummary, normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, normStatus: normStatus, money: money,
+    isRoomStatusSummary: isRoomStatusSummary, normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, businessDateFromText: businessDateFromText, normStatus: normStatus, money: money,
     roomOf: roomOf, roomKey: roomKey, nameKey: nameKey, confOf: confOf, emailOf: emailOf, rowFrom: rowFrom, finishRows: finishRows, rowKey: rowKey, mergeRows: mergeRows, pairsToRow: pairsToRow,
     kindOfText: kindOfText, pageKind: pageKind, sigKind: sigKind, formLabel: formLabel, dataLook: dataLook, isReportForm: isReportForm, KNOWN_HEAD: KNOWN_HEAD, hash: hash, summary: summary, totalOf: totalOf, totalLine: totalLine, FIELDS: FIELDS, VERSION: VERSION, READER_REV: READER_REV };
   if (typeof module !== 'undefined' && module.exports) { module.exports = H; return; }
@@ -1444,6 +1453,28 @@
     return '';
   }
 
+  function businessDate(doc, order) {
+    var result = '';
+    doc.querySelectorAll('label, span, h1, h2, h3, [role="heading"], [class*="date" i], [id*="date" i], [aria-label*="business" i]').forEach(function (e) {
+      if (result || mine(e) || inData(e)) return;
+      // Cheap text-content check avoids layout reads on every ordinary ADF span.
+      if (typeof e.textContent === 'string' && !/business\s*date/i.test(e.textContent + ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || ''))) return;
+      var label = [txt(e), e.getAttribute('aria-label') || '', e.getAttribute('title') || ''].join(' ').replace(/businessDate/gi, 'Business Date');
+      if (!/\bbusiness\s+date(?=\b|\d)/i.test(label) || label.length > 180) return;
+      var target = e.tagName === 'LABEL' && e.getAttribute('for') ? doc.getElementById(e.getAttribute('for')) : null;
+      if (e.tagName === 'INPUT' && !e.readOnly && !e.disabled || target && target.tagName === 'INPUT' && !target.readOnly && !target.disabled) return;   // an editable report filter
+      result = businessDateFromText(label, order);
+      if (result) return;
+      var candidates = [target, e, e.nextElementSibling, e.parentElement];
+      for (var i = 0; i < candidates.length && !result; i++) {
+        var node = candidates[i]; if (!node || mine(node) || inData(node) || node.tagName === 'INPUT' && !node.readOnly && !node.disabled) continue;
+        var value = node.tagName === 'INPUT' ? node.value : txt(node);
+        if (value && value.length < 160) result = businessDateFromText(node === e.parentElement ? value : 'Business Date ' + value, order);
+      }
+    });
+    return result;
+  }
+
   // Never in Opera's way: no reading while you type or click (it waits until you pause), only when the
   // browser is idle, and a screen that takes long to read is read less often.
   var lastUse = 0, cost = 0;
@@ -1492,14 +1523,15 @@
       if (kind === 'rooms') rows.forEach(function (r) { if (!r.rs && r.statusText) { var x = normRoomStatus(r.statusText); if (x) { r.rs = x; r.roomStatus = r.statusText; delete r.status; } } });
       g.other.forEach(function (o) { var tb = tableFrom(o.head, o.rows, heads[0] || document.title); if (tb) tables.push(tb); });
       if (kind === 'audit') { var tx = heads.slice(); tables.forEach(function (tb) { tb.rows.forEach(function (r) { tx.push(r.join(' ')); }); }); pairs.forEach(function (p) { tx.push(p[0] + ' ' + p[1]); }); audit = { state: auditState(tx) }; }
-      var date = screenDate(document, order);
+      var date = screenDate(document, order), operatingDate = businessDate(document, order);
+      if (!kind && operatingDate) kind = 'other';
       var key = kind + '|' + date + '|' + (heads[0] || document.title || '').replace(/\d+/g, '#').slice(0, 60);   // "Arrivals (42)" while it loads is the same screen
       if (key !== view.key) { view = { key: key, kind: kind, date: date, rows: [], title: (heads[0] || document.title || '').slice(0, 90), total: 0 }; noteScreen(kind, view.title); if (kind) tl('📺', (KLABEL[kind] || 'A screen') + ' on screen'); }
       view.rows = REPLACE[kind] ? rows : mergeRows(view.rows, rows);
       if (view.rows.length > 1500) view.rows = view.rows.slice(-1500);
       if (g.total) view.total = g.total;
       else if (rows.length && !REPLACE[kind]) { var hn = (heads[0] || '').match(/\((\d{1,5})\)\s*$/); if (hn) view.total = +hn[1]; }   // "Departures (15)"
-      view.folio = folio; view.traces = traces; view.tables = tables; view.audit = audit;
+      view.businessDate = operatingDate; view.folio = folio; view.traces = traces; view.tables = tables; view.audit = audit;
       lastCtx = { kind: kind, hint: hint, heads: heads, date: date, g: g, pairs: readP ? pairs : null, rowsN: rows.length, tables: tables.length };
       checkStuck(lastCtx);
       send();
@@ -1689,13 +1721,14 @@
   }
   function send(force) {
     var more = view.folio || (view.traces && view.traces.length) || (view.tables && view.tables.length);
-    if ((!view.rows.length && !more) || !view.kind) return;
+    if ((!view.rows.length && !more && !view.businessDate) || !view.kind) return;
     var snap = { id: view.key, kind: view.kind, date: view.date, title: view.title, total: view.total || 0, rows: view.rows, frame: FRAME, url: location.hostname + location.pathname, prop: readProp() };
+    if (view.businessDate) snap.businessDate = view.businessDate;
     if (view.folio) snap.folio = view.folio;
     if (view.traces && view.traces.length) snap.traces = view.traces;
     if (view.tables && view.tables.length) snap.tables = view.tables;
     if (view.audit) snap.audit = view.audit;
-    var h = more ? hash([snap.kind, snap.date, snap.rows, snap.folio || 0, snap.traces || 0, snap.tables || 0, snap.audit || 0]) : hash([snap.kind, snap.date, snap.rows]);
+    var h = more ? hash([snap.kind, snap.date, snap.businessDate || '', snap.rows, snap.folio || 0, snap.traces || 0, snap.tables || 0, snap.audit || 0]) : hash([snap.kind, snap.date, snap.businessDate || '', snap.rows]);
     if (!force && h === sentHash) return;
     if (!force && Date.now() - sentAt < 2500) { laterScan(2600); return; }   // a list still loading: at most one snapshot every few seconds
     if (post({ source: 'ho-op', v: VERSION, h: h, snap: scrub(snap), at: Date.now() })) {
@@ -2086,7 +2119,7 @@
   var uiIv = setInterval(function () { if (Date.now() - linked > 40000 || lastErr) render(); }, 2500);   // the linking checklist after 10 s (render returns at once when nothing changed)
   window.__hoOp = { guard: { idle: LOCK.idle, state: LOCK.state },
     stop: stop, scan: scan, connect: connect, min: setMin, tab: function (k) { setTab(k); }, report: manualReport, v: VERSION,
-    state: function () { return { kind: view.kind, date: view.date, title: view.title, total: view.total, rows: view.rows.slice(), folio: view.folio || null, traces: (view.traces || []).slice(), tables: (view.tables || []).slice(), audit: view.audit || null,
+    state: function () { return { kind: view.kind, date: view.date, businessDate: view.businessDate || '', title: view.title, total: view.total, rows: view.rows.slice(), folio: view.folio || null, traces: (view.traces || []).slice(), tables: (view.tables || []).slice(), audit: view.audit || null,
       sent: sentN, sentAt: sentAt, linked: Date.now() - linked < 45000, ack: lastAck, err: lastErr, ext: !!EXT, frame: FRAME, learn: LEARN, steps: steps.length, hint: hintNow, cost: Math.round(cost * 10) / 10,
       link: linkNow(), relay: relay, stuckSent: doneToday().slice(), stuckQ: stuckQ.length, timeline: TL.slice() }; } };
   if (TOP && !EXT) try { console.log('%c 📡 HotelOps Opera reader is running ✓ %c Press "Connect" in the HotelOps window (bottom right). It only reads; it never changes anything in Opera.', 'background:#111827;color:#fbbf24;font:700 13px system-ui;padding:4px 8px;border-radius:6px', 'color:#9aa3b2;font:12px system-ui'); } catch (_) {}

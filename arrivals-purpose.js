@@ -800,11 +800,11 @@ function loadArrivals() {
   const hdrs = splitLine(lines[0]).map(h => h.replace(/"/g,'').trim().toUpperCase());
   const ci   = (...n) => _colIndex(hdrs, ...n);
   const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=ci('CONFIRMATION NUMBER','CONFIRMATION_NO','CONFIRM'),
-        taI=ci('TRAVEL AGENT','TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE'),
+        taI=ci('TRAVEL AGENT','TRAVEL'),coI=ci('COMPANY'),srcI=ci('BOOKING SOURCE','SOURCE'),
         eI=ci('EMAIL','E-MAIL'), natI=ci('NATIONALITY','COUNTRY','NATION','NAT');
   if (rI < 0 || nI < 0) { alert('Could not find Room/Name columns.'); return; }
   _showColumnMap(hdrs, { Room:rI, Name:nI, 'Conf.':cI, Nights:niI, Email:eI,
-                         'Travel Agent':taI, Company:coI, 'Booking Source':srcI, Nationality:natI });
+                         'Travel Agent':taI, Company:coI, 'Booking Source':srcI, Nationality:natI, 'How you hear about us':window.PurposeReferral?.headerIndex(hdrs)??-1 });
   const guests = [];
   for (let i = 1; i < lines.length; i++) {
     const p    = splitLine(lines[i]);
@@ -814,7 +814,7 @@ function loadArrivals() {
     guests.push({ room, conf:cI>=0?(p[cI]||'').replace(/"/g,'').trim():'', name:cleanName(rn), purpose:'Business',
       nights:niI>=0?parseInt(p[niI])||1:1, nat: natI>=0 ? (p[natI]||'').replace(/"/g,'').trim() : '', email: (eI>=0 && (p[eI]||'').trim()) ? (p[eI]||'').replace(/"/g,'').trim() : 'No@email.com',
       source:cleanSource(taI>=0?(p[taI]||'').replace(/"/g,'').trim():'', coI>=0?(p[coI]||'').replace(/"/g,'').trim():'', srcI>=0?(p[srcI]||'').replace(/"/g,'').trim():''),
-      remarks:'' });
+      howHeard: window.PurposeReferral?.read(p,hdrs)||'', remarks:'' });
   }
   if (!guests.length) { alert('No guests found.'); return; }
   arrGuests = guests;
@@ -915,18 +915,73 @@ function purposeKpiUpdate() {
   const badge = document.getElementById('badge-purpose'); if (badge) badge.textContent = t || '0';
 }
 
+function purposeMergeHeard(incoming, previous = purposeGuests) {
+  const conf = g => String(g.conf || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+  const person = g => String(g.name || '').replace(/\s+/g, ' ').trim().toUpperCase();
+  return incoming.filter(g => !_isPmRoom(g.room)).map(g => {
+    const next = {...g};
+    if (String(next.howHeard || '').trim()) return next;
+    const c = conf(next), candidates = (previous || []).filter(old => c && conf(old) ? c === conf(old) : String(next.room || '') === String(old.room || '') && person(next) && person(next) === person(old));
+    if (candidates.length === 1 && String(candidates[0].howHeard || '').trim()) {
+      for (const field of ['howHeard','_howHeardGenerated','_howHeardGeneratedValue']) if (candidates[0][field] !== undefined) next[field] = candidates[0][field];
+    }
+    return next;
+  });
+}
+function purposeChangeHeard(i, value) {
+  const guest = purposeGuests[i]; if (!guest) return;
+  guest.howHeard = String(value || ''); guest._howHeardGenerated = false; delete guest._howHeardGeneratedValue;
+  debounceSavePurpose();
+}
+function purposeRandomizeHeard(percent) {
+  if (!purposeGuests.length) { showToast('No guests loaded', 'err'); return; }
+  if (!window.PurposeReferral) { showToast('Refresh the app to load referral suggestions.', 'err'); return; }
+  const key = 'purpose_heard_pct_v1:' + (typeof HOTEL_ID !== 'undefined' ? HOTEL_ID : 'local');
+  let saved = '80'; try { saved = localStorage.getItem(key) || saved; } catch (_) {}
+  const input = typeof percent === 'number' ? percent : prompt('Walk-ins: percent Online search (0–100). Only blank answers are filled; entered answers stay unchanged:', saved);
+  if (input === null) return;
+  try {
+    if (String(input).trim() === '') throw Error('Enter a percentage from 0 to 100.');
+    const result = window.PurposeReferral.fill(purposeGuests, {walkinOnlinePercent:Number(input)});
+    try { localStorage.setItem(key, String(input)); } catch (_) {}
+    if (!result.filled) { showToast('No blank answers to fill. Your existing answers are unchanged.', 'info'); return result; }
+    purposeRender(); savePurpose(purposeGuests);
+    addPurposeLog('How you hear about us', `Filled ${result.filled} blank answers · ${result.walkin.online}/${result.walkin.eligible} walk-ins Online search · ${result.preserved} existing answers kept`);
+    showToast(`✓ ${result.filled} suggestions saved · existing answers kept`, 'ok'); return result;
+  } catch (error) { showToast(error.message || 'The answers could not be filled.', 'err'); }
+}
+function purposeBusinessISO() {
+  if (window.PurposeBusinessDate) return window.PurposeBusinessDate.resolve();
+  return new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Dubai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+}
+function purposeRenderDate() {
+  const date = _purposeDay(), label = document.getElementById('purposeBusinessLabel'), input = document.getElementById('purposeBusinessDate');
+  if (label) label.textContent = date.toLocaleDateString('en-GB', {weekday:'long',day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'});
+  if (input && document.activeElement !== input) input.value = purposeBusinessISO();
+  document.querySelectorAll('#purposeTable tr').forEach(row=>{if(row.children.length<2)return;row.children[0].textContent=date.toLocaleDateString('en-GB',{weekday:'long',timeZone:'UTC'});row.children[1].textContent=date.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'});});
+  const options = document.getElementById('purposeHowHeardOptions');
+  if (options && window.PurposeReferral && !options.children.length) options.innerHTML = window.PurposeReferral.options.map(value=>`<option value="${escapeHtml(value)}"></option>`).join('');
+}
+function purposeSetBusinessDate(value) {
+  if (!window.PurposeBusinessDate || !window.PurposeBusinessDate.validISO(value)) { showToast('Choose a valid Opera business date.', 'err'); purposeRenderDate(); return; }
+  if (!window.PurposeBusinessDate.observe(value, {source:'manual'})) { const input=document.getElementById('purposeBusinessDate');if(input)input.value=purposeBusinessISO();purposeRenderDate(); return; }
+  purposeRender(); showToast('Report date follows '+value+' until Opera changes its business date.', 'ok');
+}
+window.addEventListener('purpose-business-date', () => { const active=document.activeElement;const editing=document.getElementById('purposeTable')?.contains(active)||document.getElementById('purposeCards')?.contains(active);if(editing)purposeRenderDate();else purposeRender(); });
+
 function purposeRender() {
+  purposeRenderDate();
   const search   = (document.getElementById('purposeSearch')?.value || '').toLowerCase();
   const filtered = purposeGuests.filter(g => {
     const mf  = purposeFilter_ === 'all' || g.purpose === purposeFilter_;
     const msf = purposeSrcFilter_ === 'all' || sourceCategory(g.source) === purposeSrcFilter_;
     const mo  = purposeOriginFilter_ !== 'missing' || !g.originOfTravel;
-    const ms  = !search || [g.room,g.conf,g.name,g.nat,g.source,g.originOfTravel].join(' ').toLowerCase().includes(search);
+    const ms  = !search || [g.room,g.conf,g.name,g.nat,g.source,g.originOfTravel,g.howHeard].join(' ').toLowerCase().includes(search);
     return mf && msf && mo && ms;
   });
   const tbody = document.getElementById('purposeTable'); if (!tbody) return;
   if (!purposeGuests.length) {
-    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:28px 36px;">
+    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:28px 36px;">
       <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);margin-bottom:14px;">
         No guests loaded. Sync from Arrivals, upload a file, or add manually.
       </div>
@@ -937,10 +992,9 @@ function purposeRender() {
     </td></tr>`;
     purposeKpiUpdate(); return;
   }
-  // Day/Date — the whole report is one day's arrivals and goes out the next day,
-  // so every row is stamped with tomorrow's day name + date (matches the paper template).
-  const _dayName = _purposeDay().toLocaleDateString('en-GB', { weekday: 'long' });
-  const _dateStr = _purposeDay().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  // Every row and export use the same saved Opera business day.
+  const _dayName = _purposeDay().toLocaleDateString('en-GB', { weekday: 'long', timeZone:'UTC' });
+  const _dateStr = _purposeDay().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric', timeZone:'UTC' });
   tbody.innerHTML = filtered.map(g => {
     const i      = purposeGuests.indexOf(g);
     const origin = g.originOfTravel || '';
@@ -978,6 +1032,14 @@ function purposeRender() {
           style="width:86px;${_purposeNatBorder(g)}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'purpose')" title="AI">✦</button>
       </div></td>
+      <td>
+        <input value="${escapeHtml(origin)}"
+          oninput="purposeGuests[${i}].originOfTravel=this.value"
+          onblur="gmOnEdit(purposeGuests[${i}].name,'originOfTravel',this.value);debounceSavePurpose()"
+          placeholder="—"
+          title="Origin of Travel — loaded from Vicas/Inhouse XML"
+          style="width:96px;${originStyle}"/>
+      </td>
       <td><input value="${escapeHtml(g.email)}"
         oninput="purposeGuests[${i}].email=this.value"
         onblur="gmOnEdit(purposeGuests[${i}].name,'email',this.value);debounceSavePurpose()"
@@ -990,14 +1052,10 @@ function purposeRender() {
           style="width:82px;"/>
         <span class="src-badge ${srcCat}" id="src-badge-p-${i}">${SOURCE_CATEGORIES[srcCat].label}</span>
       </div></td>
-      <td>
-        <input value="${escapeHtml(origin)}"
-          oninput="purposeGuests[${i}].originOfTravel=this.value"
-          onblur="gmOnEdit(purposeGuests[${i}].name,'originOfTravel',this.value);debounceSavePurpose()"
-          placeholder="—"
-          title="Origin of Travel — loaded from Vicas/Inhouse XML"
-          style="width:96px;${originStyle}"/>
-      </td>
+      <td><input value="${escapeHtml(g.howHeard || '')}" list="purposeHowHeardOptions" data-purpose-heard="${i}"
+        oninput="purposeChangeHeard(${i},this.value)" onblur="debounceSavePurpose()"
+        title="${g._howHeardGenerated ? 'Suggested answer — editable; saved until you change it.' : 'How you hear about us — entered answers stay unchanged.'}"
+        placeholder="Choose or type…" style="width:155px;${g._howHeardGenerated?'border-color:var(--sky);':''}"/></td>
       <td><input value="${escapeHtml(g.remarks)}"
         oninput="purposeGuests[${i}].remarks=this.value"
         onblur="debounceSavePurpose()"
@@ -1045,6 +1103,9 @@ function purposeRenderCards(list) {
             oninput="purposeGuests[${i}].originOfTravel=this.value"
             onblur="gmOnEdit(purposeGuests[${i}].name,'originOfTravel',this.value);debounceSavePurpose()"></label>
         ${f(i, 'conf', 'Confirmation #')}
+        <label class="pc-f pc-wide"><span>How you hear about us${g._howHeardGenerated ? ' · suggested' : ''}</span>
+          <input value="${escapeHtml(g.howHeard || '')}" list="purposeHowHeardOptions" data-purpose-heard="${i}"
+            oninput="purposeChangeHeard(${i},this.value)" onblur="debounceSavePurpose()" placeholder="Choose or type…"></label>
         ${f(i, 'remarks', 'Remarks')}
       </div>
       <button class="pc-del-wide" onclick="purposeRemoveGuest(${i})">✕ Remove guest</button>
@@ -1293,7 +1354,7 @@ function purposeRandomizeSplit() {
 
 function syncFromArrivals() {
   if (!arrGuests.length) { alert('No arrivals loaded. Go to Arrivals tab first.'); return; }
-  purposeGuests = arrGuests.filter(g => !_isPmRoom(g.room)).map(g => ({...g}));
+  purposeGuests = purposeMergeHeard(arrGuests);
   _applyOriginToPurpose();
   purposeRender(); savePurpose(purposeGuests);
   showToast('Synced from Arrivals ✓');
@@ -1305,8 +1366,8 @@ function clearPurpose() {
   addPurposeLog('Cleared', 'All guests cleared');
 }
 
-// The Purpose of Stay report is sent the next day: every row carries tomorrow's day and date.
-function _purposeDay() { const d = new Date(); d.setDate(d.getDate() + 1); return d; }
+// Noon UTC represents the saved ISO business day without a timezone rollover.
+function _purposeDay() { return new Date(purposeBusinessISO() + 'T12:00:00Z'); }
 // PM rooms (9000 and up) are Opera's pseudo rooms, not guests: they never go on the report.
 function _isPmRoom(room) { const n = parseInt(String(room || '').replace(/\D/g, ''), 10); return n >= 9000; }
 
@@ -1323,11 +1384,11 @@ function loadPurpose() {
   const hdrs  = splitLine(lines[0]).map(h => h.replace(/"/g,'').trim().toUpperCase());
   const ci    = (...n) => _colIndex(hdrs, ...n);
   const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=ci('CONFIRMATION NUMBER','CONFIRMATION_NO','CONFIRM'),
-        taI=ci('TRAVEL AGENT','TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE'),
+        taI=ci('TRAVEL AGENT','TRAVEL'),coI=ci('COMPANY'),srcI=ci('BOOKING SOURCE','SOURCE'),
         eI=ci('EMAIL','E-MAIL'), natI=ci('NATIONALITY','COUNTRY','NATION','NAT');
   if (rI < 0 || nI < 0) { alert('Could not find Room/Name.'); return; }
   _showColumnMap(hdrs, { Room:rI, Name:nI, 'Conf.':cI, Nights:niI, Email:eI,
-                         'Travel Agent':taI, Company:coI, 'Booking Source':srcI, Nationality:natI });
+                         'Travel Agent':taI, Company:coI, 'Booking Source':srcI, Nationality:natI, 'How you hear about us':window.PurposeReferral?.headerIndex(hdrs)??-1 });
   const guests = [];
   for (let i = 1; i < lines.length; i++) {
     const p    = splitLine(lines[i]);
@@ -1338,9 +1399,9 @@ function loadPurpose() {
       nights:niI>=0?parseInt(p[niI])||1:1, nat: natI>=0 ? (p[natI]||'').replace(/"/g,'').trim() : '', email: (eI>=0 && (p[eI]||'').trim()) ? (p[eI]||'').replace(/"/g,'').trim() : 'No@email.com',
       source:cleanSource(taI>=0?(p[taI]||'').replace(/"/g,'').trim():'', coI>=0?(p[coI]||'').replace(/"/g,'').trim():'', srcI>=0?(p[srcI]||'').replace(/"/g,'').trim():''),
       originOfTravel: '',
-      remarks:'' });
+      howHeard: window.PurposeReferral?.read(p,hdrs)||'', remarks:'' });
   }
-  purposeGuests = guests;
+  purposeGuests = purposeMergeHeard(guests);
   _applyOriginToPurpose();   // re-apply any already-loaded XML instantly — don't discard it
   purposeRender();
   // Real XML data (Vicas/Inhouse) first — it's ground truth, not a guess.
@@ -1387,16 +1448,16 @@ function _purposeArchive() {
     total: purposeGuests.length,
     withNationality: withNat,
     nationalities: nat, sources: src, purposes: purpose,
-  });
+  }, purposeBusinessISO());
 }
 
 function exportPurpose() {
-  // Day/Date — same convention as the on-screen table: tomorrow's day + date (it is sent the next day)
-  const dayName = _purposeDay().toLocaleDateString('en-GB', { weekday: 'long' });
-  const dateStr = _purposeDay().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  // Day/Date match the saved Opera business date shown on the screen.
+  const dayName = _purposeDay().toLocaleDateString('en-GB', { weekday: 'long', timeZone:'UTC' });
+  const dateStr = _purposeDay().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric', timeZone:'UTC' });
   if (purposeGuests.some(g => _isPmRoom(g.room))) purposeGuests = purposeGuests.filter(g => !_isPmRoom(g.room));   // a list loaded before this rule
-  const rows = [['Day','Date','Room','Confirmation No.','Name','Purpose of Stay','Night of Stay','Nationality','Origin of Travel','Email','Booking Source','Remarks']];
-  purposeGuests.forEach(g => rows.push([dayName,dateStr,g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.originOfTravel||'',g.email,g.source,g.remarks]));
+  const rows = [['Day','Date','Room','Confirmation No.','Name','Purpose of Stay','Night of Stay','Nationality','Origin of Travel','Email','Booking Source','How you hear about us','Remarks']];
+  purposeGuests.forEach(g => rows.push([dayName,dateStr,g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.originOfTravel||'',g.email,g.source,g.howHeard||'',g.remarks]));
 
   // 0 normal · 1 header · 2 walk-in · 3 leisure
   const styles = [
@@ -1418,7 +1479,7 @@ function exportPurpose() {
       return g && g.purpose === 'Leisure' ? 3 : 0;
     },
     styles,
-    [11,12,8,16,28,14,8,14,18,26,20,18]);
+    [11,12,8,16,28,14,8,14,18,26,20,24,18]);
 
   const n = walkIn.filter(Boolean).length;
   addPurposeLog('Exported', `${purposeGuests.length} guests exported${n ? ` — ${n} walk-in${n===1?'':'s'} highlighted` : ''}`);
@@ -1488,11 +1549,11 @@ function loadOperaFile(input, target) {
       const hdrs = rows[hdrRow].map(c => String(c).replace(/"/g,'').trim().toUpperCase());
       const ci   = (...n) => _colIndex(hdrs, ...n);
       const rI=ci('ROOM'), nI=ci('NAME'), cI=ci('CONFIRMATION NUMBER','CONFIRMATION_NO','CONFIRM'), niI=ci('NIGHT'),
-            taI=ci('TRAVEL AGENT','TRAVEL'), coI=ci('COMPANY'), srcI=ci('SOURCE'),
+            taI=ci('TRAVEL AGENT','TRAVEL'), coI=ci('COMPANY'), srcI=ci('BOOKING SOURCE','SOURCE'),
             eI=ci('EMAIL','E-MAIL'), natI=ci('NATIONALITY','COUNTRY','NATION','NAT');
       if (rI < 0 || nI < 0) { alert('Cannot find Room/Name.\nHeaders: ' + hdrs.slice(0,10).join(', ')); return; }
       _showColumnMap(hdrs, { Room:rI, Name:nI, 'Conf.':cI, Nights:niI, Email:eI,
-                             'Travel Agent':taI, Company:coI, 'Booking Source':srcI, Nationality:natI });
+                             'Travel Agent':taI, Company:coI, 'Booking Source':srcI, Nationality:natI, 'How you hear about us':window.PurposeReferral?.headerIndex(hdrs)??-1 });
       const guests = [];
       for (let i = hdrRow + 1; i < rows.length; i++) {
         const r    = rows[i];
@@ -1507,6 +1568,7 @@ function loadOperaFile(input, target) {
           nat:    natI>=0 ? String(r[natI]||'').replace(/"/g,'').trim() : '', email: (eI>=0 && String(r[eI]||'').trim()) ? String(r[eI]).replace(/"/g,'').trim() : 'No@email.com',
           source: cleanSource(taI>=0?String(r[taI]||'').trim():'', coI>=0?String(r[coI]||'').trim():'', srcI>=0?String(r[srcI]||'').trim():''),
           originOfTravel: '',
+          howHeard: window.PurposeReferral?.read(r,hdrs)||'',
           remarks:'',
         });
       }
@@ -1523,7 +1585,7 @@ function loadOperaFile(input, target) {
           });
         }, 400);
       } else {
-        purposeGuests = guests;
+        purposeGuests = purposeMergeHeard(guests);
         _applyOriginToPurpose();   // re-apply any already-loaded XML instantly — don't discard it
         purposeRender();
         // Real XML data (Vicas/Inhouse) first — it's ground truth, not a guess.

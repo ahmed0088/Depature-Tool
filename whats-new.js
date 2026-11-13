@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 576, items: [
+    { ico: '📅', title: 'Purpose of Stay follows Opera’s business date',
+      what: 'The report and Excel export now use the same saved weekday and date. They stay on Opera’s business day until Opera rolls it forward, including after midnight.',
+      does: 'How you hear about us is now an editable, saved column. Fill blank answers with one click, choose the walk-in Online search percentage, and keep entered answers. Suggestions stay fixed through refresh, sync and export.' }
+  ] },
   { v: 575, items: [
     { ico: '⚙️', title: 'Your IN-Gauge tool, your settings',
       what: 'Settings is now at the top. Switch tools, allowed changes, charts, history and extra guidance on or off, choose compact cards and set your start page.',

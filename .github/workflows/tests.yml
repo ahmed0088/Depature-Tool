@@ -42,6 +42,12 @@ jobs:
       - name: Reviewed sales automation guards
         run: node tests/manual-sales-automation.test.js
 
+      - name: Purpose report business day and referral column
+        run: |
+          node tests/purpose-business-date.test.js
+          node tests/purpose-referral.test.js
+          node tests/purpose-stay.browser.test.js
+
       - name: Flexible IN-Gauge settings
         run: |
           node tests/ingauge-settings.test.js

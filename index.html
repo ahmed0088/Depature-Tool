@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v575"/>
+<meta name="ho-version" content="v576"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -1035,6 +1035,7 @@
     <div class="page-hd-actions">
       <button class="btn ai"   onclick="runAINat_purpose()"><span id="aiSpinPurpose"></span>✦ Nationality</button>
       <button class="btn"      onclick="purposeRandomizeSplit()" title="Randomly assign Business/Leisure to an exact percentage split">🎲 Randomize Purpose</button>
+      <button class="btn" id="purposeRandomizeHeardButton" onclick="purposeRandomizeHeard()" title="Fill blank answers; walk-ins mostly Online search. Entered answers stay unchanged.">🎲 How you hear about us</button>
       <button class="btn gold" onclick="exportPurpose()">⬇ Export</button>
       <button class="btn mint" onclick="syncFromArrivals()">↑ Sync Arrivals</button>
       <button class="btn sky"  onclick="openImportEmailsModal()" title="Paste the TSV output from the Neorcha email-scraper script to auto-fill emails by Confirmation Number">📧 Import Emails</button>
@@ -1046,6 +1047,8 @@
       <button class="btn rose" onclick="clearPurpose()">✕ Clear</button>
     </div>
   </div>
+  <div class="purpose-business-bar"><div><span>Opera business date</span><b id="purposeBusinessLabel"></b><small>Kept until Opera changes its business date</small></div><details><summary>Set report date</summary><label>Current Opera date<input type="date" id="purposeBusinessDate" onchange="purposeSetBusinessDate(this.value)"></label></details></div>
+  <datalist id="purposeHowHeardOptions"></datalist>
   <div id="purposeSrcWarn" class="src-warn" style="display:none;"></div>
   <div id="purposeColMap" class="colmap" style="display:none;"></div>
   <div id="purposeXmlCoverage" class="xml-cov" style="display:none;"></div>
@@ -1093,7 +1096,7 @@
     <div class="fchip" id="purposeMissingOriginChip" onclick="purposeToggleMissingOrigin(this)" title="Show only guests with no Origin of Travel filled in yet">🌍 Missing Origin</div>
   </div>
   <div class="tbl-wrap"><table>
-    <thead><tr><th>Day</th><th>Date</th><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Origin of Travel</th><th>Remarks</th><th></th></tr></thead>
+    <thead><tr><th>Day</th><th>Date</th><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Origin of Travel</th><th>Email</th><th>Booking Source</th><th>How you hear about us</th><th>Remarks</th><th></th></tr></thead>
     <tbody id="purposeTable"></tbody>
   </table></div>
   <div id="purposeCards" class="pc-list"></div>
@@ -4108,6 +4111,8 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
 <script src="utils.js"></script>
 <script src="natguess.js"></script>
 <script src="departures.js"></script>
+<script src="purpose-business-date.js"></script>
+<script src="purpose-referral.js"></script>
 <script src="arrivals-purpose.js"></script>
 <script src="shifts.js"></script>
 <script src="shift-links.js"></script>
@@ -4192,7 +4197,7 @@ function clearPurpose() {
 function syncFromArrivals() {
   if (!arrGuests.length) { showToast('No arrivals loaded yet.', 'err'); return; }
   if (purposeGuests.length && !confirm('This will replace current Purpose of Stay data. Continue?')) return;
-  purposeGuests = arrGuests.map(g => ({...g}));
+  purposeGuests = typeof purposeMergeHeard === 'function' ? purposeMergeHeard(arrGuests) : arrGuests.map(g => ({...g}));
   purposeRender();
   savePurpose(purposeGuests);
   showToast('Synced ' + purposeGuests.length + ' guests from Arrivals ✓', 'ok');
@@ -4831,7 +4836,8 @@ async function appInit() {
     arrRender();
   }
 
-  // 7 — Apply purpose
+  // 7 — Apply purpose (date metadata also exists on an empty report)
+  window.PurposeBusinessDate?.restore(data.purpose);
   if (data.purpose && data.purpose.guests && data.purpose.guests.length) {
     purposeGuests = data.purpose.guests; window._purDate = data.purpose.date || '';
     purposeRender();
@@ -4918,10 +4924,12 @@ async function appInit() {
   });
 
   listenPurpose(snap => {
-    if (!snap || !snap.guests) return;
+    if (!snap) return;
+    window.PurposeBusinessDate?.restore(snap);
+    if (!snap.guests) return;
     // Same guard for the purpose table.
     const purTable = document.getElementById('purposeTable');
-    const editingPur = purTable && purTable.contains(document.activeElement);
+    const editingPur = purTable && purTable.contains(document.activeElement) || document.getElementById('purposeCards')?.contains(document.activeElement);
     if (editingPur) return;
     window._purDate = snap.date || ''; purposeGuests = snap.guests;
     purposeRender();

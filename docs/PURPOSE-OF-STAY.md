@@ -1,0 +1,11 @@
+# Purpose of Stay
+
+The report uses a saved Opera business date, separate from the timestamp when a guest row was edited. Table weekday/date, report date label, Excel rows and daily history all use the same ISO day. The initial fallback is the Dubai calendar day, pinned until an explicit Opera Business Date or a user-selected report date changes it. Browser midnight, device timezone and opening a future arrival search do not advance it.
+
+The Opera reader transmits `businessDate` only when a Business Date label identifies it; generic screen/filter dates remain separate. After the existing property check, the bridge observes that explicit date even when the row list is unchanged. Hotel-specific memo and shared Purpose metadata survive a refresh. The Purpose reader plan also filters arrivals by this business day, independently of the calendar date used by other tools. Stale/backward automatic observations do not replace an established business day; an explicit manual date can prepare a historical report. Refresh the Opera tab once to load the updated reader.
+
+**How you hear about us** appears after Booking Source in the report and export. Existing names for the column (including How did you know about us) are recognized on paste/Excel import. Values are editable on desktop and phone, preserved by booking identity during Arrivals sync, and saved with guest rows. Exports include the existing Remarks column after the new field.
+
+The optional dice button fills blanks only. Choose the walk-in percentage for Online search (80% by default); the remaining walk-ins receive a mix of Friends / family, Social media and Previous stay. Other suggestions follow the booking channel: Booking website for OTA, ALL app for ALL bookings, Company for corporate, and a weighted mix for other sources. Suggestions are marked in the interface and stay saved; no randomization occurs during rendering or export, and entered answers are never overwritten. You can type a different answer to match your workbook’s exact labels.
+
+No live Opera edits are made by this feature. Tests cover date pinning across midnight/timezones and persistence, explicit Opera rollover, referral ratio and preservation, import/sync identity and desktop/mobile export alignment.

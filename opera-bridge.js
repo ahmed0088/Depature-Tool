@@ -196,6 +196,7 @@ function sanitize(snap) {
   }).filter(Boolean);
   const prop = String(snap.prop || '').toUpperCase(); 
   const out = { kind, date: isIso(snap.date) ? snap.date : '', title: cut(snap.title, 90), total: Math.max(0, +snap.total || 0), frame: String(snap.frame || '').slice(0, 12), rows };
+  if (isIso(snap.businessDate) && Number.isFinite(Date.parse(snap.businessDate + 'T12:00:00Z')) && new Date(snap.businessDate + 'T12:00:00Z').toISOString().slice(0, 10) === snap.businessDate) out.businessDate = snap.businessDate;
   if (/^[A-Z0-9]{3,8}$/.test(prop)) out.prop = prop;   // which hotel this Opera tab is (clusters)
   const F = cleanFolio(snap.folio); if (F) out.folio = F;
   if (Array.isArray(snap.traces)) out.traces = snap.traces.slice(0, 150).map(t => {
@@ -288,12 +289,15 @@ function plan(inp) {
 
   // ── Arrivals + Purpose of Stay ──
   const arrRows = rows.filter(r => (r.arrival === t || ((kind === 'arrivals' || arrOnly) && !r.arrival && screenToday)) && r.status !== 'checked_out');
+  const purposeDate = isIso(inp.purposeDate) ? inp.purposeDate : t;
+  const purposeScreenDay = !date || date === purposeDate;
+  const purposeRows = rows.filter(r => (r.arrival === purposeDate || ((kind === 'arrivals' || arrOnly) && !r.arrival && purposeScreenDay)) && r.status !== 'checked_out');
   if (kind === 'arrivals' && !arrRows.length && rows.length && date && date !== t) P.notes.push(`arrivals for ${date} — not today, nothing changed`);
   const noRoom = arrRows.filter(r => !realRoom(r.room)).length;
-  const planList = (list, out, purpose) => {
+  const planList = (list, out, purpose, listRows) => {
     list = list || [];
     const taken = new Set();
-    arrRows.forEach(r => {
+    listRows.forEach(r => {
       if (purpose && realRoom(r.room) && isPm(r.room)) return;
       const c = normConf(r.conf);
       let g = c ? list.find(x => normConf(x.conf) === c) : null;
@@ -320,7 +324,8 @@ function plan(inp) {
       out.add.push(ng);
     });
   };
-  if (arrRows.length) { planList(inp.arr, P.arr, false); planList(inp.pur, P.pur, true); }
+  if (arrRows.length) planList(inp.arr, P.arr, false, arrRows);
+  if (purposeRows.length) planList(inp.pur, P.pur, true, purposeRows);
   if (noRoom && (P.arr.add.length || kind === 'arrivals' || arrOnly)) P.notes.push(`${noRoom} arrival${noRoom === 1 ? '' : 's'} without a room yet — added once Opera gives a room`);
 
   // ── In-House Guests ──
@@ -1212,7 +1217,7 @@ function boardNow() {
 }
 const ihNow = () => safe(() => { const s = W.hoInHouse && W.hoInHouse.state ? W.hoInHouse.state().snap : null; return s && Array.isArray(s.rows) ? s : null; }, null);
 function planNow(snap) {
-  return plan({ snap, today: today(), board: boardNow(), arr: typeof arrGuests !== 'undefined' ? arrGuests : [], pur: typeof purposeGuests !== 'undefined' ? purposeGuests : [], ih: ihNow() });
+  return plan({ snap, today: today(), purposeDate: W.PurposeBusinessDate ? W.PurposeBusinessDate.resolve() : today(), board: boardNow(), arr: typeof arrGuests !== 'undefined' ? arrGuests : [], pur: typeof purposeGuests !== 'undefined' ? purposeGuests : [], ih: ihNow() });
 }
 
 // ══ Applying ════════════════════════════════════════════════
@@ -1389,6 +1394,9 @@ function receive(raw, h, reply) {
   const snap = sanitize(raw);
   { const pb = snap ? propCheck(snap.prop) : ''; if (pb) return 'not changed: ' + pb; }
   if (!snap) { safe(() => stuckApp(raw && typeof raw === 'object' ? raw : {}, 'not-applied', 'HotelOps answered "nothing readable": the snapshot had no list of rows it could use')); return 'nothing readable'; }
+  // Only an explicitly labelled Opera business date may advance Purpose of
+  // Stay. A search filter/screen date is not the hotel's operating day.
+  if (snap.businessDate && W.PurposeBusinessDate) safe(() => W.PurposeBusinessDate.observe(snap.businessDate, { source: 'opera', at: Date.now() }));
   if (raw && raw.url) safe(() => rememberHome(raw.url));
   h = String(h || hashOf([snap.kind, snap.date, snap.rows]));
   if (SEEN.has(h) && SEEN.get(h) !== WAITING && LAST[snap.kind] && LAST[snap.kind].h === h) {   // the same screen again: nothing new to read (a folio back to an earlier state is read again)

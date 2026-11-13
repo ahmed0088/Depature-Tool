@@ -3761,8 +3761,8 @@ console.log('\nOpera reader');
     pairs: [], form: [{ l: 'Arrival', f: 'arrival', how: 'parent-next', path: 'span < td < tr < table[role=presentation] · value span < td', v: '28-Oct-2026' }, { l: 'Testperson', f: '', how: 'next-sibling', path: 'label', v: 'Alpha Testperson' }] });
   const frTxt = R.reportText(frep);
   check('adf report: reader revision, header cells and the first line\'s attribute names, the form\'s label → value layout (a label that is a guest\'s word dropped)',
-    [frep.rr, /reader v438 r2/.test(frTxt), /header cells: th\[role=columnheader\]\[aria-colindex=1\]/.test(frTxt), /first data row: tr\[role=row\] \{_afrrk,class\}/.test(frTxt), /"Arrival" → arrival = 99-Aaa-9999 · parent-next · span < td < tr < table\[role=presentation\]/.test(frTxt), /Testperson|Alpha|0412/.test(frTxt.replace(/^.*headers → fields.*$/m, ''))],
-    [2, true, true, true, true, false]);
+    [frep.rr, /reader v438 r3/.test(frTxt), /header cells: th\[role=columnheader\]\[aria-colindex=1\]/.test(frTxt), /first data row: tr\[role=row\] \{_afrrk,class\}/.test(frTxt), /"Arrival" → arrival = 99-Aaa-9999 · parent-next · span < td < tr < table\[role=presentation\]/.test(frTxt), /Testperson|Alpha|0412/.test(frTxt.replace(/^.*headers → fields.*$/m, ''))],
+    [3, true, true, true, true, false]);
   check('adf report: the app keeps the new parts and writes the same text', O.stuckText(O.stuckClean(J(frep))) === frTxt, true);
   // ── the app side: Queue feeds Arrivals only, a check-in dialog changes nothing ──
   const qSnap = { kind: 'queue', date: T, rows: [{ room: '0412', name: 'Testperson, Alpha', conf: '100001', arrival: T, departure: '2026-10-30', status: 'checked_out' }, { room: '0413', name: 'Testperson, Bravo', conf: '100002', arrival: T, departure: T, status: 'due_in' }] };
