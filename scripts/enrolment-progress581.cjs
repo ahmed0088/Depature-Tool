@@ -10,6 +10,9 @@ const fs=require('node:fs');
  const statuses={};for(const guest of live.report?.guests||[]){const status=String(guest.status||'unknown').replace(/\S+@\S+/g,'[email]').slice(0,120);statuses[status]=(statuses[status]||0)+1;}
  const result={readOnly:true,matchingRun:true,tag:live.tag,state:live.state,step:live.step,total:live.n,processed:live.done,tally:live.tally,statuses,currentIndex:live.current?.index||null};
  // Only known status/code lines and generic worker errors, never guest names or addresses.
- result.genericErrors=(live.con||[]).filter(e=>e.g==='ERR').map(e=>String(e.m||'').replace(/\S+@\S+/g,'[email]')).filter(m=>/^(Browser page error:|Portal request failed|Stopped:|worker |waitFor timeout:|signup button not found)/i.test(m)).map(m=>m.slice(0,150));
+ result.genericErrorCount=(live.con||[]).filter(e=>e.g==='ERR').length;
+ result.recentCodes={};for(const entry of live.con||[]){const message=String(entry.m||'');if(!message.includes('GUEST RESULT'))continue;const match=message.match(/(?: · )(success|already_member|bad_email|bad_name|bad_data|submission_uncertain|skipped: country_missing|skipped: title_not_committed)(?: · |$)/);if(match)result.recentCodes[match[1]]=(result.recentCodes[match[1]]||0)+1;}
+ result.recentEmailRejection=(live.con||[]).some(e=>/email undeliverable/i.test(String(e.m||'')));
+ result.recentTimeout=(live.con||[]).some(e=>/waitFor timeout|signup button not found/i.test(String(e.m||'')));
  console.log('ENROLMENT_DIAGNOSTIC '+JSON.stringify(result));
  }catch(_){console.error('Read-only enrolment diagnosis failed during '+stage);process.exitCode=1;}})();
