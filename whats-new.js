@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 591, items: [
+    { ico: '🧾', title: 'Approve existing requests and correct misclassified fees',
+      what: 'The approved total now shows how much is still Pending. Source-linked pending requests can be reviewed for approval directly in the difference list, including a clear booking check when stays overlap.',
+      does: 'A fee already saved under the wrong product is offered as an edit of that record. Opera transaction references prevent duplicate additions across products. Journal reviews offer products only from the mapped family; room upsells cannot be saved as Breakfast.' }
+  ] },
   { v: 590, items: [
     { ico: '✅', title: 'Reviewed selections leave the remaining list',
       what: 'Save & select moves reviewed money corrections into Selected for automation. The remaining count shows what still needs review. Open your selection to edit or unselect a saved change.',

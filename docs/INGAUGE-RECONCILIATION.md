@@ -1,4 +1,4 @@
-# Reviewed money reconciliation (v589; selection queues v590)
+# Reviewed money reconciliation (v589; selection queues v590; pending/product review v591)
 
 Open **Monthly totals → Explain the difference → Fix the money differences**. The cards show the confirmation, posting date, Opera net amount, approved and pending IN-Gauge amounts, why they differ, and the proposed remedy. Posting evidence includes transaction IDs, notes, cashier/login, matched stay and existing record IDs. Relevant Changes Log entries explain customized fees; the journal supplies the posted amount.
 
@@ -18,6 +18,16 @@ Selection never changes the snapshot, financial totals or remote records. Pendin
 - Reuse existing pending, denied or unidentified requests. Matching pending requests can be approved through the existing approval workflow. Reopening a denied request requires a reason. Do not create another sale to bypass either state.
 - For a one-off early/late fee with several entries, the reviewer chooses the keeper and each extra entry. Correcting the keeper and denying an extra are separate selected operations. Denial requires a reason. Only one keeper is allowed. Known denied extras remain review evidence until the keeper is corrected; a completed cleanup does not reappear.
 - Currency differences, reversals, split postings, uncertain identities, missing automatic imports and stay-based calculations remain billing checks. A room/date/amount match without verified reservation identity does not authorize an addition or denial. Older one-off requests remain history.
+
+## Pending approvals and existing product corrections (v591)
+
+Pending revenue is shown next to the approved total, with the number of existing requests awaiting review. Approval uses the existing record; it is never a duplicate addition. If an exact `Opera journal <transaction ID>` memo links one Pending entry to one of several candidate stays, the difference list offers a booking-review approval. The editor names the existing confirmation and alternative candidates. The reviewer must verify the bill before acknowledgement; approval preserves the existing confirmation. An incorrect booking identity must be corrected through the appropriate IN-Gauge workflow, not silently reassigned by this action.
+
+An exact journal-reference memo also finds a fee saved under another known product family. With one current-period record on the same confirmation and day, offer a product correction on that record, preserving seller, status, dates and amount. Several linked entries, another confirmation/date, denied requests or unsupported identity remain held. Matching amounts alone never establish a cross-product replacement.
+
+Journal-derived proposals carry the mapped product family and transaction codes. The editor limits choices to that family, and the shared core rejects a different family before portal or ledger access. Update the transaction-code mapping and re-review if the mapping itself is wrong. An exact, unique Opera room-type SKU match in the verified room-product catalog preselects the matching room product. Conflicting or unknown codes leave multiple room products for an explicit reviewer choice. Existing non-journal edits and older reviewed plans retain compatibility.
+
+An addition is blocked if its exact source transaction already appears in any saved record memo. Live duplicate preflight also checks that reference across product families. Do not bypass the source transaction ledger to retry an already processed sale; correct its existing record instead. Tests cover wrong-product corrections, exact ID matching, late-arriving duplicates, manual-audit family guards, ambiguous source-linked approval and unchanged source records on phone/desktop.
 
 ## Scope and execution
 

@@ -81,6 +81,8 @@
     if(/^(?:1010|ROOMUPSELL(?:ING)?|ROOMUPGRADE|USS\d+)$/.test(compact)||/^STANDARDROOM|^CLASSICROOM|^SUPERIOR(?:FAMILY)?ROOM|^PRIVILEGEROOM|^STUDIO(?:WITH|WITHOUT)|^(?:ONE|TWO|THREE|\d+)BEDROOMAPARTMENT/.test(compact))return 'ROOM';
     return '';
   }
+  const familyLabel=family=>({EC:'Early check-in',LC:'Late checkout',BB:'Breakfast',ROOM:'Room upselling',DIN:'Dinner',HB:'Half board',FB:'Full board'})[family]||'';
+  const journalIds=value=>[...new Set([...text(value).matchAll(/\bOpera\s+journal\s+(\d+)\b/gi)].map(m=>m[1]))];
   function resolveProduct(proposal,products){
     const pool=(products||[]).filter(p=>p.activeStatus==='NORMAL'&&!/UNKNOWN|UNMAPPED/.test(key(p.code+' '+p.name)));
     let hits=[];
@@ -128,6 +130,7 @@
         if(op.confirmation!==before.confirmation)fail('A reviewed operation cannot change its reservation identity.');
       }else if(!/^\d+$/.test(text(op.confirmation))||!text(op.transaction))fail('A missing sale needs its confirmation and Opera transaction.');
       const dateIssue=operationPeriodError(op,snapshot,period);if(dateIssue)fail(dateIssue);
+      if(op.action==='add'){const existing=snapshot.records.filter(r=>journalIds(r.memo).includes(text(op.transaction)));if(existing.length)fail('Opera transaction '+text(op.transaction)+' already exists in IN-Gauge as record '+existing.map(r=>r.id).join(', ')+'. Review the existing entry and product instead of adding it again.');}
       if(op.reconciliation){const proof=op.reconciliation;
         if(proof.schema!==1||proof.snapshotId!==snapshot.id||proof.reviewed!==true||!text(proof.key)||!Array.isArray(proof.journalIds)||!proof.journalIds.length||proof.journalIds.some(v=>!/^\d+$/.test(String(v)))||!Number.isSafeInteger(proof.journalCents)||proof.journalCents<=0||text(proof.currency).toUpperCase()!==text(snapshot.settings.currency).toUpperCase())fail('Check the Opera evidence, amount, confirmation and credit before saving this correction.');
         const sourceDay=before?.businessDate||op.values?.businessDate;if(!withinPeriod(sourceDay,proof.period))fail('This correction was prepared for another posting period. Review it again.');
@@ -135,6 +138,12 @@
         if(proof.kind==='duplicate'&&(!Array.isArray(proof.recordIds)||proof.recordIds.length<2||!proof.recordIds.includes(op.recordId)||proof.recordIds.some(id=>{const r=snapshot.records.find(r=>r.id===id);return !r||r.confirmation!==op.confirmation||r.propertyId!==snapshot.binding.propertyId||r.departmentId!==snapshot.binding.departmentId||!withinPeriod(r.businessDate,proof.period);})))fail('Refresh the exact duplicate entries before reviewing this action.');
         if(proof.role==='keep'&&op.productId!==before?.productId)fail('Review a product replacement separately from retaining a one-off entry.');
         if(['add','edit'].includes(op.action)&&op.values?.totalCents!==proof.journalCents&&text(op.reason).length<5)fail('Explain why the reviewed amount differs from the Opera posting.');
+      }
+      const expectedFamily=op.journalFamily||op.reconciliation?.family;
+      if(expectedFamily&&['add','edit','approve'].includes(op.action)){
+        if(!familyLabel(expectedFamily))fail('Review the Opera transaction-code mapping again.');
+        const product=snapshot.products.find(p=>p.id===id(op.action==='approve'?before?.productId:op.productId));
+        if(product&&(kind(product.name)||kind(product.code))!==expectedFamily)fail('Opera '+(op.journalCodes||op.reconciliation?.codes||[]).join(', ')+' is mapped to '+familyLabel(expectedFamily)+'. Choose a product from that family, or change the transaction-code mapping and review again.');
       }
       if(op.action==='approve'){
         const p=snapshot.products.find(p=>p.id===before.productId),person=snapshot.contributors.find(p=>p.id===before.contributorId);
@@ -189,7 +198,8 @@
   function auditParams(op){if(!['approve','deny','delete'].includes(op.action)||!numId(op.recordId))fail('Invalid audit-status operation.');return {entityIDs:id(op.recordId),isReview:'false',isLock:'false',isDeny:String(op.action==='deny'),isDelete:String(op.action==='delete'),denialNotes:op.action==='approve'?'Approved':text(op.reason),entityType:'PRODUCT_METRIC'};}
   function duplicates(op,records,products){
     const product=products.find(p=>p.id===id(op.productId)),once=product&&['EC','LC'].includes(kind(product.code)||kind(product.name));
-    return records.filter(r=>r.confirmation===op.confirmation&&(r.productId===id(op.productId)||!r.productId||/UNKNOWN|UNMAPPED/.test(key(r.product)))&&(once||r.businessDate===op.values?.businessDate));
+    const sourceIds=new Set([op.transaction,...(op.reconciliation?.journalIds||[])].map(text).filter(Boolean));
+    return records.filter(r=>journalIds(r.memo).some(tx=>sourceIds.has(tx))||r.confirmation===op.confirmation&&(r.productId===id(op.productId)||!r.productId||/UNKNOWN|UNMAPPED/.test(key(r.product)))&&(once||r.businessDate===op.values?.businessDate));
   }
   function reviewedDuplicate(op,live,snapshot){
     const proof=op.reconciliation;if(op.action!=='edit'||proof?.kind!=='duplicate'||proof.role!=='keep'||proof.reviewed!==true||!proof.recordIds?.includes(String(live.id)))return false;
@@ -205,6 +215,6 @@
   function matches(op,r){
     return differences(op,r).length===0;
   }
-  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,payload,auditParams,duplicates,reviewedDuplicate,matches,differences,terminal,saleCategory,operationCategory,scopeAllows};
+  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,payload,auditParams,duplicates,reviewedDuplicate,matches,differences,terminal,saleCategory,operationCategory,scopeAllows};
   root.InGaugeAuditCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
