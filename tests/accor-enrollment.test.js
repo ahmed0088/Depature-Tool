@@ -24,7 +24,7 @@ test('each outcome belongs to exactly one summary bucket including skipped error
  assert.equal(r.complete,true);assert.equal(A.resultReport([],1).complete,false);
 });
 function processFixture(diagnosticOnly){
- const results=[],calls=[],sandbox={window:{},diagnosticOnly,results,cset:async()=>{},log:()=>{},CURRENT_KEY:'current',persist:async index=>calls.push(['persist',index]),goHome:async()=>calls.push(['navigate']),openSignupForm:async()=>calls.push(['form']),clearReactSelect:async()=>{},inputByLabel:()=>({value:'',dispatchEvent(){}}),setReactInput:()=>{},pickTitle:async()=>true,pickReactSelectByLabel:async()=>{calls.push(['country']);return true;},sleep:async()=>{},humanType:async()=>{throw Error('Guest fields must not be entered in a diagnostic');},DEFAULT_TITLE:'Mr.'};
+ const results=[],calls=[],sandbox={window:{},receipts:{recover:async()=>null},diagnosticOnly,results,cset:async()=>{},log:()=>{},CURRENT_KEY:'current',persist:async index=>calls.push(['persist',index]),goHome:async()=>calls.push(['navigate']),openSignupForm:async()=>calls.push(['form']),clearReactSelect:async()=>{},inputByLabel:()=>({value:'',dispatchEvent(){}}),setReactInput:()=>{},pickTitle:async()=>true,pickReactSelectByLabel:async()=>{calls.push(['country']);return true;},sleep:async()=>{},humanType:async()=>{throw Error('Guest fields must not be entered in a diagnostic');},DEFAULT_TITLE:'Mr.'};
  vm.createContext(sandbox);const fn=source.slice(source.indexOf('  async function processOne('),source.indexOf('  for (let i = startIndex;'));
  vm.runInContext(fn+';this.process=processOne;',sandbox);return {sandbox,results,calls};
 }
@@ -36,4 +36,9 @@ test('missing country stops before page navigation or any guest entry/submission
 test('read-only diagnostic validates title and country without typing guest data or submitting',async()=>{
  const {sandbox,results,calls}=processFixture(true);const out=await sandbox.process(guest,0,1);
  assert.equal(out.status,'diagnostic_form_ready');assert.equal(results[0].status,'test: form_ready');assert(calls.some(x=>x[0]==='country'));
+});
+
+test('unusable guest names are held under the original name, without placeholder enrolments',async()=>{
+ const {sandbox,results,calls}=processFixture(false);const out=await sandbox.process({...guest,originalName:'示例 客人',first_name:'Test',last_name:'User',nameOk:false},0,1);
+ assert.equal(out.status,'skipped: name_not_latin');assert.equal(results[0].name,'示例 客人');assert.deepEqual(calls,[['persist',1]]);
 });

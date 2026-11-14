@@ -160,7 +160,7 @@ function gpSet(i, field, val) {
 
 // Bulk: tick / untick every usable guest, or set one civility for every usable guest without one.
 // enrolled already (by hand: "submitted"; by the cloud robot: "success" / "success_stuck"; or an ALL member) → never offered again
-const GP_DONE_RE = /submitted|already|^success/;
+const GP_DONE_RE = /submitted|already|^success|^submission_uncertain$/;
 /** the robot's last answer for a guest, in plain words (pure) */
 /** show the guests in one result tile (enrolled / already / skipped / error) with the reason each one did/didn't go through */
 function gpAccShowCat(cat) {
@@ -182,9 +182,9 @@ function gpAccRenderCat() {
 }
 function gpTryWords(st) {
   const s = String(st || '');
-  return /^success/.test(s) ? 'enrolled' : /already/.test(s) ? 'already an ALL member' : /bad_email/.test(s) ? 'The cloud portal returned “email undeliverable”; not enrolled. Compare with the working PC portal before changing the address.'
+  return /^success/.test(s) ? 'enrolled' : /already/.test(s) ? 'already an ALL member' : /submission_uncertain/.test(s) ? 'Submission outcome uncertain after a portal reload — verify it in Accor before retrying. Automatic re-submission is held.' : /bad_email/.test(s) ? 'The Accor portal returned “email undeliverable” for this attempt. The address has not been changed; compare this guest with the working extension.'
     : /country_missing/.test(s) ? 'country missing — enter it before retrying; nothing was submitted'
-    : /bad_name|name_not_latin/.test(s) ? 'name refused (Latin letters A–Z only)' : /country_not_found/.test(s) ? 'country not found in the portal list'
+    : /name_not_latin/.test(s) ? 'No usable first and family name after normalization — review the actual guest name; nothing submitted' : /bad_name/.test(s) ? 'The portal refused the name' : /country_not_found/.test(s) ? 'country not found in the portal list'
     : /bad_data/.test(s) ? 'the portal refused the data' : /title/.test(s) ? 'title could not be set' : s.replace(/^skipped:\s*/, '').replace(/_/g, ' ');
 }
 function gpCanEnroll(r) { const t = gpTracked(r); return gpEligible(r) && !(t && GP_DONE_RE.test(t.status)); }
@@ -239,7 +239,7 @@ function gpRender() {
   body.innerHTML = gpRows.map((r, i) => {
     const f = GP_FLAG[r.flag];
     const t = gpTracked(r);
-    const tracked = t ? `<span class="gp-flag ${GP_DONE_RE.test(t.status) ? 'ok' : 'info'}" title="Logged ${escapeHtml(t.date || '')}">${escapeHtml(t.status)}</span>` : '';
+    const tracked = t ? `<span class="gp-flag ${GP_DONE_RE.test(t.status) && t.status !== 'submission_uncertain' ? 'ok' : 'info'}" title="Logged ${escapeHtml(t.date || '')}">${escapeHtml(t.status)}</span>` : '';
     const can = gpEligible(r) && !(t && GP_DONE_RE.test(t.status));
     return `<tr class="${can ? '' : 'gp-dim'}">
       <td style="font-family:var(--mono);font-size:.7rem;">${escapeHtml(r.conf)}</td>

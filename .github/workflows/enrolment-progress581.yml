@@ -1,0 +1,21 @@
+name: Enrolment read-only diagnosis
+on:
+  push:
+    branches: ['verify/neorcha-mercure-579']
+    paths: ['scripts/enrolment-progress581.cjs','.github/workflows/enrolment-progress581.yml']
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: node scripts/enrolment-progress581.cjs
+        env:
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
+          HOTELOPS_HOTEL: ${{ secrets.HOTELOPS_HOTEL }}

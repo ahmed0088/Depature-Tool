@@ -778,7 +778,7 @@ function mount() {
           <p><b>The start key</b> (so ☁️ Run in the cloud can start it from this device) — press the button and follow the steps; it is kept on this device only.</p>
           <p><a href="https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml" target="_blank" rel="noopener">All cloud runs on GitHub ↗</a> · <a href="#" id="nx-cl-forget">Forget the start key on this device</a></p></details></div>
       <details class="nx-man"><summary>No helper on this PC? Run it by hand</summary>
-        <ol><li>Open <b>ibis.myneorcha.com</b>, log in, go to <b>Guest Documents</b> and pick your <b>hotel</b>.</li>
+        <ol><li>Open <b>your selected Neorcha link</b>, log in, go to <b>Guest Documents</b> and pick your <b>hotel</b>.</li>
           <li>Press <b>📋 Copy the collector</b>, then on Neorcha press <b>F12 → Console</b>, paste and press <b>Enter</b> <small>(first time: type <code>allow pasting</code>)</small> — or click the bookmark.</li>
           <li>Choose the dates and press <b>▶ Collect</b>. It saves a file at the end: drop it here.</li></ol>
         <div class="nx-col-b"><button type="button" class="btn" id="nx-copycol">📋 Copy the collector</button><a class="btn" id="nx-bm" href="#">⭐ Drag to bookmarks</a></div>
@@ -852,9 +852,15 @@ function mount() {
   };
   const paintList = () => {
     const short = n => String(n || '').replace(/\s+(hotel|dubai|resort)\b.*$/i, '').slice(0, 26) || n;
-    $('hl').innerHTML = [`<button type="button" role="tab" data-hs="" class="${SEL === '' ? 'on' : ''}" aria-selected="${SEL === ''}"><b>${esc(short(hotelName()))}</b><small>this hotel</small></button>`]
-      .concat(LIST.map((h, i) => `<button type="button" role="tab" data-hs="${i}" class="${SEL === String(i) ? 'on' : ''}" aria-selected="${SEL === String(i)}"><b>${esc(h.name)}</b><small>${esc(h.acct || acctOf(h.url))}</small><span class="x" data-hdel="${i}" title="Remove ${esc(h.name)}">×</span></button>`))
-      .join('') + '<button type="button" class="add" data-hadd="1">＋ Add hotel</button>';
+    const items=[{key:'',name:short(hotelName()),account:'this hotel'},...LIST.map((h,i)=>({key:String(i),name:h.name,account:h.acct||acctOf(h.url)}))];
+    let buttons=Array.from($('hl').querySelectorAll('button[data-hs]'));
+    if(buttons.length!==items.length||buttons.some((b,i)=>b.dataset.hs!==items[i].key)){
+      $('hl').innerHTML=items.map(h=>`<button type="button" role="tab" data-hs="${h.key}"><b></b><small></small>${h.key!==''?`<span class="x" data-hdel="${h.key}">×</span>`:''}</button>`).join('')+'<button type="button" class="add" data-hadd="1">＋ Add hotel</button>';
+      buttons=Array.from($('hl').querySelectorAll('button[data-hs]'));
+    }
+    // Input blur can save a link during pointer-down on another button. Preserve
+    // those buttons so repainting account labels cannot swallow the click.
+    buttons.forEach((b,i)=>{const h=items[i];b.classList.toggle('on',SEL===h.key);b.setAttribute('aria-selected',String(SEL===h.key));b.querySelector('b').textContent=h.name;b.querySelector('small').textContent=h.account;const del=b.querySelector('[data-hdel]');if(del)del.title='Remove '+h.name;});
   };
   const paintHotel = () => {
     paintReader();if(profilesReady)loadFields();

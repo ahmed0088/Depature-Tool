@@ -9,6 +9,16 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 580, items: [
+    { ico: '✍️', title: 'Enrolment results survive portal reloads',
+      what: 'The cloud keeps each submission receipt before a portal redirect can erase it. A recovered response is recorded without submitting that guest again.',
+      does: 'Uncertain outcomes are held for verification instead of retried automatically. Portal email rejections and name skips remain separate, with clearer reasons. This fixes lost accepted responses being reported as already members after an automatic retry.' }
+  ] },
+  { v: 579, items: [
+    { ico: '🏨', title: 'Mercure Neorcha collection restored',
+      what: 'Mercure now uses its new Tweak portal. A saved short name such as Mercure resolves to the portal property only when there is one matching hotel; full property names still match exactly.',
+      does: 'The collector confirms the selected hotel before reading and lists the available names if a choice is ambiguous. Existing Mercure links move from the retired page to Tweak; other hotel legacy links and separate account credentials are preserved.' }
+  ] },
   { v: 578, items: [
     { ico: '🔎', title: 'Explain the monthly revenue difference',
       what: 'Monthly totals now explains the gap by product, business date and confirmation, with Opera transaction IDs, IN-Gauge record IDs, amounts and pending requests shown separately.',
