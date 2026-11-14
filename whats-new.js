@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 583, items: [
+    { ico: '📊', title: 'Enrolment figures stay visible',
+      what: 'The live window remembers confirmed enrolment totals after closing or reopening the app. Portal reloads no longer reset the figures to zero.',
+      does: 'The live window updates in place, keeping the buttons, scroll position and opened result lists steady. Saved figures belong to the same run and hotel; unavailable totals show a dash while reconnecting.' }
+  ] },
   { v: 582, items: [
     { ico: '🏨', title: 'Saved hotel enrolment links',
       what: 'Paste a link once, give it a hotel name and save it. Then choose Ibis, Mercure, Adagio or any other saved hotel directly in the enrolment window.',

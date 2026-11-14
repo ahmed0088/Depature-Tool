@@ -113,7 +113,7 @@
   }
   const latest = kind => Object.values(RUNS).filter(r => r.kind === kind).sort((a, b) => b.started - a.started)[0] || null;
   /** "Run #12 · Ibis Styles Dubai" for the run window's header */
-  function label(kind) { const r = latest(kind); return r ? 'Run #' + (r.no || '?') + (r.hotel ? ' · ' + r.hotel : '') : ''; }
+  function label(kind, tag) { const r = tag ? RUNS[tag] : latest(kind); return r ? (r.no ? 'Run #' + r.no : 'Cloud run') + (r.hotel ? ' · ' + r.hotel : '') : ''; }
 
   /** a live report arrived: fold it into its run (written only when something that matters changed) */
   function onLive(kind, v) {
@@ -123,6 +123,14 @@
     if (!r && Date.now() - (+v.at || 0) < 24 * 3600e3) { adopt(kind, v); return paint(); }
     if (r) {
       const f = fromLive(kind, v);
+      if (kind === 'enrol') {
+        // Older cloud workers publish zero/missing metrics during a page reload.
+        f.done = Math.max(f.done || 0, r.done || 0);
+        if (!f.n && r.n) f.n = r.n;
+        const sum = t => Object.values(t || {}).reduce((n,v) => n + (+v || 0), 0);
+        if (!f.tally || sum(f.tally) < sum(r.tally)) f.tally = r.tally;
+        if (!f.tally) delete f.tally;
+      }
       // A delayed progress report must never turn a finished history record back into a live run.
       if (+v.at < +r.at || (terminal(r) && f.state === 'run')) return paint();
       const key = o => [o.state, o.done, o.n, o.prog, o.url, o.started, JSON.stringify(o.tally || '')].join('|');
@@ -353,12 +361,12 @@
       const next = {};
       Object.entries(v || {}).forEach(([k, r]) => { if (r && typeof r === 'object' && KINDS[r.kind]) next[k] = Object.assign({}, r, { tag: k }); });
       Object.values(RUNS).forEach(r => { if (!next[r.tag] && Date.now() - r.started < 60000) next[r.tag] = r; });   // just started here, not back from the database yet
-      RUNS = next; paint();
+      RUNS = next; paint(); W.dispatchEvent(new Event('ho-enrol-history'));
     });
     Object.keys(KINDS).forEach(k => fbListen(KINDS[k].live, v => onLive(k, v)));
   })();
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', () => { css(); paint(); }); else { css(); paint(); }
   async function update(tag, fields) { const r = RUNS[tag]; if (!r || (r.url === fields.url && !fields.note)) return; const patch = {}; if (/^https:\/\/github\.com\//.test(fields.url || '')) patch.url = fields.url; if (fields.note) patch.note = clean(fields.note,140); Object.assign(r,patch); if (dbOk()) try { await fbUpdate('cloudRuns/'+tag,patch); } catch (_) {} paint(); }
-  W.hoRuns = { start, update, minimized, closed, label, list, paint, _pure: { fromLive, chipText, liveKey, status, day, matches, operation, summary } };
+  W.hoRuns = { start, update, minimized, closed, label, list, paint, get: (kind, tag) => RUNS[tag] && RUNS[tag].kind === kind ? Object.assign({}, RUNS[tag]) : null, _pure: { fromLive, chipText, liveKey, status, day, matches, operation, summary } };
 })();
 

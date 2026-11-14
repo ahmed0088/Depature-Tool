@@ -199,6 +199,23 @@ function reportNote(report, test) {
   return `${prefix}Finished: ${report.submitted} enrolled · ${report.alreadyMember} already members · ${report.pending} pending · ${report.skipped} skipped · ${report.errors} errors · ${report.processed}/${report.total} processed.`;
 }
 
+// A navigation can make a poll unavailable. Only confirmed worker results may replace the checkpoint.
+function enrollmentProgress(total) {
+  let results = [], observed = false;
+  return {
+    read(snapshot) {
+      const candidates = [snapshot && snapshot.loop, snapshot && snapshot.state].filter(v => v && Array.isArray(v.results));
+      const latest = candidates.sort((a,b) => b.results.length - a.results.length)[0];
+      if (latest && latest.results.length >= results.length) { results = latest.results.slice(); observed = true; }
+      if (!observed) return {};
+      const report = resultReport(results, total);
+      return { done: report.processed, report, tally: { enrolled: report.submitted, already: report.alreadyMember,
+        skipped: report.skipped + report.pending + report.other, errors: report.errors } };
+    },
+    results() { return results.slice(); }
+  };
+}
+
 async function main() {
   // the hotel is optional: without it the HotelOps account's own hotel is used (hotelDb)
   const missing = ['HOTELOPS_EMAIL', 'HOTELOPS_PASS'].filter(k => !String(E[k] || '').trim());
@@ -356,6 +373,7 @@ async function main() {
     await live({ step: 'enroll', note: test ? 'Test run: checking portal and selected list. No invitations will be sent.' : 'Worker started. Monitoring each enrollment result…' });
 
     let done = false;
+    const progress = enrollmentProgress(rows.length);
     let seenWorkerLogs = 0;
     let lastFingerprint = '';
     let workerStartedAt = Date.now();
@@ -408,21 +426,21 @@ async function main() {
           ? 'The enrollment worker stopped moving for 2 minutes (no new step on the portal). The last steps are in the console above.'
           : 'The portal opened, but the enrollment worker could not start on it. The portal page may have changed.');
       }
+      progress.read(snapshot);
       done = !!(snapshot && snapshot.enabled === false);
       if (Date.now() - lastProgressAt > 2500) {
         lastProgressAt = Date.now();
-        const loop = snapshot && (snapshot.loop || snapshot.state);
-        const processed = Math.min(rows.length, Math.max(0, Number(loop && (Array.isArray(loop.results) ? loop.results.length : loop.nextIndex) || 0)));
+        const metrics = progress.read(snapshot);
+        const processed = metrics.done || 0;
         const note = currentGuest
           ? `Working on guest ${currentGuest.index || '?'} of ${currentGuest.total || rows.length}. Results are recorded as each guest finishes.`
           : `Enrollment worker running · ${processed} of ${rows.length} processed.`;
-        const sofar = loop && Array.isArray(loop.results) ? resultReport(loop.results, rows.length) : null;
-        if (sofar) {
-          ACTIVE_REPORT = sofar;
-          await checkpoint(loop.results).catch(() => { tlog('WARN', 'Could not checkpoint the latest completed results; they remain in the browser and will be saved again.'); });
+        if (metrics.report) {
+          ACTIVE_REPORT = metrics.report;
+          await checkpoint(progress.results()).catch(() => { tlog('WARN', 'Could not checkpoint the latest completed results; they remain in the browser and will be saved again.'); });
         }
-        const tally = sofar ? { enrolled: sofar.submitted, already: sofar.alreadyMember, skipped: sofar.skipped + sofar.pending + sofar.other, errors: sofar.errors } : null;
-        await live({ step: workerStarts ? 'enroll' : 'worker', done: processed, current: currentGuest || null, tally, report:sofar, worker: workerStarts > 0, action: note, note });
+        // Missing context is not zero progress. Omit unknown fields instead of deleting the live tally/report.
+        await live(Object.assign({ step: workerStarts ? 'enroll' : 'worker', ...(currentGuest ? {current:currentGuest} : {}), worker: workerStarts > 0, action: note, note }, metrics));
       }
     }
 
@@ -430,7 +448,8 @@ async function main() {
     const result = await safePageEvaluate(page, 'final result poll', () => {
       try { return JSON.parse(localStorage.getItem('__accor_cloud___accor_loop_state') || '{}'); } catch (_) { return {}; }
     }, {});
-    const results = Array.isArray(result.results) ? result.results : [];
+    progress.read({loop:result});
+    const results = progress.results();
     const report = resultReport(results, rows.length);
     const today = new Date(Date.now() + 4 * 3600e3).toISOString().slice(0, 10);
     const patch = {};
@@ -466,4 +485,4 @@ if (require.main === module) main().catch(async error => {
   await publishError(message);
   fail(message);
 });
-module.exports = { consenting, pipeRows, resultReport, reportNote, enrollmentBudget, tokenSession, enrollmentCheckpoint, hotelDb };
+module.exports = { consenting, pipeRows, resultReport, reportNote, enrollmentBudget, tokenSession, enrollmentCheckpoint, enrollmentProgress, hotelDb };

@@ -51,6 +51,8 @@ jobs:
           node tests/accor-review.test.js
           node tests/accor-review.browser.test.js
           node tests/accor-long-run.test.js
+          node tests/accor-progress.test.js
+          node tests/accor-progress.browser.test.js
           node tests/enrolment-links.test.js
           node tests/enrolment-links.browser.test.js
 

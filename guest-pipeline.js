@@ -176,14 +176,14 @@ function gpAccRenderCat() {
   const box = document.getElementById('acrCat'); if (!box) return;
   const cat = GP_ACC.cat || '';
   document.querySelectorAll('.acr-tile.tap').forEach(t => t.classList.toggle('on', !!cat && (t.getAttribute('onclick') || '').indexOf("'" + cat + "'") >= 0));
-  if (!cat) { box.hidden = true; box.innerHTML = ''; return; }
+  if (!cat) { box.hidden = true; gpAccHtml(box, ''); return; }
   const live = GP_ACC.live, guests = (live && live.report && Array.isArray(live.report.guests)) ? live.report.guests : [];
   const list = guests.filter(g => g.cat === cat);
   box.hidden = false;
   const head = { enrolled: '✅ Enrolled', already: '👤 Already members', skipped: '⏭ Skipped', error: '⚠️ Needs review' }[cat] || cat;
-  box.innerHTML = `<div class="acr-cat-h">${head} (${list.length})</div>` + (list.length
+  gpAccHtml(box, `<div class="acr-cat-h">${head} (${list.length})</div>` + (list.length
     ? list.map(g => `<div class="acr-cat-row"><b>${escapeHtml(g.name || 'Guest')}</b><small>${g.conf ? 'Conf. ' + escapeHtml(g.conf) + ' · ' : ''}${escapeHtml(gpTryWords(g.status))}</small></div>`).join('')
-    : '<div class="acr-cat-row"><small>None in this group.</small></div>');
+    : '<div class="acr-cat-row"><small>None in this group.</small></div>'));
 }
 function gpTryWords(st) {
   const s = String(st || '');
@@ -354,7 +354,7 @@ async function gpAccCloudRestart() {
   if (!confirm(`Start the enrolment again for ${rows.length} ready guest(s)${portalName?' · '+portalName:''}?${held.length?' '+held.length+' selected guest(s) without a country stay held.':''}`)) return;
   gpCloudTag = 'acc' + Date.now().toString(36);
   try {
-    await fbUpdate('enrollLive', { at: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: rows.length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
+    await fbSet('enrollLive', { at: Date.now(), started: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: rows.length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
     await fbSet('enrollJob', { tsv: gpEnrollTsv(rows, true), n: rows.length, at: Date.now(), test: false, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url,portalName });
     try { if (window.hoRuns) window.hoRuns.start('enrol', gpCloudTag, { hotel: (document.getElementById('hotelName') || {}).textContent || '', n: rows.length, test: false, how: 'run again' }); } catch (_) {}
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: '', tag: gpCloudTag, hid, portal_url: url } }) });
@@ -392,10 +392,13 @@ let gpAccPollTimer = 0;
 function gpAccPoll(tag) {
   GP_ACC.tag = tag || GP_ACC.tag; GP_ACC.at = GP_ACC.at || Date.now(); GP_ACC.gh = null;
   clearInterval(gpAccPollTimer);
+  const pollTag = GP_ACC.tag;
   const tick = async () => {
     try {
+      if (!pollTag || GP_ACC.tag !== pollTag) return;
       const j = await gpAccGh('/runs?per_page=10&event=workflow_dispatch');
-      const r = (j.workflow_runs || []).filter(x => Date.parse(x.created_at) >= GP_ACC.at - 60000)
+      if (GP_ACC.tag !== pollTag) return;
+      const r = (j.workflow_runs || []).filter(x => String(x.display_title || x.name || '').includes(GP_ACC.tag) || (GP_ACC.live && GP_ACC.live.run && x.html_url === GP_ACC.live.run))
         .sort((x, y) => Date.parse(x.created_at) - Date.parse(y.created_at))[0];
       if (r) { GP_ACC.gh = { status: r.status, conclusion: r.conclusion, url: r.html_url }; gpCloudPaint(); }
       if (r && r.status === 'completed') clearInterval(gpAccPollTimer);
@@ -572,11 +575,94 @@ function gpAccorRunWin(open) {
   const on = open !== false; w.classList.toggle('on', on);
   clearInterval(GP_ACC.timer); if (on) { GP_ACC.timer = setInterval(() => gpCloudPaint(), 1000); gpCloudPaint(); }
 }
+// Keep verified totals through portal navigation and app restarts. The cache contains counts only.
+function gpAccMerge(previous, value) {
+  if (!value) return previous;
+  const same = previous && String(previous.tag || previous.started || '') === String(value.tag || value.started || '');
+  if (same && +value.at < +previous.at) return previous;
+  if (same && ['done','error','stopped'].includes(previous.state) && value.state === 'run') return previous;
+  const next = Object.assign({}, same ? previous : {}, value);
+  const report = value.report, reportDone = report && Number(report.processed);
+  if (report && Number.isFinite(reportDone) && reportDone >= +(next.done || 0)) {
+    next.done = reportDone;
+    next.tally = { enrolled: +report.submitted || 0, already: +report.alreadyMember || 0,
+      skipped: (+report.skipped || 0) + (+report.pending || 0) + (+report.other || 0), errors: +report.errors || 0 };
+  }
+  if (same) {
+    if (+next.done < +previous.done || next.done == null) next.done = previous.done;
+    if (!next.n && previous.n) next.n = previous.n;
+    if (!value.tally && !report) next.tally = previous.tally;
+    if (!report || +report.processed < +(previous.report && previous.report.processed || 0)) next.report = previous.report;
+    const sum = t => t ? ['enrolled','already','skipped','errors'].reduce((n,k) => n + (+t[k] || 0), 0) : -1;
+    if (sum(next.tally) < sum(previous.tally)) next.tally = previous.tally;
+  }
+  // History from an older worker can retain a tally while its processed field was reset.
+  if (next.tally) {
+    const counted = ['enrolled','already','skipped','errors'].reduce((n,k) => n + (+next.tally[k] || 0), 0);
+    next.done = Math.min(Math.max(+next.done || 0, counted), +next.n || Infinity);
+  }
+  return next;
+}
+const gpAccScope = () => typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
+function gpAccRemember(value) {
+  if (!value || !value.tag || !value.tally || !gpAccScope()) return;
+  const counts = { tag: value.tag, at: +value.at || Date.now(), started: +value.started || 0, n: +value.n || 0, done: +value.done || 0,
+    tally: Object.fromEntries(['enrolled','already','skipped','errors'].map(k => [k,+value.tally[k] || 0])) };
+  try { localStorage.setItem('gp_enrol_progress_v1:' + gpAccScope(), JSON.stringify(counts)); } catch (_) {}
+}
+function gpAccRestore(value) {
+  if (!value || !value.tag) return null;
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('gp_enrol_progress_v1:' + gpAccScope()) || 'null'); } catch (_) {}
+  if (!saved || saved.tag !== value.tag || Date.now() - +saved.at > 864e5) saved = null;
+  const record = window.hoRuns && window.hoRuns.get ? window.hoRuns.get('enrol', value.tag) : null;
+  const confirmed = record ? gpAccMerge(null, {tag:record.tag,n:record.n,done:record.done,tally:record.tally}) : null;
+  if (confirmed && (!saved || +confirmed.done > +saved.done)) saved = confirmed;
+  if (record && record.url) saved = Object.assign({}, saved || {tag:value.tag}, {run:record.url});
+  // Restored metrics are a baseline; the live state, date and identity always come from this run's feed.
+  return saved ? Object.assign({}, saved, { at: 0 }) : null;
+}
+// Reconcile existing nodes instead of replacing the live window on every heartbeat.
+// Buttons, focus, scrolling, category lists and spinner animations survive text updates.
+function gpAccHtml(target, html) {
+  if (!target || target._gpHtml === html) return;
+  target._gpHtml = html;
+  const template = document.createElement('template'); template.innerHTML = html;
+  const identity = n => n.nodeType === 1 ? n.tagName + ':' + (n.id || n.getAttribute('data-acr-key') || '') : n.nodeType;
+  const sync = (parent, source) => {
+    let old = parent.firstChild;
+    Array.from(source.childNodes).forEach(fresh => {
+      if (!old || identity(old) !== identity(fresh)) {
+        const found = Array.from(parent.childNodes).find(n => n !== old && identity(n) === identity(fresh) && fresh.nodeType === 1 && (fresh.id || fresh.hasAttribute('data-acr-key')));
+        if (found) { parent.insertBefore(found, old); old = found; }
+        else { const added = fresh.cloneNode(true); parent.insertBefore(added, old); return; }
+      }
+      if (fresh.nodeType === 1 && fresh.id === 'acrCat') { old = old.nextSibling; return; }
+      if (fresh.nodeType === 1) {
+        Array.from(old.attributes).forEach(a => { if (!fresh.hasAttribute(a.name)) old.removeAttribute(a.name); });
+        Array.from(fresh.attributes).forEach(a => { if (old.getAttribute(a.name) !== a.value) old.setAttribute(a.name, a.value); });
+        sync(old, fresh);
+      } else if (old.nodeValue !== fresh.nodeValue) old.nodeValue = fresh.nodeValue;
+      old = old.nextSibling;
+    });
+    while (old) { const next = old.nextSibling; old.remove(); old = next; }
+  };
+  sync(target, template.content);
+}
 function gpCloudPaint(v) {
-  if (v) GP_ACC.live = v;
+  const scope = gpAccScope();
+  if (GP_ACC.scope !== scope) { GP_ACC.live = null; GP_ACC.gh = null; GP_ACC.scope = scope; GP_ACC.at = 0; GP_ACC.tag = ''; GP_ACC.cat = ''; }
+  if (v) {
+    const same = GP_ACC.live && GP_ACC.live.tag === v.tag;
+    if (!same && GP_ACC.live && (+v.started || +v.at || 0) < (+GP_ACC.live.started || +GP_ACC.live.at || 0)) return;
+    if (!same) { GP_ACC.gh = null; GP_ACC.cat = ''; GP_ACC.logged = false; GP_ACC.tag = v.tag || ''; GP_ACC.at = +v.started || +v.at || Date.now(); }
+    const restored = gpAccRestore(v);
+    const baseline = same && restored ? gpAccMerge(restored, GP_ACC.live) : same ? GP_ACC.live : restored;
+    GP_ACC.live = gpAccMerge(baseline, v);
+    gpAccRemember(GP_ACC.live);
+  }
   const live = GP_ACC.live, st = gpAccState(live, GP_ACC.gh);
-  const hh = t => { const d = new Date(+t); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':'); };
-  const n = +(live && live.n) || 0, done = Math.min(+(live && live.done) || 0, n || Infinity);
+  const n = +(live && live.n) || 0, done = Math.min(Math.max(+(live && live.done) || 0, !live?.tally && live?.current ? Math.max(0, +live.current.index - 1 || 0) : 0), n || Infinity);
   const pct = st.state === 'done' ? 100 : Math.round(Math.min(97, st.k / 5 * 100 * (st.k === 3 ? 1 : 1) + (st.k === 3 && n ? done / n * 20 : 0)));
   const ty = live && live.tally || null, test = !!(live && live.test);
   const icon = { done: '✅', error: '⛔', stopped: '⏹' }[st.state] || '⏳';
@@ -585,25 +671,26 @@ function gpCloudPaint(v) {
   const box = document.getElementById('gpCloudLive');
   if (box && live) {
     box.hidden = false; box.className = 'gp-cloud-live ' + st.state;
-    box.innerHTML = `<div class="gp-cl-top"><b>${icon} ${test ? '🧪 Test · ' : ''}${escapeHtml(st.note || '…')}</b><span class="gp-cl-actions">${active ? `<button type="button" class="gp-cl-stop" onclick="gpAccControl('stop')">■ Stop</button>` : ''}<button type="button" class="gp-cl-start" onclick="gpAccorRunWin(true)">📡 Live window</button></span></div>
-      <div class="gp-cl-bar"><i style="width:${pct}%"></i></div><div class="gp-cl-meta"><span>${done} / ${n} guests</span>${ty ? `<span>✅ ${+ty.enrolled || 0} · 👤 ${+ty.already || 0} · ⏭ ${+ty.skipped || 0} · ⚠️ ${+ty.errors || 0}</span>` : ''}${st.url ? `<a class="gp-cl-run" href="${escapeHtml(st.url)}" target="_blank" rel="noopener">GitHub ↗</a>` : ''}</div>`;
+    gpAccHtml(box, `<div class="gp-cl-top"><b>${icon} ${test ? '🧪 Test · ' : ''}${escapeHtml(st.note || '…')}</b><span class="gp-cl-actions">${active ? `<button type="button" class="gp-cl-stop" onclick="gpAccControl('stop')">■ Stop</button>` : ''}<button type="button" class="gp-cl-start" onclick="gpAccorRunWin(true)">📡 Live window</button></span></div>
+      <div class="gp-cl-bar"><i style="width:${pct}%"></i></div><div class="gp-cl-meta"><span>${done} / ${n} guests</span>${ty ? `<span>✅ ${+ty.enrolled || 0} · 👤 ${+ty.already || 0} · ⏭ ${+ty.skipped || 0} · ⚠️ ${+ty.errors || 0}</span>` : ''}${st.url ? `<a class="gp-cl-run" href="${escapeHtml(st.url)}" target="_blank" rel="noopener">GitHub ↗</a>` : ''}</div>`);
   }
   // 2) the live window
   const body = document.getElementById('gpAccorModalBody'); if (!body) return;
   const sub = document.getElementById('gpAccorModalSub');
   const t0 = (live && +live.started) || GP_ACC.at || Date.now(), sec = Math.max(0, Math.round(((st.state === 'run' ? Date.now() : (live && +live.at) || Date.now()) - t0) / 1000));
-  if (sub) sub.textContent = (window.hoRuns && window.hoRuns.label('enrol') ? window.hoRuns.label('enrol') + ' · ' : '') + (live?.portalName?live.portalName+' · ':'') + (test ? '🧪 Test run · nothing is submitted · ' : '') + (live ? Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') : 'No run yet');
-  if (!live && !GP_ACC.gh) { body.innerHTML = '<div class="acr-empty">No enrolment run yet. Tick <b>Agreed</b> for the guests who said yes, paste the enrolment portal link, then press <b>☁️ Start cloud computer</b> (or 🧪 Test first).</div>'; gpAccPaintCon([], st); return; }
+  const subtitle = (window.hoRuns && window.hoRuns.label('enrol', live && live.tag) ? window.hoRuns.label('enrol', live && live.tag) + ' · ' : '') + (live?.portalName?live.portalName+' · ':'') + (test ? '🧪 Test run · nothing is submitted · ' : '') + (live ? Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') : 'No run yet');
+  if (sub && sub.textContent !== subtitle) sub.textContent = subtitle;
+  if (!live && !GP_ACC.gh) { gpAccHtml(body, '<div class="acr-empty">No enrolment run yet. Tick <b>Agreed</b> for the guests who said yes, paste the enrolment portal link, then press <b>☁️ Start cloud computer</b> (or 🧪 Test first).</div>'); gpAccPaintCon([], st); return; }
   const cg = live && live.current;
   const guests = (live && live.report && Array.isArray(live.report.guests)) ? live.report.guests : [];
   const tile = (ic, lb, val, cls, cat) => { const has = guests.some(g => g.cat === cat); return `<button type="button" class="acr-tile ${cls}${has ? ' tap' : ''}" ${has ? `onclick="gpAccShowCat('${cat}')"` : 'disabled'}><b>${val}</b><span>${ic} ${lb}${has ? ' ›' : ''}</span></button>`; };
-  body.innerHTML = `<div class="acr-bar ${st.state}"><i style="width:${pct}%"></i></div>
-    <ol class="acr-steps">${GP_ACC_STEPS.map(([id, ic, lb], i) => { const s2 = st.state === 'done' || i < st.k ? 'ok' : i === st.k ? (st.state === 'error' ? 'bad' : st.state === 'stopped' ? 'stop' : 'now') : '';
+  gpAccHtml(body, `<div data-acr-key="bar" class="acr-bar ${st.state}"><i style="width:${pct}%"></i></div>
+    <ol data-acr-key="steps" class="acr-steps">${GP_ACC_STEPS.map(([id, ic, lb], i) => { const s2 = st.state === 'done' || i < st.k ? 'ok' : i === st.k ? (st.state === 'error' ? 'bad' : st.state === 'stopped' ? 'stop' : 'now') : '';
       return `<li class="${s2}"><span class="d">${s2 === 'ok' ? '✓' : s2 === 'bad' ? '!' : s2 === 'stop' ? '■' : ic}</span><span class="l">${escapeHtml(lb)}${id === 'enroll' && n ? ` <em>${done} / ${n}</em>` : ''}</span>${s2 === 'now' ? '<span class="sp"></span>' : ''}</li>`; }).join('')}</ol>
-    ${cg && st.state === 'run' ? `<div class="acr-guest"><span>👤</span><div><b>Guest ${escapeHtml(String(cg.index || '?'))} of ${escapeHtml(String(cg.total || n || '?'))}: ${escapeHtml(cg.title || '')} ${escapeHtml(cg.name || '')}</b><small>Confirmation ${escapeHtml(String(cg.conf || '—'))} · ${escapeHtml(String(cg.country || '—'))} · phone ${escapeHtml(String(cg.phone || '—'))}</small></div></div>` : ''}
-    ${ty ? `<div class="acr-tiles">${tile('✅', test ? 'Checked' : 'Enrolled', test ? done : +ty.enrolled || 0, 'ok', 'enrolled')}${tile('👤', 'Already members', +ty.already || 0, 'info', 'already')}${tile('⏭', 'Skipped', +ty.skipped || 0, 'warn', 'skipped')}${tile('⚠️', 'Errors', +ty.errors || 0, 'bad', 'error')}</div><div class="acr-cat" id="acrCat" hidden></div>` : ''}
-    <div class="acr-note ${st.state}">${icon} ${escapeHtml(st.note || '…')}</div>
-    <div class="acr-act">${active ? `<button type="button" class="btn" onclick="gpAccControl('stop')">■ Stop after this guest</button>` : ''}${!active && live && live.step !== 'queued' ? `<button type="button" class="btn" onclick="gpAccCloudRestart()">▶ Run again</button>` : ''}${st.url ? `<a class="btn" href="${escapeHtml(st.url)}" target="_blank" rel="noopener">Open on GitHub ↗</a>` : ''}${st.state === 'run' ? '<span class="acr-hint">You can close this — the cloud computer keeps going and the results land in the tracker.</span>' : ''}</div>`;
+    ${cg && st.state === 'run' ? `<div data-acr-key="guest" class="acr-guest"><span>👤</span><div><b>Guest ${escapeHtml(String(cg.index || '?'))} of ${escapeHtml(String(cg.total || n || '?'))}: ${escapeHtml(cg.title || '')} ${escapeHtml(cg.name || '')}</b><small>Confirmation ${escapeHtml(String(cg.conf || '—'))} · ${escapeHtml(String(cg.country || '—'))} · phone ${escapeHtml(String(cg.phone || '—'))}</small></div></div>` : ''}
+    <div data-acr-key="tiles" class="acr-tiles">${tile('✅', test ? 'Checked' : 'Enrolled', ty ? (test ? done : +ty.enrolled || 0) : '—', 'ok', 'enrolled')}${tile('👤', 'Already members', ty ? +ty.already || 0 : '—', 'info', 'already')}${tile('⏭', 'Skipped', ty ? +ty.skipped || 0 : '—', 'warn', 'skipped')}${tile('⚠️', 'Errors', ty ? +ty.errors || 0 : '—', 'bad', 'error')}</div><div class="acr-cat" id="acrCat" hidden></div>
+    <div data-acr-key="note" class="acr-note ${st.state}">${icon} ${escapeHtml(st.note || '…')}${!ty && done ? '<small class="acr-reconnecting">Last guest position restored. Result totals are reconnecting; — means unavailable.</small>' : ''}</div>
+    <div data-acr-key="actions" class="acr-act">${active ? `<button type="button" class="btn" onclick="gpAccControl('stop')">■ Stop after this guest</button>` : ''}${!active && live && live.step !== 'queued' ? `<button type="button" class="btn" onclick="gpAccCloudRestart()">▶ Run again</button>` : ''}${st.url ? `<a class="btn" href="${escapeHtml(st.url)}" target="_blank" rel="noopener">Open on GitHub ↗</a>` : ''}${st.state === 'run' ? '<span class="acr-hint">You can close this — the cloud computer keeps going and the results land in the tracker.</span>' : ''}</div>`);
   gpAccRenderCat();
   const lines = (live && Array.isArray(live.con) ? live.con : []).slice();
   if (GP_ACC.gh && (!live || live.step === 'queued')) lines.push({ t: Date.now(), g: 'GH', m: 'GitHub Actions: ' + GP_ACC.gh.status + (GP_ACC.gh.conclusion ? ' · ' + GP_ACC.gh.conclusion : '') });
@@ -677,6 +764,7 @@ function gpAgentBeat() {
   // the hotel's saved link (shared by the team): fill it unless you are typing in the field right now
   fbListen('enrollPortalUrl', v => { const a = document.getElementById('gpAccorUrl'); if (a && v && v.url && document.activeElement !== a && !a.value) { if(window.GPEnrollmentLinks)GPEnrollmentLinks.adoptLegacy(v.url);else a.value = v.url; } });
   fbListen('enrollLive', v => { if (v && (Date.now() - (+v.at || 0) < 24 * 3600e3)) gpCloudPaint(v); });
+  window.addEventListener('ho-enrol-history', () => { if (GP_ACC.live) gpCloudPaint(GP_ACC.live); });
   fbListen('enrollAgent', gpAgentPaint);
   fbListen('enrollJob', job => { if (job && job.state === 'queued' && !job.accorLoop) gpAgentTake(job); });
   gpAgentBeat(); setInterval(gpAgentBeat, 60000);

@@ -3768,7 +3768,7 @@ html, body { background: var(--bg); }
 .gp-cloud-set{margin-top:10px;font-size:.82rem;color:var(--text3)}.gp-cloud-set summary{cursor:pointer}
 .gp-agent-st{margin-top:10px;display:inline-block;padding:4px 10px;border-radius:99px;font-size:.78rem;border:1px solid var(--border);background:var(--card)}.gp-agent-st.on{border-color:color-mix(in srgb,#10b981 55%,var(--border));color:var(--text)}
 .gp-agent-on{display:flex;gap:8px;align-items:center;margin:10px 0 6px;font-size:.88rem;color:var(--text);cursor:pointer}
-:root { --ho-css: "v582"; }
+:root { --ho-css: "v583"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
@@ -4039,3 +4039,6 @@ select option, select optgroup { background: var(--input-bg,var(--card)); color:
 .gp-portal-error:empty{display:none}
 .gp-portal-picker input:focus-visible,.gp-portal-picker select:focus-visible,.gp-portal-picker summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(max-width:600px){.gp-portal-picker{padding:12px}.gp-portal-buttons .btn{flex:1}.gp-portal-choice select{min-height:48px}}
+
+/* Enrolment reconnect state: unknown counts are distinct from confirmed zero. */
+.acr-reconnecting{display:block;margin-top:6px;font-size:.78rem;line-height:1.5;color:var(--text2)}
