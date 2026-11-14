@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 592, items: [
+    { ico: '📌', title: 'A clearer side menu',
+      what: 'Page names, counts and pin buttons now have separate space. The Night Checklist count stays visible, long names shorten neatly, and pinned stars stay visible without a floating dark box.',
+      does: 'Group arrows align with their titles, folded pages leave no empty gaps, and tablet pin buttons have full touch targets. Search, favorites, menu arrangement and page names in Settings keep working.' }
+  ] },
   { v: 591, items: [
     { ico: '🧾', title: 'Approve existing requests and correct misclassified fees',
       what: 'The approved total now shows how much is still Pending. Source-linked pending requests can be reviewed for approval directly in the difference list, including a clear booking check when stays overlap.',

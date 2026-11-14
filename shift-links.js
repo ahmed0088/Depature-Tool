@@ -104,7 +104,7 @@ const jsq = s => esc(JSON.stringify(String(s)));   // a value inside onclick="â€
 function navItem(id) { return document.querySelector(`nav.sidenav .nav-item[data-panel="${id}"]`); }
 function labelOf(id) {
   const el = navItem(id);
-  const txt = el ? [...el.childNodes].filter(c => c.nodeType === 3).map(c => c.textContent).join(' ').replace(/\s+/g, ' ').trim() : '';
+  const txt = el ? (el.querySelector(':scope > .nav-label')?.textContent.trim() || [...el.childNodes].filter(c => c.nodeType === 3).map(c => c.textContent).join(' ').replace(/\s+/g, ' ').trim()) : '';
   return txt || LABELS[id] || id;
 }
 function iconOf(id) {

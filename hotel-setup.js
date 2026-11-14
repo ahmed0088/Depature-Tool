@@ -386,7 +386,7 @@ function _hsuPages() {
   const out = [];
   document.querySelectorAll('nav.sidenav .nav-item[data-panel]').forEach(n => {
     const id = n.dataset.panel; if (!id || out.some(p => p.id === id)) return;
-    const name = [...n.childNodes].filter(c => c.nodeType === 3).map(c => c.textContent).join(' ').replace(/\s+/g, ' ').trim() || n.title || id;
+    const name = n.querySelector(':scope > .nav-label')?.textContent.trim() || [...n.childNodes].filter(c => c.nodeType === 3).map(c => c.textContent).join(' ').replace(/\s+/g, ' ').trim() || n.title || id;
     out.push({ id, name: name.replace(/\s*[\d—✓/]+\s*$/, '').trim() || id });
   });
   return out;

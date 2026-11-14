@@ -36,7 +36,7 @@
   const nav = () => D.querySelector('nav.sidenav');
   const items = () => [...(nav() ? nav().querySelectorAll(':scope > .nav-item') : [])];
   const idOf = el => el.dataset.panel || el.id.replace(/^nav-/, '');
-  const labelOf = el => [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.nodeValue).join(' ').trim() || el.textContent.trim();
+  const labelOf = el => el.querySelector(':scope > .nav-label')?.textContent.trim() || [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.nodeValue).join(' ').trim() || el.textContent.trim();
   const iconOf = el => { const i = el.querySelector('.nav-icon'); return i ? i.textContent.trim() : '•'; };
   const visible = el => el.style.display !== 'none' && getComputedStyle(el).display !== 'none';
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -81,6 +81,16 @@
   // ⭐ pinned + 🕘 recent
   function quick() {
     const b = box(); if (!b) return;
+    // Give the name its own flexible slot so counts and pin buttons cannot cover it.
+    items().forEach(el => {
+      if (el.querySelector(':scope > .nav-label')) return;
+      const text = [...el.childNodes].filter(node => node.nodeType === 3 && node.nodeValue.trim());
+      if (!text.length) return;
+      const label = D.createElement('span'); label.className = 'nav-label';
+      label.textContent = text.map(node => node.nodeValue).join(' ').replace(/\s+/g, ' ').trim();
+      el.insertBefore(label, text[0]); text.forEach(node => node.remove());
+      if (!el.title) el.title = label.textContent;
+    });
     const by = new Map(items().filter(visible).map(el => [idOf(el), el]));
     const pins = LS.get(PIN_KEY, []).filter(id => by.has(id)), cur = (D.querySelector('.panel.active') || {}).id || '';
     const rec = LS.get(REC_KEY, []).filter(id => by.has(id) && !pins.includes(id) && 'panel-' + id !== cur).slice(0, 4);
@@ -93,7 +103,7 @@
       if (!s) { s = D.createElement('button'); s.type = 'button'; s.className = 'nvf-star'; el.appendChild(s);
         s.addEventListener('click', e => { e.stopPropagation(); togglePin(idOf(el)); }); }
       const p = pins.includes(idOf(el)); s.textContent = p ? '★' : '☆'; s.classList.toggle('on', p);
-      s.title = p ? 'Unpin from the top of the menu' : 'Pin to the top of the menu'; s.setAttribute('aria-label', s.title);
+      s.title = p ? 'Unpin from the top of the menu' : 'Pin to the top of the menu'; s.setAttribute('aria-label', (p ? 'Unpin ' : 'Pin ') + labelOf(el)); s.setAttribute('aria-pressed', String(p));
     });
     mobileQuick(by, pins, rec);
   }

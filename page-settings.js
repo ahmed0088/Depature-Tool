@@ -84,7 +84,7 @@
       v => { const h = (P('hiddenPages') || []).filter(x => x !== id); if (v) { if (!confirm('Hide this page from your menu? Settings → Pages brings it back.')) return false; h.push(id); } SP('hiddenPages', h); }));
     return L;
   }
-  const titleOf = id => { const n = D.getElementById('nav-' + id); const t = n ? [...n.childNodes].filter(x => x.nodeType === 3).map(x => x.nodeValue).join(' ').trim() : ''; const h = D.querySelector('#panel-' + id + ' .page-hd h1, #panel-' + id + ' h1'); return t || (h ? h.textContent.trim() : id); };
+  const titleOf = id => { const n = D.getElementById('nav-' + id); const t = n ? (n.querySelector(':scope > .nav-label')?.textContent.trim() || [...n.childNodes].filter(x => x.nodeType === 3).map(x => x.nodeValue).join(' ').trim()) : ''; const h = D.querySelector('#panel-' + id + ' .page-hd h1, #panel-' + id + ' h1'); return t || (h ? h.textContent.trim() : id); };
 
   function rowHtml(o) {
     const v = o.get();

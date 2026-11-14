@@ -242,7 +242,7 @@ function pages() {
   items.forEach(el => {
     const id = el.dataset.panel;
     if (!id || NEVER_LISTED.includes(id) || out.some(p => p.id === id)) return;
-    const label = [...el.childNodes].filter(c => c.nodeType === 3).map(c => c.textContent).join(' ').replace(/\s+/g, ' ').trim() || el.title || id;
+    const label = el.querySelector(':scope > .nav-label')?.textContent.trim() || [...el.childNodes].filter(c => c.nodeType === 3).map(c => c.textContent).join(' ').replace(/\s+/g, ' ').trim() || el.title || id;
     const ic = el.querySelector('.nav-icon');
     const g = groups.find(([, ps]) => ps.includes(id));
     out.push({ id, label, icon: ic ? ic.innerHTML : '', group: g ? g[0] : 'Tools' });
