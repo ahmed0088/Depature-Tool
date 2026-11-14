@@ -25,7 +25,7 @@ async function sellerPinGuard(db,plan,snapshot){
   };
 }
 async function execute(plan,snapshot,{portal,db,test,publish,stop,verifySeller}){
-  C.validatePlan(plan,snapshot);const results=[];const save=async(op,result)=>{const before=snapshot.records.find(r=>r.id===op.recordId),product=snapshot.products.find(p=>p.id===op.productId),person=snapshot.contributors.find(p=>p.id===op.contributorId);results.push({...result,action:op.action,at:Date.now(),hotel:snapshot.binding.property,currency:snapshot.settings.currency,before:before?{...C.values(before),status:before.status,product:before.product,seller:before.seller}:null,...(op.sellerFreeze?{sellerFreeze:op.sellerFreeze}:{}),requested:{...op.values,status:op.statusAfter||({approve:'APPROVED',deny:'DENIED',delete:'PURGED'})[op.action],product:product?.name||'',seller:person?.name||''},reason:op.reason||[op.evidence,op.sellerFreezeEvidence].filter(Boolean).join(' · ')});await publish(results);};
+  C.validatePlan(plan,snapshot);const results=[];const save=async(op,result)=>{const before=snapshot.records.find(r=>r.id===op.recordId),product=snapshot.products.find(p=>p.id===op.productId),person=snapshot.contributors.find(p=>p.id===op.contributorId);results.push({...result,action:op.action,at:Date.now(),hotel:snapshot.binding.property,currency:snapshot.settings.currency,before:before?{...C.values(before),status:before.status,product:before.product,seller:before.seller}:null,...(op.sellerFreeze?{sellerFreeze:op.sellerFreeze}:{}),...(op.reconciliation?{reconciliation:op.reconciliation}:{}),requested:{...op.values,status:op.statusAfter||({approve:'APPROVED',deny:'DENIED',delete:'PURGED'})[op.action],product:product?.name||'',seller:person?.name||''},reason:op.reason||[op.evidence,op.sellerFreezeEvidence].filter(Boolean).join(' · ')});await publish(results);};
   for(const [index,op] of plan.operations.entries()){
     if(await stop())return {results,stopped:true};
     const ledgerKey=sha(C.stable(C.binding(plan.binding))+'|'+(op.action==='add'?'transaction:'+op.transaction:'record:'+op.recordId+'|'+op.expected+'|'+op.action));
@@ -78,7 +78,7 @@ async function main(){
     const tally={tested:0,applied:0,unchanged:0,held:0,uncertain:0};for(const r of results)if(r.state in tally)tally[r.state]++;
     await db.patch(node,{state,results,tally,note,run,at:Date.now(),...extra});
     const live={tag,scope:plan.scope||'all',state:state==='running'?'run':state,test,n:plan.operations?.length||0,done:results.length,note,tally,at:Date.now(),started:job.reviewedAt,run};
-    await db.put('ingauge/live',live);await db.patch('cloudRuns/'+tag,{...live,kind:'ingauge',url:run,mode:plan.mode||'',...(plan.binding?.property?{hotel:plan.binding.property}:{}),...(plan.from?{from:plan.from}:{}),...(plan.to?{to:plan.to}:{}),...(['done','error','stopped'].includes(live.state)?{finishedAt:live.at}:{})});
+    await db.put('ingauge/live',live);await db.patch('cloudRuns/'+tag,{...live,kind:'ingauge',url:run,mode:plan.mode||'',...(plan.binding?.property?{hotel:plan.binding.property}:{}),...((plan.from||plan.period?.from)?{from:plan.from||plan.period.from}:{}),...((plan.to||plan.period?.to)?{to:plan.to||plan.period.to}:{}),...(['done','error','stopped'].includes(live.state)?{finishedAt:live.at}:{})});
   };
   let browser,heartbeat,publishedResults=[];const trace=[];
   const progress=async(stage,note)=>{

@@ -106,7 +106,16 @@
     const total=unit*(product.recurring&&settings.validation!=='BUSINESS_DATE'?days:1);
     if(!Number.isSafeInteger(total)||total>1000000000)fail('The proposed total is outside the supported range.');return total;
   }
-  function operationError(op,snapshot){
+  function withinPeriod(value,period){return !!(day(value)&&day(period?.from)&&day(period?.to)&&period.from<=period.to&&period.from<=value&&value<=period.to);}
+  function operationPeriodError(op,snapshot,period){
+    const selected=period===undefined?{from:snapshot?.from,to:snapshot?.to}:period;
+    if(!day(selected?.from)||!day(selected?.to)||selected.from>selected.to)return 'Choose a valid audit period before reviewing changes.';
+    const before=snapshot?.records?.find(r=>r.id===id(op.recordId)),sourceDate=op.action==='add'?op.values?.businessDate:before?.businessDate;
+    if(!withinPeriod(sourceDate,snapshot)||!withinPeriod(sourceDate,selected))return 'The original posting business date is missing or outside the selected audit period. Choose that period explicitly to review this sale.';
+    if(['add','edit'].includes(op.action)&&(!withinPeriod(op.values?.businessDate,snapshot)||!withinPeriod(op.values?.businessDate,selected)))return 'The proposed business date is outside the selected audit period.';
+    return '';
+  }
+  function operationError(op,snapshot,period){
     try{
       if(!['add','edit','approve','deny','delete'].includes(op.action))fail('Choose a supported operation.');
       const before=snapshot.records.find(r=>r.id===id(op.recordId));
@@ -118,6 +127,15 @@
         if(op.action==='approve'&&before.status!=='PENDING')fail('Only an existing Pending request can be approved here.');
         if(op.confirmation!==before.confirmation)fail('A reviewed operation cannot change its reservation identity.');
       }else if(!/^\d+$/.test(text(op.confirmation))||!text(op.transaction))fail('A missing sale needs its confirmation and Opera transaction.');
+      const dateIssue=operationPeriodError(op,snapshot,period);if(dateIssue)fail(dateIssue);
+      if(op.reconciliation){const proof=op.reconciliation;
+        if(proof.schema!==1||proof.snapshotId!==snapshot.id||proof.reviewed!==true||!text(proof.key)||!Array.isArray(proof.journalIds)||!proof.journalIds.length||proof.journalIds.some(v=>!/^\d+$/.test(String(v)))||!Number.isSafeInteger(proof.journalCents)||proof.journalCents<=0||text(proof.currency).toUpperCase()!==text(snapshot.settings.currency).toUpperCase())fail('Check the Opera evidence, amount, confirmation and credit before saving this correction.');
+        const sourceDay=before?.businessDate||op.values?.businessDate;if(!withinPeriod(sourceDay,proof.period))fail('This correction was prepared for another posting period. Review it again.');
+        if(proof.role==='extra'&&op.action!=='deny'||proof.role==='keep'&&op.action!=='edit')fail('Review the one-off duplicate action again.');
+        if(proof.kind==='duplicate'&&(!Array.isArray(proof.recordIds)||proof.recordIds.length<2||!proof.recordIds.includes(op.recordId)||proof.recordIds.some(id=>{const r=snapshot.records.find(r=>r.id===id);return !r||r.confirmation!==op.confirmation||r.propertyId!==snapshot.binding.propertyId||r.departmentId!==snapshot.binding.departmentId||!withinPeriod(r.businessDate,proof.period);})))fail('Refresh the exact duplicate entries before reviewing this action.');
+        if(proof.role==='keep'&&op.productId!==before?.productId)fail('Review a product replacement separately from retaining a one-off entry.');
+        if(['add','edit'].includes(op.action)&&op.values?.totalCents!==proof.journalCents&&text(op.reason).length<5)fail('Explain why the reviewed amount differs from the Opera posting.');
+      }
       if(op.action==='approve'){
         const p=snapshot.products.find(p=>p.id===before.productId),person=snapshot.contributors.find(p=>p.id===before.contributorId);
         if(!p||p.activeStatus!=='NORMAL'||/UNKNOWN|UNMAPPED/.test(key(p.code+' '+p.name))||!person)fail('Identify the product and contributor before approving this request.');
@@ -152,7 +170,8 @@
     if(!plan||plan.schema!==2||plan.mode!=='apply'||!snapshot||!snapshot.complete||snapshot.invalidatedAt||!snapshot.pagination?.verified||snapshot.pagination.total!==snapshot.records.length||snapshot.pagination.read!==snapshot.records.length||!sameBinding(plan.binding,snapshot.binding)||plan.snapshotId!==snapshot.id||plan.hotelId!==snapshot.hotelId)fail('Refresh live IN-Gauge to fetch and verify every page for this hotel before reviewing changes.');
     if(!Array.isArray(plan.operations)||!plan.operations.length||plan.operations.length>100)fail('Select between 1 and 100 reviewed operations.');
     const scope=plan.scope||'all';if(!['manual','automatic','all'].includes(scope))fail('Choose Manual upsells, Automatic packages or Both.');
-    const seen=new Set();for(const op of plan.operations){if(!scopeAllows(scope,operationCategory(op,snapshot)))fail('A selected change is outside your chosen audit mode. Choose the matching mode and review again.');const error=operationError(op,snapshot);if(error)fail(error);const k=op.action==='add'?'new:'+op.transaction:'record:'+op.recordId;if(seen.has(k))fail('A record or Opera transaction appears more than once in this plan.');seen.add(k);}
+    const seen=new Set();for(const op of plan.operations){if(!scopeAllows(scope,operationCategory(op,snapshot)))fail('A selected change is outside your chosen audit mode. Choose the matching mode and review again.');const error=operationError(op,snapshot,plan.period);if(error)fail(error);const k=op.action==='add'?'new:'+op.transaction:'record:'+op.recordId;if(seen.has(k))fail('A record or Opera transaction appears more than once in this plan.');seen.add(k);}
+    const keepers=new Set();for(const op of plan.operations){const proof=op.reconciliation;if(proof?.recordIds?.some(id=>!withinPeriod(snapshot.records.find(r=>r.id===id)?.businessDate,plan.period===undefined?snapshot:plan.period)))fail('A reconciliation source entry is outside the selected posting period.');if(proof?.role==='keep'){if(keepers.has(proof.key))fail('Choose only one entry to retain for this one-off fee.');keepers.add(proof.key);}}
     return plan;
   }
   function values(r){return {unitCents:r.unitCents,totalCents:r.totalCents,chargeDays:r.chargeDays,arrival:r.arrival,departure:r.departure,businessDate:r.businessDate,room:r.room,memo:r.memo};}
@@ -172,6 +191,12 @@
     const product=products.find(p=>p.id===id(op.productId)),once=product&&['EC','LC'].includes(kind(product.code)||kind(product.name));
     return records.filter(r=>r.confirmation===op.confirmation&&(r.productId===id(op.productId)||!r.productId||/UNKNOWN|UNMAPPED/.test(key(r.product)))&&(once||r.businessDate===op.values?.businessDate));
   }
+  function reviewedDuplicate(op,live,snapshot){
+    const proof=op.reconciliation;if(op.action!=='edit'||proof?.kind!=='duplicate'||proof.role!=='keep'||proof.reviewed!==true||!proof.recordIds?.includes(String(live.id)))return false;
+    const source=snapshot.records.find(r=>r.id===String(live.id)),before=snapshot.records.find(r=>r.id===String(op.recordId));
+    if(!source||!before||live.confirmation!==op.confirmation||live.propertyId!==snapshot.binding.propertyId||live.departmentId!==snapshot.binding.departmentId||live.productId!==before.productId||!withinPeriod(live.businessDate,proof.period))return false;
+    return live.status==='DENIED'||live.status==='PURGED'||fingerprint(live)===fingerprint(source);
+  }
   function differences(op,r,b){
     const expectedStatus=({approve:'APPROVED',deny:'DENIED',delete:'PURGED'})[op.action]||op.statusAfter;
     const expected={confirmation:op.confirmation,productId:id(op.productId),contributorId:id(op.contributorId),status:expectedStatus,...op.values,...(b?{propertyId:b.propertyId,departmentId:b.departmentId}:{})};
@@ -180,6 +205,6 @@
   function matches(op,r){
     return differences(op,r).length===0;
   }
-  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,flatten,record,fingerprint,amountTotal,operationError,validatePlan,values,payload,auditParams,duplicates,matches,differences,terminal,saleCategory,operationCategory,scopeAllows};
+  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,payload,auditParams,duplicates,reviewedDuplicate,matches,differences,terminal,saleCategory,operationCategory,scopeAllows};
   root.InGaugeAuditCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

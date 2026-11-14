@@ -150,7 +150,10 @@
       if (!exactIndex.has(exact)) exactIndex.set(exact, []); exactIndex.get(exact).push(g);
       if (!confIndex.has(key)) confIndex.set(key, []); confIndex.get(key).push(g);
     }
-    const result = journal.map(j => {
+    const period=context.period;
+    if(period&&(!date(period.from)||!date(period.to)||period.from>period.to))throw new Error('Choose a valid audit period.');
+    const selectedJournal=period?journal.filter(j=>{const d=date(j.BUSINESS_DATE);return !d||(period.from<=d&&d<=period.to);}):journal;
+    const result = selectedJournal.map(j => {
       const day = date(j.BUSINESS_DATE), code = clean(j.TRX_CODE), product = products[code] || clean(j.TRX_DESC) || 'Unmapped product', cents = amount(j.CASHIER_DEBIT) - amount(j.CASHIER_CREDIT), seller = sellerOf(j, employees);
       const candidates = [...new Map((guestIndex.get(room(j.ROOM) + '|' + norm(j.GUEST_FULL_NAME)) || []).filter(r => ['CKIN','CKOT','DUEIN','DUEOUT','DUOT'].includes(r.SHORT_RESV_STATUS) && day && date(r.TRUNC_BEGIN) <= day && day <= date(r.TRUNC_END)).map(r => [r.CONFIRMATION_NO, r])).values()];
       const r = { transaction: j.TRX_NO, day, code, product, family:mapping[code]||'', cents, room: clean(j.ROOM), guest: clean(j.GUEST_FULL_NAME), currency: clean(j.CURRENCY1).toUpperCase(), note: noteText(j), seller, cashier: clean(j.CASHIER_NAME), username: clean(j.USER_NAME), userId: clean(j.INSERT_USER), conf: candidates.length === 1 ? candidates[0].CONFIRMATION_NO : '', candidates, matches: [], line: j.line, bucket: '', reason: '', action: '' };
@@ -193,7 +196,7 @@
     const groups = new Map();
     result.filter(r => r.bucket !== 'package').forEach(r => { const key = (r.conf || norm(r.guest) + '|' + room(r.room)) + '|' + r.code + '|' + r.day; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(r); });
     groups.forEach(rows => { if (rows.length > 1) rows.forEach(r => { if (r.bucket !== 'coverage') Object.assign(r, { bucket: 'review', reason: 'Multiple postings or reversals for this event. One IN-Gauge line cannot clear multiple Opera transactions.', action: 'Reconcile the event’s net total and existing requests before adding.' }); }); });
-    return { rows: result, dates, summary: Object.fromEntries(Object.keys(labels).map(k => [k, result.filter(r => r.bucket === k).length])), totalCents: result.reduce((s, r) => s + r.cents, 0) };
+    return { rows: result, dates, ...(period?{period:{...period},skippedOutsidePeriod:journal.length-selectedJournal.length}:{}), summary: Object.fromEntries(Object.keys(labels).map(k => [k, result.filter(r => r.bucket === k).length])), totalCents: result.reduce((s, r) => s + r.cents, 0) };
   }
 
   const state = { files: {}, data: {}, shared: {}, result: null, filter: 'add', search: '', busy: false, error: '', open: new Set(), limit: 60 };
@@ -242,6 +245,7 @@
   }
   function exportWorkbook() {
     if (!state.result || !global.XLSX) return;
+    if(!state.result.rows.length){toast('No journal postings fall inside the selected audit period.','warn');return;}
     const X = global.XLSX, wb = X.utils.book_new();
     function addSheet(name, rows) {
       const ws = X.utils.aoa_to_sheet(rows);
@@ -326,7 +330,7 @@
     if (!state.result) { root.innerHTML = '<div class="msu-empty"><span aria-hidden="true">✓</span><h3>Your monthly add list, with the proof</h3><p>Upload all three reports and check manual sales. You’ll see what to add, who earned it, and which requests already exist.</p></div>'; return; }
     const result = state.result, warnings = Object.values(state.data).flatMap(d => d.warnings);
     const matches = result.rows.map((r, i) => ({ r, i })).filter(({ r }) => r.bucket === state.filter && (!state.search || searchNorm([r.room, r.guest, r.conf, r.product, r.seller.name, r.transaction, r.note, ...r.matches.map(g => g.conf)].join(' ')).includes(searchNorm(state.search)) || [r.room, r.conf, r.transaction, ...r.matches.map(g => g.conf)].some(v => clean(v).includes(state.search))));
-    root.innerHTML = `<div class="msu-report-coverage"><div><b>IN-Gauge daily dates: ${esc(result.dates[0])} → ${esc(result.dates.at(-1))}</b><p>${state.liveContext ? 'Live snapshot. Refresh IN-Gauge before reviewing a changed request.' : 'Results use your uploaded export. A newer approval appears after you upload a newer report.'}</p></div><button type="button" class="btn" data-ms-export>Export review</button></div>
+    root.innerHTML = `<div class="msu-report-coverage"><div><b>IN-Gauge daily dates: ${esc(result.dates[0])} → ${esc(result.dates.at(-1))}</b><p>${state.liveContext ? 'Live snapshot. Refresh IN-Gauge before reviewing a changed request.' : 'Results use your uploaded export. A newer approval appears after you upload a newer report.'}</p></div><button type="button" class="btn" data-ms-export ${result.rows.length?'':'disabled'}>Export review</button></div>
       <div class="msu-stats" aria-label="Results">${Object.entries(labels).map(([k, label]) => `<button type="button" class="msu-stat ${k}${state.filter === k ? ' selected' : ''}" data-ms-filter="${k}" aria-pressed="${state.filter === k}"><strong>${result.summary[k]}</strong><span>${label}</span>${k === 'add' ? `<small>AED ${money(result.rows.filter(r => r.bucket === 'add').reduce((s, r) => s + r.cents, 0))} net</small>` : ''}</button>`).join('')}</div>
       <div class="msu-list-head"><div><h2>${labels[state.filter]}</h2><p>${state.filter === 'add' ? 'Proposed additions missing from this export. Use a complete, unfiltered report before adding.' : state.filter === 'package' ? 'Automatic package charges stay with Package Audit’s existing correction workflow.' : state.filter === 'existing' ? 'Pending and approved requests are already submitted. Do not create another.' : state.filter === 'coverage' ? 'These dates need a newer or wider IN-Gauge export before a missing sale can be confirmed.' : 'Identity, seller, amount or status needs checking before another request is created.'}</p></div><label class="msu-search"><span class="sr-only">Search sales</span><input id="msuSearch" type="search" value="${esc(state.search)}" placeholder="Room, seller, guest or confirmation…"></label></div>
       <div class="msu-list">${matches.length ? matches.slice(0, state.limit).map(({ r, i }) => card(r, i)).join('') : `<div class="msu-empty"><h3>${state.search ? 'No matching sales' : 'Nothing in this list'}</h3><p>${state.search ? 'Try another room, seller or confirmation.' : 'Choose another result above to see its details.'}</p></div>`}</div>

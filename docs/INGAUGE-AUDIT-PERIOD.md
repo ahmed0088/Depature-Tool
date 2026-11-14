@@ -1,0 +1,13 @@
+# Selected posting period (v589)
+
+IN-Gauge automation starts at the first day of the current Dubai calendar month and ends on today. The **Current month** button restores this range. Uploading a journal never changes the selected dates, even if it spans several months. Restoring a broader saved snapshot does not widen the selected period either.
+
+Explicit date choices are saved on this device by user, HotelOps namespace, portal, tenant, property and department. A deliberate historical review remains available during the same calendar month; at the next month rollover the default moves to that new month. Changing dates clears staged changes and approval readiness, keeps the date controls open, and preserves the source reports and history.
+
+Eligibility uses the **original posting/business date**, not the reservation arrival, departure, Changes Log timestamp or booking creation date. An October arrival with a November fee remains eligible for a November audit. Earlier activity logs remain available to establish the original seller. Suggestions, manual journal reconciliation, existing-record/pending lists and direct editor entry check the selected dates. Period fields do not remove old database records or rewrite completed history.
+
+New reviewed plans include the selected `period` in their digest. The shared core validates both the original record date and the proposed date against the selected period and fetched snapshot. The cloud runner calls this validation before portal access or an intent ledger. Edits, approvals, denials and removals are all covered. Moving an October record's date to November cannot bypass the source-date check. Existing plans without an explicit period retain their already reviewed snapshot bounds for compatibility.
+
+The editor and suggestion cards display posting dates separately from stay dates. The manual reconciliation retains older journal rows in the source file but excludes them from current-period results. A valid period with no postings produces no suggestions and no empty-export failure.
+
+Tests: `ingauge-period.test.js` covers boundaries, every action, source-date changes, reviewed plan validation, no portal/ledger calls for old rows, manual clipping, proposal filters, both upload modes and scoped persistence/rollover. `ingauge-period.browser.test.js` covers phone/desktop defaults, broad snapshot restore, real two-month upload, older seller history, explicit past-period review, reopen/current-month shortcut, forged editor entry, staged-edit invalidation and unchanged source records. All accounts and financial actions are synthetic.

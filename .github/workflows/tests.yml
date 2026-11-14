@@ -50,6 +50,16 @@ jobs:
           node tests/ingauge-seller-pins.test.js
           node tests/ingauge-seller-pins.browser.test.js
 
+      - name: Selected posting periods and phone date controls
+        run: |
+          node tests/ingauge-period.test.js
+          node tests/ingauge-period.browser.test.js
+
+      - name: Reviewed money corrections and cloud handoff
+        run: |
+          node tests/ingauge-reconciliation.test.js
+          node tests/ingauge-reconciliation.browser.test.js
+
       - name: Accor enrollment country and result checks
         run: |
           node tests/accor-enrollment.test.js

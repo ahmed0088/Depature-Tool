@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 589, items: [
+    { ico: '🧾', title: 'Review money differences and run the corrections',
+      what: 'Monthly differences now explain why a fee differs, how to fix it, and which confirmation and IN-Gauge record are involved. Review a correction or missing sale, save selected changes, then run the existing cloud automation.',
+      does: 'Amount edits preserve the reviewed seller. Missing sales require confirmed credit; ambiguous bookings and extra one-off entries need a billing decision. Pending requests count as approved revenue only after approval.' },
+    { ico: '📅', title: 'Keep package fixes inside the selected month',
+      what: 'Journal uploads keep your selected dates instead of expanding the audit into earlier months. The tool starts on the current month; Current month restores that range in one tap.',
+      does: 'Suggestions and reviewed cloud changes check the original posting date, including approvals and denials. An October arrival can still have a November charge. Earlier Changes Logs remain available to identify the correct seller.' }
+  ] },
   { v: 588, items: [
     { ico: '🔎', title: 'Recognize Opera guests due to check out',
       what: 'The manual audit and monthly breakdown now recognize Opera’s DUOT reservation status when matching journal postings to confirmations.',
