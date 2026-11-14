@@ -1,0 +1,38 @@
+'use strict';
+const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=require('playwright-core');
+(async()=>{
+ const browser=await chromium.launch({executablePath:[process.env.CHROME_PATH,'/usr/bin/google-chrome','/usr/bin/chromium'].find(p=>p&&fs.existsSync(p)),headless:true,args:['--no-sandbox']});
+ try{
+  for(const width of [390,1100]){
+   const page=await browser.newPage({viewport:{width,height:844},isMobile:width===390,hasTouch:width===390}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
+   await page.route('**/*',r=>r.request().url()==='https://review.test/'?r.fulfill({contentType:'text/html',body:'<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><div hidden><textarea id="gpInput"></textarea><div id="gpTableWrap"><table><tbody id="gpTable"></tbody></table></div><div id="gpActions"></div><div id="gpSummary"></div><input id="gpAccorUrl" value="https://secure.guestinternet.com/portal-system/portal/"><input id="gpAllConsent" type="checkbox"><button id="gpCopyEnroll"></button></div>'}):r.abort());await page.goto('https://review.test/');
+   await page.addStyleTag({content:fs.readFileSync('pro.css','utf8')});await page.addStyleTag({content:':root{--card:#fff;--bg:#f7f8fc;--bg2:#f0f2f8;--text:#202535;--text2:#657086;--text3:#657086;--border:#dce0ea;--accent:#4f67e8;--font:system-ui}body{font:14px system-ui}[hidden]{display:none!important}'});
+   await page.evaluate(()=>{window.HOTEL_ID='example';window._ref=null;window.showToast=(...args)=>(window.toasts||=[]).push(args);window.escapeHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));window.currentProfile={name:'Synthetic'};window.operations=[];window.fbSet=async(path,value)=>operations.push({path,value:JSON.parse(JSON.stringify(value))});window.fbUpdate=window.fbSet;window.fbListen=()=>{};});
+   await page.addScriptTag({content:fs.readFileSync('guest-pipeline.js','utf8')});
+   await page.evaluate(()=>{
+    gpAccGh=async(path,options)=>operations.push({dispatch:path,options});gpAccPoll=()=>{};gpAccorRunWin=()=>{};gpCloudPaint=()=>{};
+    window.cards=[{conf:'1',name:'Example One',email:'one@example.test',nat:'Turkey'},{conf:'2',name:'Example Two',email:'two@example.test',nat:''},{conf:'3',name:'Known Member',email:'member@example.test',nat:'Canada',member:true},{conf:'4',name:'Example Four',email:'four@example.test',nat:'NA'},{conf:'5',name:'Address Needed',email:'bad',nat:'India'}];window.originalCards=JSON.stringify(cards);gpLog[gpLogKey('one@example.test')]={status:'bad_email'};gpQuickEnroll(cards,'neorcha');gpRows.forEach(r=>{r.consent=true});gpQuickPaint();
+   });
+   assert.match(await page.locator('#gqFoot').innerText(),/2.*ready/s);assert.match(await page.locator('#gqFoot').innerText(),/1 need a country/);assert.equal(await page.locator('#gqEdit-2').count(),0,'known members cannot be edited into a new submission');
+   assert.deepEqual(await page.evaluate(()=>gpCloudSelection().rows.map(r=>r.conf)),['1','4']);
+   await page.locator('#gqUrl').fill('https://secure.guestinternet.com/portal-system/portal/?hotel=example');
+   await page.locator('#gqEdit-1>summary').click();await page.locator('#gqEdit-1 [data-gq-field=nat]').fill('United Arab Emirates');if(width===390&&process.env.ACCOR_REVIEW_SCREENSHOT)await page.screenshot({path:process.env.ACCOR_REVIEW_SCREENSHOT});
+   await page.evaluate(()=>{gpQuickTick(0)});assert.equal(await page.locator('#gqEdit-1').evaluate(el=>el.open),true);assert.equal(await page.locator('#gqEdit-1 [data-gq-field=nat]').inputValue(),'United Arab Emirates','unsaved detail text survives another row repaint');
+   await page.locator('#gqEdit-1 button').click();assert.equal(await page.evaluate(()=>gpRows[1].nat),'United Arab Emirates');assert.equal(await page.evaluate(()=>gpRows[1].consent),true,'country correction keeps existing agreement');assert.equal(await page.locator('#gqUrl').inputValue(),'https://secure.guestinternet.com/portal-system/portal/?hotel=example');
+   await page.evaluate(()=>{gpQuickTick(0)});await page.locator('#gqEdit-0>summary').click();await page.locator('#gqEdit-0 [data-gq-field=email]').fill('corrected@example.test');await page.locator('#gqEdit-0 button').click();assert.equal(await page.evaluate(()=>gpRows[0].email),'corrected@example.test');assert.equal(await page.evaluate(()=>gpRows[0].consent),false,'a changed recipient must be agreed again');
+   assert.equal(await page.evaluate(()=>JSON.stringify(cards)),await page.evaluate(()=>originalCards),'review must not change source cards');assert.equal(await page.evaluate(()=>operations.length),0,'editing writes only the local draft');
+   await page.evaluate(()=>gpQuickEnroll(cards,'neorcha'));assert.equal(await page.evaluate(()=>gpRows[0].email),'corrected@example.test');assert.equal(await page.evaluate(()=>gpRows[1].nat),'United Arab Emirates');
+   await page.evaluate(()=>gpQuickEnroll(cards.map((r,i)=>i===0?{...r,name:'Another Person',email:'another@example.test'}:r),'neorcha'));assert.equal(await page.evaluate(()=>gpRows[0].email),'another@example.test');assert.equal(await page.evaluate(()=>gpRows[0].consent),false,'another person on the same confirmation cannot inherit edits or agreement');
+   await page.evaluate(()=>{HOTEL_ID='other';gpQuickEnroll(cards,'neorcha')});assert.equal(await page.evaluate(()=>gpRows[0].email),'one@example.test');assert.equal(await page.evaluate(()=>gpRows[1].nat),'','another hotel cannot inherit a country correction');
+   await page.evaluate(()=>{HOTEL_ID='example';gpQuickEnroll(cards,'neorcha')});await page.locator('#gqEdit-0>summary').click();await page.locator('#gqEdit-0 [data-gq-field=email]').fill('guest@guest.booking.com');await page.locator('#gqEdit-0 button').click();assert.match(await page.locator('#gqEdit-0 [data-gq-edit-error]').innerText(),/own valid email/);assert.equal(await page.evaluate(()=>gpRows[0].email),'corrected@example.test');
+   await page.locator('#gqEdit-0 [data-gq-field=email]').fill('one@gmail.con');await page.locator('#gqEdit-0 button').click();assert.match(await page.locator('#gqEdit-0 [data-gq-edit-error]').innerText(),/not been changed automatically/);
+   await page.locator('#gqEdit-0 [data-gq-field=email]').fill('corrected@example.test');await page.locator('#gqEdit-0 button').click();
+   await page.locator('#gqEdit-1>summary').click();await page.locator('#gqEdit-1 [data-gq-field=nat]').fill('');await page.locator('#gqEdit-1 button').click();
+   await page.evaluate(()=>{gpRows[0].consent=true;gpRows[1].consent=true;gpRows[2].consent=true;gpRows[3].consent=true;gpQuickPaint()});
+   assert.match(await page.locator('#gqFoot').innerText(),/1 need a country/);assert(await page.locator('.gq-card').evaluate(el=>el.getBoundingClientRect().right<=innerWidth+1),'review fits screen');
+   await page.locator('#gqFoot .gold').click();const operations=await page.evaluate(()=>window.operations),job=operations.find(o=>o.path==='enrollJob');assert.equal(job.value.n,2);assert(job.value.tsv.includes('corrected@example.test'));assert(!job.value.tsv.includes('two@example.test'));assert(!job.value.tsv.includes('member@example.test'));assert.equal(operations.filter(o=>o.dispatch==='/dispatches').length,1);
+   assert.deepEqual(errors,[]);if(width===390)await page.screenshot({path:'/tmp/hotelops-enrolment-review581.png'});await page.close();
+  }
+  console.log('Enrolment review desktop/phone passed: country holds, local reviewed details, consent reset, source/hotel isolation, OTA/typo guards, edit preservation and ready-only cloud dispatch. All external actions mocked.');
+ }finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exit(1)});

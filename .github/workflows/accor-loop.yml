@@ -35,7 +35,7 @@ jobs:
   enroll:
     if: github.repository == 'ahmed0088/Depature-Tool'
     runs-on: ubuntu-latest
-    timeout-minutes: 70
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

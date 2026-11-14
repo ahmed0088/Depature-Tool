@@ -11,6 +11,11 @@ test('reported alternate country names match the same real portal country',()=>{
 test('blank or ambiguous country names cannot select a different country by fuzzy overlap',()=>{
  for(const pair of [['','United Arab Emirates'],['Congo','Congo, the Democratic Republic of the'],['Guinea','Guinea-Bissau'],['Niger','Nigeria'],['Dominica','Dominican Republic'],['United','United Kingdom']])assert.equal(C.sameCountry(...pair),false,pair.join(' / '));
 });
+test('known ISO country codes expand without confusing missing markers with Namibia',()=>{
+ for(const [code,country] of [['AE','United Arab Emirates'],['IN','India'],['DE','Germany'],['TR','Turkey'],['NA','Namibia']])assert(C.sameCountry(code,country),code+' → '+country);
+ for(const missing of ['', 'unknown','N/A','No Nationality','not provided','--'])assert.equal(C.mapCountry(missing),'');
+ assert.equal(C.sameCountry('ZZ','United Arab Emirates'),false);
+});
 test('consent and title requirements remain enforced and pipe rows retain reviewed country',()=>{
  const rows=A.consenting('Consent\tCivility\tName\tEmail\tCountry\tConfirmation\nY\tMr\tSample Person\tp@example.test\tTürkiye\t1\nN\tMr\tNo Consent\tn@example.test\tTurkey\t2\nY\t\tNo Title\tt@example.test\tTurkey\t3');
  assert.equal(rows.length,1);assert.equal(rows[0].country,'Türkiye');assert(A.pipeRows(rows).includes('|Türkiye'));

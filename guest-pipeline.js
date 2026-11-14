@@ -62,6 +62,9 @@ function gpNormEmail(raw) {
 }
 
 function gpLogKey(email) { return String(email || '').toLowerCase().replace(/[.#$\[\]\/@]/g, '_'); }
+function gpReviewKey(r) { return JSON.stringify([typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '', r.conf, r.name, r.email, r.phone, r.nat]); }
+function gpCountryMissing(r) { return !String(r.nat || '').trim() || /^(unknown|n\/a|none|not (provided|given|known)|no nationality|-+)$/i.test(String(r.nat).trim()); }
+function gpCloudSelection() { const selected=gpEnrollRows().filter(r=>!r.member);return {rows:selected.filter(r=>!gpCountryMissing(r)),held:selected.filter(gpCountryMissing)}; }
 
 function gpParse(text) {
   const lines = String(text || '').split(/\r?\n/).filter(l => l.trim());
@@ -116,11 +119,13 @@ function gpAutoTitles() { gpRows.forEach(r => { if (!r.civility) { const x = gpR
 function gpCycleTitle(i) { const r = gpRows[i]; if (!r) return; const o = ['Mr', 'Ms', 'Mrs']; r.civility = o[(o.indexOf(r.civility) + 1) % 3]; r.civSrc = 'you'; gpSaveDraft(); gpRenderSummary(); if (document.getElementById('gqBody')) gpQuickPaint(); }
 
 function gpLoadText(text) {
+  if(typeof GP_REVIEW_DRAFTS!=='undefined')GP_REVIEW_DRAFTS.clear();
   gpRows = gpParse(text);
+  gpRows.forEach(r => { r.reviewKey = gpReviewKey(r); });
   // keep ticks / civility from an earlier draft of the same guests
   try {
     const d = JSON.parse(localStorage.getItem(GP_DRAFT_KEY) || '{}');
-    gpRows.forEach(r => { const o = d[r.conf]; if (o) { r.civility = o.civility || ''; r.consent = !!o.consent; if (o.civility) r.civSrc = o.civSrc || 'you'; } });
+    gpRows.forEach(r => { const o = d[r.conf]; if (o && o.reviewKey === r.reviewKey) { if(o.details){const e=gpNormEmail(o.details.email);if(e.email&&e.flag!=='invalid'&&e.flag!=='ota'&&String(o.details.name||'').trim()){Object.assign(r,{name:o.details.name,email:e.email,phone:o.details.phone||'',nat:o.details.nat||'',flag:e.flag,emailWas:e.was||'',reviewed:true});}}r.civility = o.civility || ''; r.consent = !!o.consent; if (o.civility) r.civSrc = o.civSrc || 'you'; } });
   } catch (_) {}
   gpAutoTitles();
   gpRender();
@@ -146,7 +151,7 @@ function gpClear() {
 function gpSaveDraft() {
   try {
     const d = {};
-    gpRows.forEach(r => { if (r.civility || r.consent) d[r.conf] = { civility: r.civility, consent: r.consent, civSrc: r.civSrc || '' }; });
+    gpRows.forEach(r => { if (r.civility || r.consent || r.reviewed) d[r.conf] = { reviewKey:r.reviewKey||gpReviewKey(r),civility: r.civility, consent: r.consent, civSrc: r.civSrc || '',...(r.reviewed?{details:{name:r.name,email:r.email,phone:r.phone,nat:r.nat}}:{}) }; });
     localStorage.setItem(GP_DRAFT_KEY, JSON.stringify(d));
   } catch (_) {}
 }
@@ -175,7 +180,7 @@ function gpAccRenderCat() {
   const live = GP_ACC.live, guests = (live && live.report && Array.isArray(live.report.guests)) ? live.report.guests : [];
   const list = guests.filter(g => g.cat === cat);
   box.hidden = false;
-  const head = { enrolled: '✅ Enrolled', already: '👤 Already members', skipped: '⏭ Skipped', error: '⚠️ Not enrolled' }[cat] || cat;
+  const head = { enrolled: '✅ Enrolled', already: '👤 Already members', skipped: '⏭ Skipped', error: '⚠️ Needs review' }[cat] || cat;
   box.innerHTML = `<div class="acr-cat-h">${head} (${list.length})</div>` + (list.length
     ? list.map(g => `<div class="acr-cat-row"><b>${escapeHtml(g.name || 'Guest')}</b><small>${g.conf ? 'Conf. ' + escapeHtml(g.conf) + ' · ' : ''}${escapeHtml(gpTryWords(g.status))}</small></div>`).join('')
     : '<div class="acr-cat-row"><small>None in this group.</small></div>');
@@ -215,19 +220,19 @@ function gpRenderSummary() {
   if (!box) return;
   if (!gpRows.length) { box.innerHTML = ''; return; }
   const n = f => gpRows.filter(f).length;
-  const ready = n(r => gpEligible(r) && r.consent && r.civility && !(gpTracked(r) && GP_DONE_RE.test(gpTracked(r).status)));
+  const ready = n(r => gpEligible(r) && r.consent && r.civility && !(gpTracked(r) && GP_DONE_RE.test(gpTracked(r).status))), cloud=gpCloudSelection();
   box.innerHTML = `
     <span class="gp-stat"><b>${gpRows.length}</b> guests</span>
     <span class="gp-stat ok"><b>${n(r => gpEligible(r))}</b> usable emails</span>
     <span class="gp-stat warn"><b>${n(r => !r.email)}</b> no email / OTA</span>
     <span class="gp-stat info"><b>${n(r => gpTracked(r))}</b> already in the tracker</span>
     <span class="gp-stat ${ready ? 'ok' : ''}"><b>${ready}</b> selected with agreement + civility</span>
-    ${n(r=>gpCanEnroll(r)&&r.consent&&r.civility&&!String(r.nat||'').trim())?`<span class="gp-stat warn"><b>${n(r=>gpCanEnroll(r)&&r.consent&&r.civility&&!String(r.nat||'').trim())}</b> selected without a country — cloud enrolment will skip these</span>`:''}`;
+    ${cloud.held.length?`<span class="gp-stat warn"><b>${cloud.held.length}</b> held before cloud enrolment — enter their country in Review details</span>`:''}`;
   const all = document.getElementById('gpAllConsent');
   if (all) { const can = gpRows.filter(gpCanEnroll); all.checked = can.length > 0 && can.every(r => r.consent); }
   const btn = document.getElementById('gpCopyEnroll');
   if (btn) btn.disabled = !ready;
-  ['gpCloudGo', 'gpCloudTest', 'gpAccCloudGo', 'gpAccCloudTest'].forEach(id => { const b = document.getElementById(id); if (b) b.disabled = !ready; });
+  ['gpCloudGo', 'gpCloudTest', 'gpAccCloudGo', 'gpAccCloudTest'].forEach(id => { const b = document.getElementById(id); if (b) b.disabled = !cloud.rows.length; });
 }
 
 function gpRender() {
@@ -338,15 +343,16 @@ async function gpAccControl(action) {
   } catch (e) { showToast('Could not send control command: ' + e.message, 'err'); }
 }
 async function gpAccCloudRestart() {
+  const {rows,held}=gpCloudSelection();
   const url = (document.getElementById('gpAccorUrl')?.value || '').trim();
   const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
-  if (!url || !gpEnrollRows().length) { showToast('Review the selected guests and the enrolment portal link first', 'err'); return; }
-  if (!confirm('Start the enrolment again for the selected guests?')) return;
+  if (!url || !rows.length) { showToast(held.length?'Enter the held guests’ country in Review details first.':'Review the selected guests and the enrolment portal link first', 'err'); return; }
+  if (!confirm(`Start the enrolment again for ${rows.length} ready guest(s)?${held.length?' '+held.length+' selected guest(s) without a country stay held.':''}`)) return;
   gpCloudTag = 'acc' + Date.now().toString(36);
   try {
-    await fbUpdate('enrollLive', { at: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: gpEnrollRows().length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
-    await fbSet('enrollJob', { tsv: gpEnrollTsv(gpEnrollRows(), true), n: gpEnrollRows().length, at: Date.now(), test: false, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
-    try { if (window.hoRuns) window.hoRuns.start('enrol', gpCloudTag, { hotel: (document.getElementById('hotelName') || {}).textContent || '', n: gpEnrollRows().length, test: false, how: 'run again' }); } catch (_) {}
+    await fbUpdate('enrollLive', { at: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: rows.length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
+    await fbSet('enrollJob', { tsv: gpEnrollTsv(rows, true), n: rows.length, at: Date.now(), test: false, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
+    try { if (window.hoRuns) window.hoRuns.start('enrol', gpCloudTag, { hotel: (document.getElementById('hotelName') || {}).textContent || '', n: rows.length, test: false, how: 'run again' }); } catch (_) {}
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: '', tag: gpCloudTag, hid, portal_url: url } }) });
     GP_ACC.at = Date.now();
     gpAccorRunWin(true);
@@ -355,10 +361,10 @@ async function gpAccCloudRestart() {
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function gpAccCloudEnroll(test) {
-  const rows = gpEnrollRows(); if (!rows.length) { showToast('Tick Agreed and choose a civility first', 'err'); return; }
+  const {rows,held} = gpCloudSelection(); if (!rows.length) { showToast(held.length?'Enter the held guests’ country in Review details first.':'Tick Agreed and choose a civility first', 'err'); return; }
   const url = (document.getElementById('gpAccorUrl')?.value || '').trim();
   if (!/^https:\/\/secure\.guestinternet\.com\//i.test(url)) { showToast('Enter the enrolment portal link first', 'err'); return; }
-  if (!test && !confirm(`Run the cloud enrolment for ${rows.length} selected guest(s)? Only guests marked Agreed will be sent.`)) return;
+  if (!test && !confirm(`Run the cloud enrolment for ${rows.length} ready guest(s)? Only guests marked Agreed will be sent.${held.length?' '+held.length+' selected guest(s) without a country stay held.':''}`)) return;
   gpCloudTag = 'acc' + Date.now().toString(36); const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
   gpSaveAccorUrl(url);
   try {
@@ -370,7 +376,7 @@ async function gpAccCloudEnroll(test) {
     gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'GitHub accepted the run · waiting for a cloud computer…', con: [{ t: Date.now(), g: 'GH', m: 'Run requested from HotelOps · ' + rows.length + ' guest(s) who agreed' }] });
     gpAccorRunWin(true);
     gpAccPoll(gpCloudTag);
-    showToast(test ? '🧪 Test started — nothing will be submitted' : '☁️ Enrolment started', 'ok');
+    showToast((test ? '🧪 Test started — nothing will be submitted' : '☁️ Enrolment started')+(held.length?' · '+held.length+' without a country stay in review':''), 'ok');
   } catch (e) { showToast(e.message, 'err'); gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'error', step: 'error', note: e.message, con: [{ t: Date.now(), g: 'ERR', m: e.message }] });
     try { await fbUpdate('enrollLive', { at: Date.now(), state: 'error', step: 'error', tag: gpCloudTag, note: 'Not started: ' + e.message }); } catch (_) {} }   // every device (and 🗂 Runs) sees it stopped
 }
@@ -421,6 +427,25 @@ function gpAgentPaint(a) {
 // link is remembered; one button starts the cloud robot and the live window follows. Same rules as the full
 // Guest Pipeline page (it is the same list): no e-mail / duplicate / already enrolled / ALL member → can't be ticked.
 let GP_SOURCE = '';
+const GP_REVIEW_DRAFTS = new Map();
+function gpReviewEditor(r,i) {
+  if(r.member || r.flag==='dup' || (gpTracked(r)&&GP_DONE_RE.test(gpTracked(r).status)))return '';
+  const field=(key,label,type='text')=>`<label><span>${label}</span><input data-gq-field="${key}" type="${type}" value="${escapeHtml(r[key]||'')}" maxlength="${key==='email'?254:120}" ${key==='email'?'autocapitalize="none" spellcheck="false"':''}></label>`;
+  return `<details class="gq-edit" id="gqEdit-${i}" data-gq-review="${i}"><summary>${gpCountryMissing(r)?'Add country':'Review details'}</summary><p>Use the actual guest details. Changing the name or email clears Agreed for rechecking.</p><div class="gq-edit-fields">${field('name','Guest name')}${field('email','Personal email','email')}${field('nat','Country')}${field('phone','Phone','tel')}</div><p class="gq-edit-error" data-gq-edit-error role="alert"></p><button type="button" class="btn" onclick="gpSaveReviewed(${i})">Save details</button></details>`;
+}
+function gpSaveReviewed(i) {
+  const r=gpRows[i],editor=document.getElementById('gqEdit-'+i);if(!r||!editor||r.member||r.flag==='dup'||(gpTracked(r)&&GP_DONE_RE.test(gpTracked(r).status)))return;
+  const get=key=>String(editor.querySelector('[data-gq-field="'+key+'"]').value||'').trim(),error=editor.querySelector('[data-gq-edit-error]');
+  const name=get('name').replace(/[\t\r\n|]+/g,' '),email=get('email').toLowerCase(),e=gpNormEmail(email);
+  if(!name){error.textContent='Enter the actual guest name.';return;}
+  if(!/^[^\s@|]+@[^\s@|]+\.[^\s@|]+$/.test(email)||!e.email||['invalid','ota','no-email'].includes(e.flag)){error.textContent='Enter the guest’s own valid email; OTA relay addresses cannot be used.';return;}
+  if(e.email!==email){error.textContent='Check the email spelling and enter the confirmed address. It has not been changed automatically.';return;}
+  const recipientChanged=r.name!==name||r.email!==email;
+  Object.assign(r,{name,email,nat:get('nat').replace(/[\t\r\n|]+/g,' '),phone:get('phone').replace(/[\t\r\n|]+/g,' '),flag:'',emailWas:'',reviewed:true});
+  if(recipientChanged)r.consent=false;
+  GP_REVIEW_DRAFTS.delete(r.reviewKey);editor.open=false;gpSaveDraft();gpRender();gpQuickPaint();
+  showToast(recipientChanged?'Details saved. Recheck Agreed for this guest.':gpCountryMissing(r)?'Details saved; the country is still needed before cloud enrolment.':'Details saved','ok');
+}
 /** Build the enroll sheet from any guest list (Opera reader, an uploaded Purpose/Excel sheet…) — only real, non-OTA e-mails. */
 function gpEnrollFromList(list, source, emptyMsg) {
   const cards = (Array.isArray(list) ? list : [])
@@ -467,24 +492,28 @@ function gpQuickShow() {
 function gpQuickCan(r) { return gpCanEnroll(r) && !r.member; }
 function gpQuickPaint() {
   const body = document.getElementById('gqBody'), foot = document.getElementById('gqFoot'); if (!body) return;
+  const scroll=body.scrollTop;
+  body.querySelectorAll('details[data-gq-review][open]').forEach(editor=>{const r=gpRows[+editor.dataset.gqReview];if(r)GP_REVIEW_DRAFTS.set(r.reviewKey,Object.fromEntries(Array.from(editor.querySelectorAll('[data-gq-field]')).map(el=>[el.dataset.gqField,el.value])));});
   const can = gpRows.map((r, i) => [r, i]).filter(([r]) => gpQuickCan(r)), off = gpRows.filter(r => !gpQuickCan(r));
   const why = r => r.member ? '💎 already an ALL member' : !r.email ? 'no e-mail' : r.flag === 'dup' ? 'listed twice' : r.flag === 'invalid' ? 'e-mail looks wrong' : gpTracked(r) ? gpTryWords(gpTracked(r).status) : 'can\'t be enrolled';
-  let url = ''; try { url = (document.getElementById('gpAccorUrl') || {}).value || gpLoadAccorUrl(); } catch (_) {}
+  let url = ''; try { url = (document.getElementById('gqUrl')||document.getElementById('gpAccorUrl') || {}).value || gpLoadAccorUrl(); } catch (_) {}
   gpAutoTitles();
   const sub = document.getElementById('gqSub'); if (sub) sub.textContent = can.length + ' guest' + (can.length === 1 ? '' : 's') + ' can be enrolled · tick only the ones who said YES · titles fill themselves';
   const srcNote = GP_SOURCE === 'opera' ? `<div class="gq-src">📡 These came from the <b>Opera reader</b> (guests you opened with a real e-mail). Opera does not know who agreed to join ALL — tick only the guests who actually said yes.</div>`
     : GP_SOURCE === 'sheet' ? `<div class="gq-src">📄 From the <b>uploaded sheet</b> (guests with an e-mail). Check the country is filled and tick only the guests who agreed to join ALL.</div>`
     : GP_SOURCE === 'neorcha' ? `<div class="gq-src">🪪 From the <b>Neorcha cards</b>. Tick only the guests who agreed to join ALL.</div>` : '';
   body.innerHTML = `${srcNote}<label class="gq-url"><span>🔗 Enrolment portal link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>
-    ${can.length ? `<div class="gq-bar"><span>Tap a guest to tick them</span><button type="button" class="btn sm" onclick="gpQuickAll(${can.every(([r]) => r.consent) ? 'false' : 'true'})">${can.every(([r]) => r.consent) ? '✕ Untick all' : '✓ Tick all'}</button></div><div class="gq-list">${can.map(([r, i]) => `<div class="gq-row${r.consent ? ' on' : ''}" onclick="if(!event.target.closest('.gq-title,input,label'))gpQuickTick(${i})">
+    ${can.length ? `<div class="gq-bar"><span>Tap a guest to tick them</span><button type="button" class="btn sm" onclick="gpQuickAll(${can.every(([r]) => r.consent) ? 'false' : 'true'})">${can.every(([r]) => r.consent) ? '✕ Untick all' : '✓ Tick all'}</button></div><div class="gq-list">${can.map(([r, i]) => `<div class="gq-row${r.consent ? ' on' : ''}" onclick="if(!event.target.closest('.gq-title,input,label,button,details,summary'))gpQuickTick(${i})">
       <label class="gq-yes"><input type="checkbox" ${r.consent ? 'checked' : ''} onchange="gpSet(${i},'consent',this.checked);gpQuickPaint()"><span>Agreed</span></label>
       <div class="gq-who"><b>${escapeHtml(r.name || '—')}</b><small>${r.room ? 'Room ' + escapeHtml(r.room) + ' · ' : ''}${escapeHtml(r.email)}${r.phone ? ' · 📞' : ''}${r.nat ? ' · ' + escapeHtml(r.nat) : ''}</small>${gpTracked(r) ? `<small class="gq-last">Last try ${escapeHtml(gpTracked(r).date || '')}: ${escapeHtml(gpTryWords(gpTracked(r).status))}</small>` : ''}</div>
-      <button type="button" class="gq-title ${escapeHtml(r.civSrc || 'guess')}" onclick="gpCycleTitle(${i})" title="Filled by itself — tap to change">${escapeHtml(r.civility || 'Mr')}<small>${{ card: 'from card', name: 'from name', you: 'set by you' }[r.civSrc] || 'guessed · tap'}</small></button></div>`).join('')}</div>`
+      <button type="button" class="gq-title ${escapeHtml(r.civSrc || 'guess')}" onclick="gpCycleTitle(${i})" title="Filled by itself — tap to change">${escapeHtml(r.civility || 'Mr')}<small>${{ card: 'from card', name: 'from name', you: 'set by you' }[r.civSrc] || 'guessed · tap'}</small></button>${gpCountryMissing(r)?'<p class="gq-missing">Country needed · held before cloud enrolment</p>':''}${gpReviewEditor(r,i)}</div>`).join('')}</div>`
       : '<div class="acr-empty">None of these guests can be enrolled (no e-mail, already members or already enrolled).</div>'}
-    ${off.length ? `<details class="gq-off"><summary>${off.length} guest${off.length === 1 ? '' : 's'} left out</summary>${off.map(r => `<div><b>${escapeHtml(r.name || r.conf)}</b> · ${escapeHtml(why(r))}</div>`).join('')}</details>` : ''}`;
-  const ready = gpEnrollRows().filter(r => !r.member), ticked = can.filter(([r]) => r.consent).length, noCiv = can.filter(([r]) => r.consent && !r.civility).length;
-  if (foot) foot.innerHTML = `<div class="gq-count"><b>${ready.length}</b> ready${noCiv ? ` · <span class="gq-warn">${noCiv} ticked without Mr/Ms</span>` : ''}${!ticked ? ' · tick who said yes' : ''}</div>
+    ${off.length ? `<details class="gq-off"><summary>${off.length} guest${off.length === 1 ? '' : 's'} left out</summary>${off.map(r => `<div><b>${escapeHtml(r.name || r.conf)}</b> · ${escapeHtml(why(r))}${gpReviewEditor(r,gpRows.indexOf(r))}</div>`).join('')}</details>` : ''}`;
+  const selection=gpCloudSelection(),ready = selection.rows.filter(r => !r.member), ticked = can.filter(([r]) => r.consent).length, noCiv = can.filter(([r]) => r.consent && !r.civility).length;
+  if (foot) foot.innerHTML = `<div class="gq-count"><b>${ready.length}</b> ready${selection.held.length?` · <span class="gq-warn">${selection.held.length} need a country</span>`:''}${noCiv ? ` · <span class="gq-warn">${noCiv} ticked without Mr/Ms</span>` : ''}${!ticked ? ' · tick who said yes' : ''}</div>
     <button type="button" class="btn" onclick="gpQuickGo(true)"${ready.length ? '' : ' disabled'}>🧪 Test</button><button type="button" class="btn gold" onclick="gpQuickGo(false)"${ready.length ? '' : ' disabled'}>☁️ Enroll ${ready.length || ''} guest${ready.length === 1 ? '' : 's'}</button>`;
+  body.querySelectorAll('details[data-gq-review]').forEach(editor=>{const r=gpRows[+editor.dataset.gqReview],draft=r&&GP_REVIEW_DRAFTS.get(r.reviewKey);if(draft){editor.open=true;editor.querySelectorAll('[data-gq-field]').forEach(el=>{if(el.dataset.gqField in draft)el.value=draft[el.dataset.gqField];});}});
+  body.scrollTop=scroll;
 }
 function gpQuickTick(i) { const r = gpRows[i]; if (!r || !gpQuickCan(r)) return; gpSet(i, 'consent', !r.consent); gpQuickPaint(); }
 /** tick / untick every guest in the sheet — ticking all asks first: each tick means that guest said yes */
@@ -674,20 +703,26 @@ async function gpImportResults() {
   gpRenderTracker(); gpRender();
 }
 
+function gpTrackerSummary(entries, month) {
+  const rows=entries.filter(r=>String(r.date||'').startsWith(month));
+  const submitted=rows.filter(r=>/^(submitted|success|success_stuck)$/.test(String(r.status||''))).length;
+  const already=rows.filter(r=>/^(already-member|already_member)$/.test(String(r.status||''))).length;
+  const pending=rows.filter(r=>r.status==='pending-account').length;
+  return {submitted,already,pending,review:rows.length-submitted-already-pending,total:rows.length};
+}
 function gpRenderTracker() {
   const box = document.getElementById('gpTracker');
   if (!box) return;
   const all = Object.values(gpLog);
   const month = (typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString()).slice(0, 7);   // local month (UTC is still last month until 04:00 on the 1st)
-  const m = all.filter(x => String(x.date || '').startsWith(month));
-  const c = s => m.filter(x => x.status === s).length;
+  const counts=gpTrackerSummary(all,month),c=s=>s==='submitted'?counts.submitted:s==='already-member'?counts.already:s==='pending-account'?counts.pending:0;
   const recent = all.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 15);
   box.innerHTML = `
     <div class="gp-kpis">
       <div class="gp-kpi"><div class="gp-kpi-n">${c('submitted')}</div><div class="gp-kpi-l">Invitations sent this month</div></div>
       <div class="gp-kpi"><div class="gp-kpi-n">${c('already-member')}</div><div class="gp-kpi-l">Already members</div></div>
       <div class="gp-kpi"><div class="gp-kpi-n">${c('pending-account')}</div><div class="gp-kpi-l">Pending accounts</div></div>
-      <div class="gp-kpi"><div class="gp-kpi-n">${m.length - c('submitted') - c('already-member') - c('pending-account')}</div><div class="gp-kpi-l">Not sent (no consent / error)</div></div>
+      <div class="gp-kpi"><div class="gp-kpi-n">${counts.review}</div><div class="gp-kpi-l">Needs review / not sent</div></div>
     </div>
     ${recent.length ? `<table class="gp-table" style="margin-top:10px;"><thead><tr><th>Date</th><th>Guest</th><th>Email</th><th>Result</th></tr></thead><tbody>
       ${recent.map(x => `<tr><td style="font-family:var(--mono);font-size:.7rem;">${escapeHtml(x.date || '')}</td><td>${escapeHtml(x.name || '')}</td><td style="font-size:.74rem;">${escapeHtml(x.email)}</td><td>${escapeHtml(x.status)}</td></tr>`).join('')}

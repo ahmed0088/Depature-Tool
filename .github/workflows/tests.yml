@@ -48,6 +48,9 @@ jobs:
           node tests/accor-country.browser.test.js
           node tests/accor-receipts.test.js
           node tests/accor-reload.browser.test.js
+          node tests/accor-review.test.js
+          node tests/accor-review.browser.test.js
+          node tests/accor-long-run.test.js
 
       - name: Purpose report business day and referral column
         run: |

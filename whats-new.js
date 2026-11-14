@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 581, items: [
+    { ico: '✍️', title: 'Review and correct enrolment details',
+      what: 'Open Review details on a guest to correct the country or confirmed contact details. Missing countries stay in review while ready guests can run. Changing the name or email clears Agreed for rechecking.',
+      does: 'Corrections stay on this device and apply only to the same source guest. Country codes such as AE and IN are supported. The tracker now counts cloud successes and already-member results correctly alongside PC results.' },
+    { ico: '☁️', title: 'Progress saving for large enrolment lists',
+      what: 'Large batches have a longer run allowance, keep the HotelOps session renewed and save completed results as they go.',
+      does: 'You can open each error category while the job is still running. Completed progress remains available if the job stops. Uncertain submissions stay held, and portal email rejections are never converted into a success or a guessed replacement address.' }
+  ] },
   { v: 580, items: [
     { ico: '✍️', title: 'Enrolment results survive portal reloads',
       what: 'The cloud keeps each submission receipt before a portal redirect can erase it. A recovered response is recorded without submitting that guest again.',

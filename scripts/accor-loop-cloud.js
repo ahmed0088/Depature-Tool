@@ -8,6 +8,7 @@ const mask = s => String(s || '').replace(/\S+@\S+/g, '•@•').replace(/\d{6,}
 const CON = [];
 let ACTIVE_HISTORY = null;
 let ACTIVE_FB = null;
+let ACTIVE_REPORT = null;
 let sensitiveValues = [];
 
 function scrub(message) {
@@ -42,7 +43,7 @@ async function publishError(message) {
     await ACTIVE_FB.patch('enrollJob', { state: 'error', error: safe, errorAt: Date.now() });
     await ACTIVE_FB.patch('enrollLive', {
       at: Date.now(), state: 'error', step: 'error', note: safe, action: safe,
-      con: CON.slice(-120), report: null
+      con: CON.slice(-120), report: ACTIVE_REPORT
     });
   } catch (_) {}
 }
@@ -70,6 +71,40 @@ function firebaseConfig() {
   return { apiKey: get('apiKey'), databaseURL: get('databaseURL') };
 }
 
+function enrollmentBudget(total) { return Math.min(210 * 60e3, Math.max(30 * 60e3, Number(total || 0) * 18e3 + 10 * 60e3)); }
+function tokenSession(auth, { refresh, now = Date.now }) {
+  let token = auth.idToken, refreshToken = auth.refreshToken, expiresAt = now() + Number(auth.expiresIn || 3600) * 1000, renewing = null;
+  return { async get(force = false) {
+    if (!force && now() < expiresAt - 120000) return token;
+    if (!renewing) renewing = (async () => {
+      if (!refreshToken) throw new Error('HotelOps sign-in expired and cannot be refreshed.');
+      const next = await refresh(refreshToken), value = next.access_token || next.id_token || next.idToken;
+      if (!value) throw new Error('HotelOps token refresh did not return a session.');
+      token = value; refreshToken = next.refresh_token || refreshToken; expiresAt = now() + Number(next.expires_in || next.expiresIn || 3600) * 1000;
+      return token;
+    })().finally(() => { renewing = null; });
+    return renewing;
+  } };
+}
+function enrollmentCheckpoint({ patch, test, now = Date.now }) {
+  const saved = new Set();
+  return async results => {
+    if (test) return 0;
+    const updates = {}, pending = [], today = new Date(now() + 4 * 3600e3).toISOString().slice(0, 10);
+    for (const [index, row] of results.entries()) {
+      if (!row || !/@/.test(row.email || '')) continue;
+      const identity = JSON.stringify([index, row.email, row.conf, row.status]);
+      if (saved.has(identity)) continue;
+      pending.push(identity);
+      updates[key(row.email)] = { email: String(row.email).toLowerCase(), status: String(row.status || 'unknown'), date: today, name: String(row.name || ''), conf: String(row.conf || '') };
+    }
+    if (!pending.length) return 0;
+    await patch('enrollLog', updates);
+    pending.forEach(id => saved.add(id));
+    return pending.length;
+  };
+}
+
 async function hotelDb() {
   const config = firebaseConfig();
   const base = String(E.FB_DB_URL || config.databaseURL || '').replace(/\/$/, '');
@@ -81,6 +116,14 @@ async function hotelDb() {
   });
   const auth = await response.json().catch(() => ({}));
   if (!response.ok || !auth.idToken) fail('HotelOps sign-in refused — check HOTELOPS_EMAIL / HOTELOPS_PASS');
+  const session = tokenSession(auth, { refresh: async refreshToken => {
+    const response = await fetch(String(E.FB_TOKEN_URL || 'https://securetoken.googleapis.com/v1/token') + '?key=' + encodeURIComponent(config.apiKey), {
+      method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }).toString()
+    });
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error('HotelOps session refresh was refused (' + response.status + ').');
+    return value;
+  } });
   let hotelId = String(E.HOTELOPS_HOTEL || '').trim();
   if (!hotelId) {
     const lookup = await fetch(base + '/userHotels/' + encodeURIComponent(auth.localId) + '.json?auth=' + encodeURIComponent(auth.idToken));
@@ -89,12 +132,14 @@ async function hotelDb() {
       ? String(hotels.hotelId || hotels.id || Object.keys(hotels)[0] || '') : '';
   }
   if (!/^[\w-]{1,80}$/.test(hotelId)) fail('No HotelOps hotel was found for this account');
-  const endpoint = p => base + '/hotels/' + encodeURIComponent(hotelId) + '/' + p + '.json?auth=' + encodeURIComponent(auth.idToken);
+  const endpoint = (p, token) => base + '/hotels/' + encodeURIComponent(hotelId) + '/' + p + '.json?auth=' + encodeURIComponent(token);
   const request = async (p, method, body) => {
-    const r = await fetch(endpoint(p), {
+    const send = async force => fetch(endpoint(p, await session.get(force)), {
       method, headers: { 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body)
     });
+    let r = await send(false);
+    if (r.status === 401) r = await send(true);
     const text = await r.text().catch(() => '');
     if (!r.ok) throw new Error(`Firebase ${method} ${p} failed (${r.status})`);
     try { return text ? JSON.parse(text) : null; } catch (_) { return text; }
@@ -163,6 +208,7 @@ async function main() {
   const job = await FB.get('enrollJob');
   const rows = consenting(job && job.tsv);
   const test = /^(1|true|yes)$/i.test(String(E.TEST || '')) || !!(job && job.test);
+  const checkpoint = enrollmentCheckpoint({patch:FB.patch,test});
   if (!rows.length) fail('No consenting guests with civility and email were found in the enrollment list');
   // never let a guest's name, e-mail or confirmation reach the public GitHub log (whole name AND each part of it)
   sensitiveValues = rows.flatMap(r => [r.name, r.email, r.conf, ...String(r.name || '').split(/\s+/).filter(x => x.length >= 3)])
@@ -314,7 +360,8 @@ async function main() {
     let workerStartedAt = Date.now();
     let lastWorkerEvidence = workerStartedAt;
     let lastProgressAt = 0;
-    for (let i = 0; i < 3600 && !done; i++) {
+    const deadline = Date.now() + enrollmentBudget(rows.length);
+    for (let i = 0; Date.now() < deadline && !done; i++) {
       await new Promise(resolve => setTimeout(resolve, 500));
       const currentGuest = await safePageEvaluate(page, 'current guest poll', () => {
         try { return JSON.parse(localStorage.getItem('__accor_cloud___accor_current_guest') || 'null'); } catch (_) { return null; }
@@ -369,8 +416,12 @@ async function main() {
           ? `Working on guest ${currentGuest.index || '?'} of ${currentGuest.total || rows.length}. Results are recorded as each guest finishes.`
           : `Enrollment worker running · ${processed} of ${rows.length} processed.`;
         const sofar = loop && Array.isArray(loop.results) ? resultReport(loop.results, rows.length) : null;
+        if (sofar) {
+          ACTIVE_REPORT = sofar;
+          await checkpoint(loop.results).catch(() => { tlog('WARN', 'Could not checkpoint the latest completed results; they remain in the browser and will be saved again.'); });
+        }
         const tally = sofar ? { enrolled: sofar.submitted, already: sofar.alreadyMember, skipped: sofar.skipped + sofar.pending + sofar.other, errors: sofar.errors } : null;
-        await live({ step: workerStarts ? 'enroll' : 'worker', done: processed, current: currentGuest || null, tally, worker: workerStarts > 0, action: note, note });
+        await live({ step: workerStarts ? 'enroll' : 'worker', done: processed, current: currentGuest || null, tally, report:sofar, worker: workerStarts > 0, action: note, note });
       }
     }
 
@@ -414,4 +465,4 @@ if (require.main === module) main().catch(async error => {
   await publishError(message);
   fail(message);
 });
-module.exports = { consenting, pipeRows, resultReport, reportNote };
+module.exports = { consenting, pipeRows, resultReport, reportNote, enrollmentBudget, tokenSession, enrollmentCheckpoint, hotelDb };

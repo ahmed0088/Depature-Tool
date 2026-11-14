@@ -137,9 +137,15 @@
 
   function mapCountry(raw) {
     const value = String(raw || "").trim();
+    if (/^(unknown|n\/a|none|not (provided|given|known)|no nationality|-+)?$/i.test(value)) return "";
     const key = value.toLowerCase();
     const plain = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    return COUNTRY_ALIASES[key] || COUNTRY_ALIASES[plain] || value;
+    const known = COUNTRY_ALIASES[key] || COUNTRY_ALIASES[plain];
+    if (known) return known;
+    if (/^[a-z]{2}$/i.test(value)) {
+      try { const label = new Intl.DisplayNames(['en'], { type: 'region' }).of(value.toUpperCase());return COUNTRY_ALIASES[String(label).toLowerCase()] || label || value; } catch (_) {}
+    }
+    return value;
   }
   // Only an exact name or a known equivalent can establish a country.
   // Fuzzy overlap can confuse Guinea with Guinea-Bissau or the two Congos.
