@@ -66,6 +66,12 @@
     if(suggestions.length)return {state:'suggested',candidates:suggestions,reason:'A repeated-letter spelling differs. Confirm an alias or choose the contributor ID.'};
     return finish([],'No unique contributor matches this Opera login.');
   }
+  function journalMapping(options={}){
+    const breakfast=options.breakfastCode===undefined?'2090':options.breakfastCode;
+    if(typeof breakfast!=='string'||!/^\d{1,10}$/.test(breakfast.trim())||Number(breakfast)===0)fail('Enter a numeric Opera breakfast transaction code.');
+    const code=breakfast.trim();if(['1010','1061','1062'].includes(code))fail('The breakfast code conflicts with room upselling, early check-in or late checkout. Choose a different code.');
+    return {'1010':'ROOM','1061':'EC','1062':'LC',[code]:'BB'};
+  }
   function kind(v){
     const s=key(v),compact=s.replace(/ /g,'');
     if(/(?:EC$|^1061$)/.test(compact)||['EARLYCHECKIN','EARLYARRIVAL'].includes(compact))return 'EC';
@@ -174,6 +180,6 @@
   function matches(op,r){
     return differences(op,r).length===0;
   }
-  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,kind,flatten,record,fingerprint,amountTotal,operationError,validatePlan,values,payload,auditParams,duplicates,matches,differences,terminal,saleCategory,operationCategory,scopeAllows};
+  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,flatten,record,fingerprint,amountTotal,operationError,validatePlan,values,payload,auditParams,duplicates,matches,differences,terminal,saleCategory,operationCategory,scopeAllows};
   root.InGaugeAuditCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

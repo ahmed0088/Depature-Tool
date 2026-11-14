@@ -21,6 +21,23 @@
     try { space = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : ''; } catch (_) {}
     return 'ho_ingauge_settings_v1:' + [uid || space || 'local', space || 'local', identity(S)].map(encodeURIComponent).join(':');
   }
+  function journalKey(S={}) {
+    const C=W.InGaugeAuditCore;if(!C)throw Error('Refresh the app to load journal settings.');
+    const b=C.binding(S.binding),base=key({...S,targetKey:'',binding:{}});
+    return base.replace('ho_ingauge_settings_v1:','ho_ingauge_journal_codes_v1:')+':'+encodeURIComponent(JSON.stringify([b.portalUrl,b.tenantId,b.propertyId,b.departmentId]));
+  }
+  function journal(S={}) {
+    try {const stored=JSON.parse(W.localStorage.getItem(journalKey(S))||'null');if(stored?.schema===1){const code=stored.breakfastCode;W.InGaugeAuditCore.journalMapping({breakfastCode:code});return {breakfastCode:code.trim()};}}catch(_){}
+    return {breakfastCode:'2090'};
+  }
+  function setJournal(S={},patch={}) {
+    if(!patch||typeof patch!=='object'||Array.isArray(patch)||Object.keys(patch).length!==1||!('breakfastCode' in patch))throw Error('Choose a valid breakfast code setting.');
+    const code=patch.breakfastCode;W.InGaugeAuditCore?.journalMapping({breakfastCode:code});
+    if(typeof code!=='string')throw Error('Enter a numeric Opera breakfast transaction code.');
+    const path=journalKey(S),next={breakfastCode:code.trim()};
+    try {W.localStorage.setItem(path,JSON.stringify({schema:1,...next}));}catch(_){throw Error('The journal code could not be saved on this device. Allow browser storage and try again.');}
+    return next;
+  }
   function landingOptions(prefs) {
     return [['monthly', 'Monthly totals'], ['audit', 'Review & fix'], ['edit', 'Find a sale']].filter(([value]) => value === 'audit' || value === 'monthly' && prefs.monthly || value === 'edit' && prefs.find);
   }
@@ -86,12 +103,12 @@
   }
   function paint() {
     const root = overlay(); if (!root || root.hidden || !state) return;
-    const prefs = get(state), disabled = locked(state), body = root.querySelector('.iga-settings-body'), top = body?.scrollTop || 0;
+    const prefs = get(state), codes=journal(state), disabled = locked(state), body = root.querySelector('.iga-settings-body'), top = body?.scrollTop || 0;
     const focused = root.contains(doc().activeElement) ? doc().activeElement.id : '';
     const expanded = new Set([...root.querySelectorAll('details[open]')].map(node => node.dataset.igSettingGroup));
     const firstPaint = !root.querySelector('.iga-settings-panel');
     const row = ([name, title, description]) => `<label class="iga-settings-row" for="igSetting-${name}"><span class="iga-settings-copy"><b>${esc(title)}</b><small>${esc(description)}</small></span><input id="igSetting-${name}" type="checkbox" role="switch" data-ig-setting="${name}" ${prefs[name] ? 'checked' : ''} ${disabled ? 'disabled' : ''}></label>`;
-    root.innerHTML = `<section class="iga-editor iga-settings-panel" role="dialog" aria-modal="true" aria-labelledby="igSettingsTitle" aria-describedby="igSettingsContext"><header class="iga-settings-header"><div><span class="iga-eyebrow">PERSONAL PREFERENCES</span><h2 id="igSettingsTitle">IN-Gauge settings</h2><p class="iga-settings-context" id="igSettingsContext">${esc(state.binding?.property || 'Choose a hotel to keep its settings separate')} · saved on this device</p></div><button type="button" id="igSettingsClose" data-ig-settings-close aria-label="Close settings">×</button></header><div class="iga-settings-body"><section class="iga-settings-group"><h3>Hotel connection</h3><p class="iga-settings-context">${esc(state.binding?.property || 'No hotel selected')} · ${esc(state.binding?.department || 'Choose the hotel and department to audit.')}</p><button type="button" class="btn" id="igSettingsHotel" data-ig-settings-hotel ${disabled ? 'disabled' : ''}>${state.binding ? 'Change hotel or connection' : 'Choose IN-Gauge hotel'}</button></section><p class="iga-settings-note">Hotel verification, seller review and amount checks always stay on.</p><p class="iga-settings-error" id="igSettingsError" role="alert" ${error ? '' : 'hidden'}>${esc(error)}</p>${disabled ? '<p class="iga-settings-note">Settings are locked while a run, report upload or hotel change is in progress.</p>' : ''}${GROUPS.map(([title, rows], i) => i === 0 ? `<section class="iga-settings-group"><h3>${title}</h3>${rows.map(row).join('')}</section>` : `<details class="iga-settings-group" data-ig-setting-group="${i}" ${expanded.has(String(i)) ? 'open' : ''}><summary>${title}</summary><div class="iga-settings-group-body">${rows.map(row).join('')}</div></details>`).join('')}<section class="iga-settings-group"><h3>Start page</h3><p class="iga-settings-context" id="igSettingLandingLabel">Open this page when the tool starts</p><div class="iga-settings-landing-options" role="radiogroup" aria-labelledby="igSettingLandingLabel">${landingOptions(prefs).map(([value, label]) => `<label for="igSetting-landing-${value}"><input id="igSetting-landing-${value}" type="radio" name="igSettingsLanding" data-ig-setting="landing" value="${value}" ${prefs.landing === value ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>${label}</span></label>`).join('')}</div></section></div><footer class="iga-settings-footer"><button type="button" class="btn" id="igSettingsReset" data-ig-settings-reset ${disabled ? 'disabled' : ''}>Reset defaults</button><button type="button" class="btn gold" id="igSettingsDone" data-ig-settings-close>Done</button></footer></section>`;
+    root.innerHTML = `<section class="iga-editor iga-settings-panel" role="dialog" aria-modal="true" aria-labelledby="igSettingsTitle" aria-describedby="igSettingsContext"><header class="iga-settings-header"><div><span class="iga-eyebrow">PERSONAL PREFERENCES</span><h2 id="igSettingsTitle">IN-Gauge settings</h2><p class="iga-settings-context" id="igSettingsContext">${esc(state.binding?.property || 'Choose a hotel to keep its settings separate')} · saved on this device</p></div><button type="button" id="igSettingsClose" data-ig-settings-close aria-label="Close settings">×</button></header><div class="iga-settings-body"><section class="iga-settings-group"><h3>Hotel connection</h3><p class="iga-settings-context">${esc(state.binding?.property || 'No hotel selected')} · ${esc(state.binding?.department || 'Choose the hotel and department to audit.')}</p><button type="button" class="btn" id="igSettingsHotel" data-ig-settings-hotel ${disabled ? 'disabled' : ''}>${state.binding ? 'Change hotel or connection' : 'Choose IN-Gauge hotel'}</button></section><section class="iga-settings-group iga-journal-settings"><h3>Opera journal codes</h3><p class="iga-settings-context">Used by Manual upsells and Monthly totals for this hotel. Saved on this device.</p><label for="igBreakfastCode">Breakfast upsell code</label><div class="iga-journal-code-input"><input id="igBreakfastCode" type="text" inputmode="numeric" autocomplete="off" maxlength="10" value="${esc(codes.breakfastCode)}" ${disabled||!state.binding?'disabled':''} aria-describedby="igBreakfastCodeHint"><button type="button" class="btn" id="igBreakfastCodeSave" data-ig-journal-save ${disabled||!state.binding?'disabled':''}>Save code</button></div><p class="iga-settings-context" id="igBreakfastCodeHint">Default: 2090. Changing it replaces the old breakfast code and clears earlier audit suggestions. Seller notes and existing-request checks still apply.</p><button type="button" class="btn" id="igBreakfastCodeReset" data-ig-journal-reset ${disabled||!state.binding||codes.breakfastCode==='2090'?'disabled':''}>Use default 2090</button><p class="iga-settings-context">Room upselling: 1010 · Early check-in: 1061 · Late checkout: 1062</p></section><p class="iga-settings-note">Hotel verification, seller review and amount checks always stay on.</p><p class="iga-settings-error" id="igSettingsError" role="alert" ${error ? '' : 'hidden'}>${esc(error)}</p>${disabled ? '<p class="iga-settings-note">Settings are locked while a run, report upload or hotel change is in progress.</p>' : ''}${GROUPS.map(([title, rows], i) => i === 0 ? `<section class="iga-settings-group"><h3>${title}</h3>${rows.map(row).join('')}</section>` : `<details class="iga-settings-group" data-ig-setting-group="${i}" ${expanded.has(String(i)) ? 'open' : ''}><summary>${title}</summary><div class="iga-settings-group-body">${rows.map(row).join('')}</div></details>`).join('')}<section class="iga-settings-group"><h3>Start page</h3><p class="iga-settings-context" id="igSettingLandingLabel">Open this page when the tool starts</p><div class="iga-settings-landing-options" role="radiogroup" aria-labelledby="igSettingLandingLabel">${landingOptions(prefs).map(([value, label]) => `<label for="igSetting-landing-${value}"><input id="igSetting-landing-${value}" type="radio" name="igSettingsLanding" data-ig-setting="landing" value="${value}" ${prefs.landing === value ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>${label}</span></label>`).join('')}</div></section></div><footer class="iga-settings-footer"><button type="button" class="btn" id="igSettingsReset" data-ig-settings-reset ${disabled ? 'disabled' : ''}>Reset preferences</button><button type="button" class="btn gold" id="igSettingsDone" data-ig-settings-close>Done</button></footer></section>`;
     const nextBody = root.querySelector('.iga-settings-body'); if (nextBody) nextBody.scrollTop = top;
     if (focused && doc().getElementById(focused)) doc().getElementById(focused).focus({ preventScroll: true });
     else if (firstPaint) doc().getElementById('igSettingsClose')?.focus({ preventScroll: true });
@@ -105,6 +122,11 @@
         try { if (typeof W.InGaugeWorkspace?.openHotelSettings !== 'function') throw Error('Refresh the app to load hotel settings.'); W.InGaugeWorkspace.openHotelSettings(); }
         catch (cause) { error = cause.message || 'Hotel settings could not be opened.'; paint(); }
         return;
+      }
+      const saveCode=event.target.closest('[data-ig-journal-save]'),resetCode=event.target.closest('[data-ig-journal-reset]');
+      if(saveCode||resetCode){
+        try {if(typeof W.InGaugeWorkspace?.updateJournalCodes!=='function')throw Error('Refresh the app to load journal controls.');await W.InGaugeWorkspace.updateJournalCodes({breakfastCode:resetCode?'2090':doc().getElementById('igBreakfastCode').value.trim()});error='';}
+        catch(cause){error=cause.message||'The journal code could not be saved.';}paint();return;
       }
       if (!event.target.closest('[data-ig-settings-reset]')) return;
       try {
@@ -122,6 +144,7 @@
       paint();
     });
     root.addEventListener('keydown', event => {
+      if(event.key==='Enter'&&event.target.id==='igBreakfastCode'){event.preventDefault();doc().getElementById('igBreakfastCodeSave')?.click();return;}
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
       if (event.key !== 'Tab') return;
       const items = focusable(root), first = items[0], last = items.at(-1);
@@ -140,5 +163,5 @@
     trigger?.setAttribute?.('aria-expanded', 'false'); if (trigger?.isConnected) trigger.focus({ preventScroll: true }); trigger = null;
   }
   function sync(S) { state = S; paint(); }
-  W.InGaugeSettings = { SCHEMA, DEFAULTS, KEYS, get, key, set, reset, open, close, sync };
+  W.InGaugeSettings = { SCHEMA, DEFAULTS, KEYS, get, key, set, reset, journalKey, journal, setJournal, open, close, sync };
 })(typeof window !== 'undefined' ? window : globalThis);

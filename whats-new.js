@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 587, items: [
+    { ico: '🍳', title: 'Choose your breakfast journal code',
+      what: 'Breakfast upsells default to Opera code 2090. Open IN-Gauge automation → Settings → Opera journal codes to change it or restore 2090.',
+      does: 'The code is saved separately for each hotel on this device and used by both Manual upsells and Monthly totals. Changing it replaces the previous breakfast mapping and clears earlier audit suggestions for a fresh review.' }
+  ] },
   { v: 586, items: [
     { ico: '🛏️', title: 'Recognize room-upsell fees from Opera',
       what: 'Include transaction code 1010 in your Opera journal to compare room-upsell fees with IN-Gauge and include them in monthly totals.',

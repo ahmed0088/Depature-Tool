@@ -7,7 +7,14 @@
   const id = v => clean(v).replace(/\.0$/, '');
   const room = v => id(v).replace(/^0+(?=\d)/, '');
   const esc = v => clean(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const products = { '1010': 'Room upselling', '1061': 'Early Check In', '1062': 'Late Check Out', '2090': 'Breakfast' };
+  function journalMapping(context={}) {
+    const C=global.InGaugeAuditCore||(typeof module!=='undefined'&&module.exports?require('./ingauge-audit-core.js'):null);
+    return C?.journalMapping?C.journalMapping(context):{'1010':'ROOM','1061':'EC','1062':'LC','2090':'BB'};
+  }
+  const productNames={ROOM:'Room upselling',EC:'Early Check In',LC:'Late Check Out',BB:'Breakfast'};
+  function journalContext(){const S=global.InGaugeWorkspace?.state,binding=state.liveContext?.binding||S?.legacyBinding||(!S?.independent?S?.binding:null);return global.InGaugeSettings?.journal?.({binding})||{breakfastCode:'2090'};}
+  function codeDescription(){return Object.entries(journalMapping(journalContext())).map(([code,family])=>code+' ('+productNames[family]+')').join(', ');}
+
   const labels = { add: 'What to add', review: 'Needs review', coverage: 'Await newer export', existing: 'Already submitted', package: 'Automatic packages' };
   const money = cents => (cents / 100).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   function amount(v) {
@@ -129,6 +136,7 @@
     return { name: hits.length === 1 ? hits[0].name : posted, basis: system ? 'Unresolved posting user' : 'Posting user fallback', mapped: false, employeeId: '', warning: system ? 'A system/night-audit posting account does not establish the seller.' : 'No seller named in notes: confirm seller credit before adding.', explanation: `No seller identified in the note. Posted by ${posted}; ${system ? 'the seller is unknown.' : 'this is only a suggested seller, requiring confirmation.'}` };
   }
   function reconcile(journal, reservations, ig, context = {}) {
+    const mapping=journalMapping(context),products=Object.fromEntries(Object.entries(mapping).map(([code,family])=>[code,productNames[family]]));
     const employees = context.contributors || [...new Map(ig.map(g => [(id(g['Employee ID']) ? 'id:' + id(g['Employee ID']) : 'name:' + norm(g.employee)), { name: g.employee, id: id(g['Employee ID']) }])).values()].filter(e => e.name && !/^[-—]$/.test(e.name));
     const dates = [...new Set(ig.map(g => g.day).filter(Boolean))].sort(), dateSet = new Set(dates), guestIndex = new Map(), exactIndex = new Map(), confIndex = new Map();
     if(context.coverage?.complete){ for(let d=new Date(context.coverage.from+'T00:00:00Z'); d.toISOString().slice(0,10)<=context.coverage.to; d.setUTCDate(d.getUTCDate()+1)) dateSet.add(d.toISOString().slice(0,10)); dates.splice(0,dates.length,...[...dateSet].sort()); }
@@ -145,13 +153,13 @@
     const result = journal.map(j => {
       const day = date(j.BUSINESS_DATE), code = clean(j.TRX_CODE), product = products[code] || clean(j.TRX_DESC) || 'Unmapped product', cents = amount(j.CASHIER_DEBIT) - amount(j.CASHIER_CREDIT), seller = sellerOf(j, employees);
       const candidates = [...new Map((guestIndex.get(room(j.ROOM) + '|' + norm(j.GUEST_FULL_NAME)) || []).filter(r => ['CKIN','CKOT','DUEIN','DUEOUT'].includes(r.SHORT_RESV_STATUS) && day && date(r.TRUNC_BEGIN) <= day && day <= date(r.TRUNC_END)).map(r => [r.CONFIRMATION_NO, r])).values()];
-      const r = { transaction: j.TRX_NO, day, code, product, cents, room: clean(j.ROOM), guest: clean(j.GUEST_FULL_NAME), currency: clean(j.CURRENCY1).toUpperCase(), note: noteText(j), seller, cashier: clean(j.CASHIER_NAME), username: clean(j.USER_NAME), userId: clean(j.INSERT_USER), conf: candidates.length === 1 ? candidates[0].CONFIRMATION_NO : '', candidates, matches: [], line: j.line, bucket: '', reason: '', action: '' };
+      const r = { transaction: j.TRX_NO, day, code, product, family:mapping[code]||'', cents, room: clean(j.ROOM), guest: clean(j.GUEST_FULL_NAME), currency: clean(j.CURRENCY1).toUpperCase(), note: noteText(j), seller, cashier: clean(j.CASHIER_NAME), username: clean(j.USER_NAME), userId: clean(j.INSERT_USER), conf: candidates.length === 1 ? candidates[0].CONFIRMATION_NO : '', candidates, matches: [], line: j.line, bucket: '', reason: '', action: '' };
       const decide = (bucket, reason, action) => Object.assign(r, { bucket, reason, action });
       if (/\[NA\s+Pkgs\./i.test(r.note)) return decide('package', 'Automatic package posting. Package Audit handles package corrections.', 'Use the Audit tab for package corrections.');
       if (r.currency !== 'AED') return decide('review', 'Journal currency is missing or differs from AED.', 'Verify currency before comparing amounts.');
       if (!products[code]) return decide('review', 'This transaction code has no verified product mapping.', 'Confirm the product before adding anything.');
       if (cents <= 0) return decide('review', 'Zero or negative posting: this may reverse another charge.', 'Reconcile the original and reversal together.');
-      if (code === '2090' && !/upsell/i.test(r.note)) return decide('review', 'Breakfast has no manual-upsell evidence in its notes.', 'Check the billing note; do not assume this is a new manual sale.');
+      if (mapping[code] === 'BB' && !/upsell/i.test(r.note)) return decide('review', 'Breakfast has no manual-upsell evidence in its notes.', 'Check the billing note; do not assume this is a new manual sale.');
       if (!day || !dateSet.has(day)) return decide('coverage', 'The IN-Gauge export has no daily entries for this posting date. Absence does not prove the sale is missing.', 'Upload a complete IN-Gauge export covering this date.');
       if (!r.conf) {
         r.matches = ig.filter(g => g.day === day && productKey(g.product) === productKey(product) && g.cents !== null && Math.abs(g.cents - cents) <= 2 && norm(g.employee) === norm(seller.name));
@@ -217,11 +225,11 @@
     catch (error) { state.error = error.message; }
     finally { state.busy = false; render(); }
   }
-  async function run() {
+  async function run(context={}) {
     if (state.busy || !['journal','reservations','ingauge'].every(k => state.data[k])) return;
     state.busy = true; state.error = ''; render();
     await new Promise(resolve => setTimeout(resolve, 20));
-    try { state.result = reconcile(state.data.journal.rows, state.data.reservations.rows, state.data.ingauge.rows, state.liveContext || {}); state.filter = 'add'; state.limit = 60; state.open.clear(); }
+    try { state.result = reconcile(state.data.journal.rows, state.data.reservations.rows, state.data.ingauge.rows, {...(state.liveContext||{}),...journalContext(),...context}); state.filter = 'add'; state.limit = 60; state.open.clear(); }
     catch (error) { state.result = null; state.error = error.message; }
     finally { state.busy = false; render(); }
   }
@@ -245,7 +253,7 @@
     addSheet('Summary', [['Manual sales review', ''], ['Created', new Date().toISOString()], ['IN-Gauge report', state.files.ingauge.name], ['Daily dates observed', state.result.dates[0] + ' to ' + state.result.dates.at(-1)], ['Important', 'Missing means absent from the uploaded export. Recheck live IN-Gauge before adding.'], ['Seller rule', 'Notes first. Posting identity is a flagged fallback. Pending requests already exist.'], ...Object.entries(state.result.summary).map(([k, v]) => [labels[k], v]), ...Object.values(state.files).map(f => ['Source file', f.name])]);
     const headers = Object.keys(rowValues(state.result.rows[0]));
     for (const key of Object.keys(labels)) addSheet(labels[key].slice(0, 31), [headers, ...state.result.rows.filter(r => r.bucket === key).map(r => Object.values(rowValues(r)))]);
-    addSheet('Data quality', [['Report notes'], ...Object.values(state.data).flatMap(d => d.warnings).map(w => [w]), ['Net charges are debit minus credit; no VAT multiplier or breakfast quantity is inferred.'], ['Transaction 1010 is treated as the room-upsell fee, not the full room charge. Mapped products also include early check-in, late checkout and breakfast.']]);
+    addSheet('Data quality', [['Report notes'], ...Object.values(state.data).flatMap(d => d.warnings).map(w => [w]), ['Net charges are debit minus credit; no VAT multiplier or breakfast quantity is inferred.'], ['Transaction 1010 is treated as the room-upsell fee, not the full room charge. Mapped codes: '+codeDescription()+'.']]);
     X.writeFile(wb, 'Manual-Sales-Review-' + new Date().toISOString().slice(0, 10) + '.xlsx');
   }
   const entryText = r => Object.entries(rowValues(r)).filter(([, v]) => v !== '').map(([k, v]) => `${k}: ${v}`).join('\n');
@@ -324,7 +332,7 @@
       <div class="msu-list">${matches.length ? matches.slice(0, state.limit).map(({ r, i }) => card(r, i)).join('') : `<div class="msu-empty"><h3>${state.search ? 'No matching sales' : 'Nothing in this list'}</h3><p>${state.search ? 'Try another room, seller or confirmation.' : 'Choose another result above to see its details.'}</p></div>`}</div>
       ${matches.length > state.limit ? `<button type="button" class="btn msu-more" data-ms-more>Show more · ${matches.length - state.limit} remaining</button>` : ''}
       ${warnings.length ? `<details class="msu-quality"><summary>Report checks · ${warnings.length} note${warnings.length === 1 ? '' : 's'}</summary><ul>${warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></details>` : ''}
-      <p class="msu-fine">Net charge = debit minus credit. No tax conversion or breakfast quantity is inferred. Mapped codes: 1010 (room-upsell fee), 1061, 1062 and 2090. Unsupported codes require review.</p>`;
+      <p class="msu-fine">Net charge = debit minus credit. No tax conversion or breakfast quantity is inferred. Mapped codes: ${esc(codeDescription())}. Change the breakfast code in IN-Gauge automation → Settings. Unsupported codes require review.</p>`;
     if (global.ManualSalesAutomation) global.ManualSalesAutomation.render();
   }
   function render() {
@@ -366,7 +374,7 @@
       <div class="msu-runbar"><div><button type="button" class="btn gold" id="msuRun" disabled>Check manual sales</button><button type="button" class="msu-link" id="msuClear">Clear reports</button></div><span>Reports are processed on this device.</span></div>
       <div class="msu-error" id="msuError" role="alert" hidden></div>
       <div id="msuResults" aria-live="polite"></div>
-      <details class="msu-help"><summary>Which reports do I need, and how does matching work?</summary><ol><li><b>Opera journal:</b> export Journal by Transaction Code as text for your month. Include room-upsell fees (1010), early check-in (1061), late checkout (1062), breakfast (2090) and any reversals. Code 1010 must contain the extra upsell fee, not the full room rate.</li><li><b>Reservation Detail:</b> export as text with stays covering those postings, including checked-out guests and extensions. A wider stay range helps resolve missing confirmations.</li><li><b>IN-Gauge:</b> export the complete product list for the same month, all employees and all statuses. Download a fresh copy after approving or adding requests.</li><li>We link room + full guest name + stay dates to a confirmation, then compare confirmation + product + daily date + net charge. Uncertain matches stay in Needs review.</li><li>The seller explicitly named after <code>**</code> in the Opera note comes first. A posting-user fallback is always flagged. Pending, approved, denied and automatically imported records are checked before proposing additions.</li></ol></details>
+      <details class="msu-help"><summary>Which reports do I need, and how does matching work?</summary><ol><li><b>Opera journal:</b> export Journal by Transaction Code as text for your month. Include room-upsell fees (1010), early check-in (1061), late checkout (1062), breakfast (default 2090; use the code saved for your hotel in IN-Gauge automation → Settings) and any reversals. Code 1010 must contain the extra upsell fee, not the full room rate.</li><li><b>Reservation Detail:</b> export as text with stays covering those postings, including checked-out guests and extensions. A wider stay range helps resolve missing confirmations.</li><li><b>IN-Gauge:</b> export the complete product list for the same month, all employees and all statuses. Download a fresh copy after approving or adding requests.</li><li>We link room + full guest name + stay dates to a confirmation, then compare confirmation + product + daily date + net charge. Uncertain matches stay in Needs review.</li><li>The seller explicitly named after <code>**</code> in the Opera note comes first. A posting-user fallback is always flagged. Pending, approved, denied and automatically imported records are checked before proposing additions.</li></ol></details>
       <div class="msu-audit-link"><div><b>One workspace, two checks</b><p>Audit fixes existing package records. Manual sales finds journal charges that need a request.</p></div><button type="button" class="btn" id="msuShareAudit" disabled>Use these reports in Audit →</button></div>`;
     main.parentNode.insertBefore(view, main.nextSibling);
     view.addEventListener('change', e => { if (e.target.dataset.msKind && e.target.files[0]) load(e.target.dataset.msKind, e.target.files[0]); });
@@ -413,10 +421,10 @@
   function useLiveSnapshot(snapshot, tableRows) {
     const parsed = snapshot.records.length ? parseIngauge(tableRows) : {rows:[],warnings:[]};
     state.data.ingauge=parsed;state.files.ingauge={name:'Live '+snapshot.binding.property+' · '+new Date(snapshot.fetchedAt).toLocaleString(),parsed};
-    state.liveContext={coverage:{complete:snapshot.complete,from:snapshot.from,to:snapshot.to},contributors:snapshot.contributors};
+    state.liveContext={binding:snapshot.binding,coverage:{complete:snapshot.complete,from:snapshot.from,to:snapshot.to},contributors:snapshot.contributors};
     invalidate();render();
   }
-  const api = { parseJournal, parseReservations, parseIngauge, reconcile, sellerOf, amount, date, rowValues, additionFields, additionText, howSteps, card, evidenceHtml, show, hide, mount, state, readWorkbook, exportWorkbook, run, load, useLiveSnapshot };
+  const api = { parseJournal, parseReservations, parseIngauge, reconcile, sellerOf, amount, date, rowValues, additionFields, additionText, howSteps, card, evidenceHtml, show, hide, mount, state, readWorkbook, exportWorkbook, run, load, useLiveSnapshot, journalContext, invalidateJournal:()=>{invalidate();render();} };
   global.ManualUpsells = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof document !== 'undefined') {

@@ -10,7 +10,7 @@ const binding = extra => ({ portalUrl: 'https://app.fpg-ingauge.com/', tenantId:
 function fixture() {
   const values = new Map(), writes = [];
   const sb = {
-    console, JSON, Date, Map, Set, String, Object, Array, URL,
+    console, JSON, Date, Map, Set, String, Object, Array, URL, InGaugeAuditCore:require('../ingauge-audit-core'),
     HOTEL_ID: 'private-example', uid: 'owner-one',
     document: { readyState: 'loading', addEventListener() {}, getElementById: () => null, querySelector: () => null },
     localStorage: { getItem: key => values.get(key) ?? null, setItem: (key, value) => { writes.push([key, value]); values.set(key, value); }, removeItem: key => values.delete(key) },
@@ -87,4 +87,19 @@ test('reset restores only personal preferences and leaves other hotels intact', 
   api.reset(state);
   assert.deepEqual(plain(api.get(state)), plain(api.DEFAULTS)); assert.equal(api.get(other).graphs, false);
   assert(writes.length >= 2); assert(writes.every(([key]) => typeof key === 'string'));
+});
+
+test('breakfast code defaults to 2090, persists per hotel and uses stable identity across tool views',()=>{
+ const {api,state,sb}=fixture();assert.equal(api.journal(state).breakfastCode,'2090');api.setJournal(state,{breakfastCode:' 2091 '});assert.equal(api.journal(state).breakfastCode,'2091');
+ const same={targetKey:'a-different-view-key',binding:binding({property:'Renamed hotel',department:'Renamed department'})};assert.equal(api.journal(same).breakfastCode,'2091');
+ for(const change of [{propertyId:'22'},{departmentId:'33'},{tenantId:'11'},{portalUrl:'https://other.fpg-ingauge.com/'}])assert.equal(api.journal({binding:binding(change)}).breakfastCode,'2090');
+ sb.uid='owner-two';assert.equal(api.journal(state).breakfastCode,'2090');sb.uid='owner-one';sb.HOTEL_ID='other-space';assert.equal(api.journal(state).breakfastCode,'2090');sb.HOTEL_ID='private-example';assert.equal(api.journal(state).breakfastCode,'2091');
+ api.reset(state);assert.equal(api.journal(state).breakfastCode,'2091','display preferences cannot silently change a financial mapping');api.setJournal(state,{breakfastCode:'2090'});assert.equal(api.journal(state).breakfastCode,'2090');
+});
+test('invalid, conflicting and unsaved journal code changes retain the last saved mapping',()=>{
+ const {api,state,sb,writes,values}=fixture();api.setJournal(state,{breakfastCode:'3100'});const count=writes.length;
+ for(const code of ['','0','100.50','2090,2091','1061','1062','1010','12345678901',2091,null,undefined,'<script>'])assert.throws(()=>api.setJournal(state,{breakfastCode:code}));
+ assert.equal(writes.length,count);assert.equal(api.journal(state).breakfastCode,'3100');assert.throws(()=>api.setJournal({}, {breakfastCode:'2091'}));assert.equal(api.journal({}).breakfastCode,'2090');
+ sb.localStorage.setItem=()=>{throw Error('blocked storage')};assert.throws(()=>api.setJournal(state,{breakfastCode:'2090'}),/saved|storage/);assert.equal(api.journal(state).breakfastCode,'3100');
+ values.set(api.journalKey(state),JSON.stringify({schema:1,breakfastCode:'1010'}));assert.equal(api.journal(state).breakfastCode,'2090','invalid stored data is never applied');
 });

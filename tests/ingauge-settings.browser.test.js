@@ -149,9 +149,46 @@ async function fixture(browser, phone) {
         });
         await page.waitForFunction(() => !!InGaugeWorkspace.state.error);
         assert.equal(await page.evaluate(() => InGaugeWorkspace.state.editing), null, 'forged disabled action cannot open an editor');
+        // Journal settings use one hotel-scoped mapping in manual checks and totals.
+        await page.evaluate(()=>{
+          const S=InGaugeWorkspace.state;S.selected.clear();S.drafts.clear();S.legacyBinding=S.binding;S.independent=false;S.error='';InGaugeWorkspace.updateSettings({...InGaugeSettings.DEFAULTS});
+          S.snapshot.products.push({id:'8',name:'Breakfast',code:'UPS40BB',activeStatus:'NORMAL',recurring:true});S.snapshot.products[0].code='3100';
+          const base={BUSINESS_DATE:'2026-11-01',CASHIER_CREDIT:'0',CURRENCY1:'AED',ROOM:'0101',GUEST_FULL_NAME:'EXAMPLE, ALEX',REFERENCE:'Breakfast upsell ** Jordan',CASHIER_NAME:'Jordan River',USER_NAME:'JRIVER',line:2};
+          ManualUpsells.state.data.journal={rows:[{...base,TRX_NO:'901',TRX_CODE:'2090',CASHIER_DEBIT:'20'},{...base,TRX_NO:'902',TRX_CODE:'3100',CASHIER_DEBIT:'30'}]};
+          ManualUpsells.state.data.reservations={rows:[{CONFIRMATION_NO:'12345678',FULL_NAME:'Alex Example',ROOM_NO:'101',TRUNC_BEGIN:'01-NOV-26',TRUNC_END:'03-NOV-26',SHORT_RESV_STATUS:'CKIN'}]};
+          ManualUpsells.useLiveSnapshot(S.snapshot,InGaugeWorkspace.tableRows(S.snapshot));window.journalSource=JSON.stringify(ManualUpsells.state.data);InGaugeWorkspace.showMonthly();
+        });
+        assert.match(await page.locator('.mt-metrics>div').first().innerText(),/AED 20.00/);
+        await page.locator('.mt-mapping summary').click();await page.locator('[data-mt-code="3100"][data-mt-family="BB"]').click();
+        assert.match(await page.locator('.mt-metrics>div').first().innerText(),/AED 50.00/,'chart-only override is separate from the saved breakfast code');
+        await trigger.click();assert.equal(await page.locator('#igBreakfastCode').inputValue(),'2090');
+        await page.locator('#igBreakfastCode').fill('1010');await page.locator('[data-ig-journal-save]').click();assert.match(await page.locator('#igSettingsError').innerText(),/conflicts/);assert.equal(await page.evaluate(()=>InGaugeSettings.journal(InGaugeWorkspace.state).breakfastCode),'2090');
+        await page.evaluate(()=>{const S=InGaugeWorkspace.state;S.drafts.set('stale',makeDraft());S.reviewed=true;S.analysisDone=true;});
+        await page.locator('#igBreakfastCode').fill('3100');await page.locator('#igBreakfastCode').press('Enter');
+        assert.equal(await page.locator('#igSettingsError').isHidden(),true);assert.equal(await page.evaluate(()=>InGaugeSettings.journal(InGaugeWorkspace.state).breakfastCode),'3100');
+        assert.deepEqual(await page.evaluate(()=>({drafts:InGaugeWorkspace.state.drafts.size,reviewed:InGaugeWorkspace.state.reviewed,result:ManualUpsells.state.result})),{drafts:0,reviewed:false,result:null});
+        if(phone){await page.locator('.iga-journal-settings').scrollIntoViewIfNeeded();await page.screenshot({path:process.env.JOURNAL_CODE_SCREENSHOT||'/tmp/ingauge-breakfast587-phone.png'});}
+        await page.locator('#igSettingsClose').click();assert.match(await page.locator('.mt-metrics>div').first().innerText(),/AED 30.00/,'a saved code replaces the old default and clears stale chart overrides');
+        const analysis=await page.evaluate(async()=>{await ManualUpsells.run();InGaugeWorkspace.buildProposals();return {error:ManualUpsells.state.error,rows:ManualUpsells.state.result.rows.map(r=>({code:r.code,bucket:r.bucket,family:r.family})),draft:InGaugeWorkspace.state.drafts.get('t-902'),selected:InGaugeWorkspace.state.selected.size};});
+        assert.equal(analysis.error,'');assert.equal(analysis.rows.find(r=>r.code==='3100').family,'BB');assert.equal(analysis.rows.find(r=>r.code==='3100').bucket,'add');assert.equal(analysis.rows.find(r=>r.code==='2090').bucket,'review');assert.equal(analysis.draft.productId,'8','Opera codes are not mistaken for IN-Gauge product codes');assert.equal(analysis.draft.statusAfter,'PENDING');assert.equal(analysis.selected,0);
+        await trigger.click();assert.equal(await page.locator('#igBreakfastCode').inputValue(),'3100','saved code survives reopening');
+        await page.evaluate(()=>InGaugeWorkspace.state.selected.add('t-902'));await page.locator('#igBreakfastCode').fill('3101');await page.locator('[data-ig-journal-save]').click();assert.match(await page.locator('#igSettingsError').innerText(),/unselect/);assert.equal(await page.evaluate(()=>InGaugeSettings.journal(InGaugeWorkspace.state).breakfastCode),'3100');
+        await page.evaluate(()=>InGaugeWorkspace.state.selected.clear());await page.locator('[data-ig-journal-reset]').click();assert.equal(await page.locator('#igBreakfastCode').inputValue(),'2090');assert.equal(await page.evaluate(()=>journalSource===JSON.stringify(ManualUpsells.state.data)),true,'mapping changes never rewrite reports');
+        await page.locator('#igSettingsClose').click();assert.equal(await page.evaluate(()=>requests.length),0);
+        const independent=await page.evaluate(async()=>{
+          const S=InGaugeWorkspace.state,original=S.binding;InGaugeWorkspace.updateJournalCodes({breakfastCode:'3100'});
+          S.independent=true;S.legacyBinding=original;S.binding=InGaugeAuditCore.binding({...original,propertyId:'22',property:'Second hotel'});S.targetKey='second-hotel';S.targetContext={};
+          S.snapshot={...S.snapshot,id:'second-hotel-snapshot',binding:S.binding,records:S.snapshot.records.map(r=>({...r,propertyId:'22'}))};
+          S.reports={journal:{rows:ManualUpsells.state.data.journal.rows.map(r=>({...r,TRX_CODE:r.TRX_CODE==='3100'?'3101':r.TRX_CODE}))},reservations:ManualUpsells.state.data.reservations};
+          const defaultCode=InGaugeSettings.journal(S).breakfastCode;InGaugeWorkspace.updateJournalCodes({breakfastCode:'3101'});InGaugeWorkspace.setScope('manual');
+          S.from=S.snapshot.from;S.to=S.snapshot.to;document.getElementById('igFrom').value=S.from;document.getElementById('igTo').value=S.to;
+          await InGaugeWorkspace.checkReports();return {defaultCode,rows:S.manualResult?.rows.map(r=>({code:r.code,bucket:r.bucket,family:r.family})),draft:S.drafts.get('t-902'),originalCode:InGaugeSettings.journal({binding:original}).breakfastCode,standaloneCode:ManualUpsells.journalContext().breakfastCode,sourceUnchanged:journalSource===JSON.stringify(ManualUpsells.state.data)};
+        });
+        assert.equal(independent.defaultCode,'2090');assert.equal(independent.originalCode,'3100');assert.equal(independent.standaloneCode,'3100');assert.equal(independent.rows.find(r=>r.code==='3101').bucket,'add');assert.equal(independent.draft.productId,'8');assert.equal(independent.sourceUnchanged,true,'auditing another hotel keeps the host reports and setting intact');
+
         assert.equal(await page.evaluate(() => requests.length), 0); assert.deepEqual(errors, []);
       } finally { await page.close(); }
     }
-    console.log('IN-Gauge settings passed on desktop and phone: accessible drawer, scoped persistence, live feature controls, financial guards, optional chart display and reset without source-data changes. All external actions mocked.');
+    console.log('IN-Gauge settings passed on desktop and phone: accessible drawer, scoped persistence, live feature controls, financial guards, optional chart display and reset without source-data changes. Breakfast-code defaults, replacement, manual suggestions, monthly totals, invalidation, conflict/selection guards and reset passed. All external actions mocked.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exit(1); });

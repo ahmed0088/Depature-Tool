@@ -1,0 +1,11 @@
+# Breakfast journal code (v587)
+
+Breakfast upsells default to Opera transaction **2090**. In **IN-Gauge automation → Settings → Opera journal codes**, enter a different numeric code and press **Save code** (or Enter). **Use default 2090** restores the default. The change replaces the previous breakfast mapping; it does not add a second code. Other default mappings remain 1010 for room-upsell fees, 1061 for early check-in and 1062 for late checkout.
+
+The choice is saved on this device, separately by account, HotelOps namespace, normalized IN-Gauge portal, tenant, property and department. Display labels and the workspace target-key representation do not affect this identity. It is separate from personal display preferences, so resetting display/tool controls cannot silently reset a financial mapping.
+
+`InGaugeAuditCore.journalMapping` validates the code and supplies the same mapping to manual reconciliation and monthly totals. Invalid, blank, zero or conflicting codes are rejected. An old breakfast code becomes unsupported/unmapped after replacement. Existing notes-first seller rules, posting-user review, pending-request checks, duplicate matching, credits, coverage and reservation guards stay in effect. An Opera transaction code is not used to pick a differently categorized IN-Gauge catalog product.
+
+Running analysis, uploads, hotel changes and selected financial operations block a mapping change. A successful change clears unselected drafts, prior analysis and approval readiness; the reports remain intact for a fresh check. Monthly totals reset temporary chart overrides and coverage confirmation when the saved code changes. Chart-only mapping buttons remain separate and explicitly labeled. Independent hotels read their own code, while the original manual-sales tab continues using the original hotel's setting.
+
+The setting does not edit Opera, IN-Gauge records, rates or sellers. Financial changes still require normal review and a selected automation run. Unit and browser tests cover default/custom code behavior, replacement, pending and reversals, target/account isolation, invalid inputs, storage failure, analysis invalidation, chart overrides, phone input/reset/reopen and independent hotel analysis. External financial requests are mocked.

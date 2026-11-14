@@ -260,3 +260,14 @@ test('1010 keeps automatic packages separate and stops duplicate multi-night or 
   f.g.day='2026-11-01';f.g.cents=24490;assert.match(run(f).rows[0].reason,/amount differs/,'do not divide a stay total or add the posting again');
   f.j.CASHIER_CREDIT='122.45';assert.match(run(f).rows[0].reason,/reverse/);
 });
+
+test('configured breakfast code replaces 2090 and retains notes, pending and reversal checks',()=>{
+ const f=fixtures();f.j.TRX_CODE='3100';f.j.TRX_DESC='Breakfast';f.j.REFERENCE='Breakfast upsell ** Lina';
+ const custom=extra=>M.reconcile(extra?.journal||[f.j],[f.r],extra?.ig||[f.g],{breakfastCode:'3100'}).rows[0];
+ let row=custom();assert.equal(row.bucket,'add');assert.equal(row.family,'BB');assert.equal(row.product,'Breakfast');assert.equal(run(f).rows[0].bucket,'review','custom code is not active without its hotel setting');
+ f.j.TRX_CODE='2090';assert.match(custom().reason,/no verified product mapping/,'old default is not silently retained');
+ f.j.TRX_CODE='3100';f.j.REFERENCE='Breakfast';assert.match(custom().reason,/no manual-upsell evidence/);f.j.REFERENCE='Breakfast upsell ** Lina';
+ f.g.product='Breakfast';f.g.conf=f.r.CONFIRMATION_NO;f.g.cents=12245;f.g.status='PENDING';assert.equal(custom().bucket,'existing');assert.match(custom().reason,/PENDING/);
+ f.j.CASHIER_CREDIT='122.45';assert.match(custom().reason,/reverse/);
+ assert.throws(()=>M.reconcile([f.j],[f.r],[f.g],{breakfastCode:'1010'}),/conflicts/);
+});

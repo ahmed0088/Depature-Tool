@@ -57,3 +57,10 @@ test('1010 and room-upsell labels resolve the family but do not guess one of sev
   assert.equal(C.resolveProduct({code:'1010',label:'Room upselling'},products).state,'ambiguous');
   assert.equal(C.resolveProduct({code:'1010',label:'Room upselling'},products.slice(0,1)).product.id,'1');
 });
+
+test('custom breakfast code uses the same mapping as manual audit and replaces the old default',()=>{
+ const journal=[post(1,'100',{TRX_CODE:'3100',REFERENCE:'Breakfast upsell'}),post(2,'0',{TRX_CODE:'3100',CASHIER_CREDIT:'20',REFERENCE:'Breakfast upsell'}),post(3,'50',{TRX_CODE:'2090',REFERENCE:'Breakfast upsell'})];
+ const records=[record(1,6000,'APPROVED',{product:'Breakfast'}),record(2,2000,'PENDING',{product:'Breakfast',isManuallyAddedRecord:true})];
+ const r=run(journal,records,{breakfastCode:'3100'});assert.equal(r.opera,8000);assert.equal(r.approved,6000);assert.equal(r.pending,2000);assert.equal(r.gap,2000);assert.equal(r.products[0].family,'BB');assert.equal(r.unmapped.length,1);assert.equal(r.unmapped[0].code,'2090');
+ assert.equal(run(journal,records).opera,5000);assert.equal(C.journalMapping()['2090'],'BB');assert.equal(C.journalMapping({breakfastCode:'3100'})['2090'],undefined);
+});

@@ -32,6 +32,15 @@
     const previousScope=S.scope,p=W.InGaugeSettings.set(S,patch);S.scope=enabledScope(S.scope,p);if(S.scope!==previousScope){S.autoAnalyse=false;S.findAfterFetch=false;clearReview();}
     if([...business,'automation'].some(key=>before[key]!==p[key]))invalidate();syncSettings();render();W.InGaugeSettings.sync(S);return p;
   }
+  function updateJournalCodes(patch){
+    if(!W.InGaugeSettings?.setJournal)throw Error('Refresh the app to load journal settings.');
+    if(S.busy||S.uploading||S.switching||restoring||!S.independent&&W.ManualUpsells?.state.busy)throw Error('Wait for the current run, analysis or upload before changing journal codes.');
+    if(!S.binding)throw Error('Choose the IN-Gauge hotel before changing journal codes.');
+    if(S.selected.size)throw Error('Apply or unselect your saved changes before changing journal codes.');
+    const before=W.InGaugeSettings.journal(S),after=W.InGaugeSettings.setJournal(S,patch);
+    if(before.breakfastCode!==after.breakfastCode){clearReview();S.manualResult=null;if(!S.independent)W.ManualUpsells?.invalidateJournal?.();}
+    S.error='';render();W.InGaugeSettings.sync(S);notify('Breakfast journal code '+after.breakfastCode+' saved · check your reports again','ok');return after;
+  }
   function openSettings(button){if(!W.InGaugeSettings)throw Error('Refresh the app to load settings.');W.InGaugeSettings.open(S,button||el('igSettingsButton'));}
   function openHotelSettings(){W.InGaugeSettings?.close();const setup=el('igSetupDetails');if(setup)setup.open=true;const details=el('igConfiguration')?.querySelector('details');if(details)details.open=true;setup?.scrollIntoView({behavior:'smooth',block:'start'});}
   async function digest(s){return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))].map(x=>x.toString(16).padStart(2,'0')).join('');}
@@ -222,7 +231,7 @@
     if(S.scope!=='manual')for(const row of S.independent?S.autoResults:typeof pkgResults!=='undefined'?pkgResults:[]){if(!row.pinSkip&&(!row.requestedSale||row.pin?.seller)&&['credit','deny','review'].includes(row.verdict)&&(!row.alreadyComplete||row.needsEmployee||row.needsProduct||row.reassign)){const op=proposedAudit(row);if(op)S.drafts.set(op.key,op);}}
     for(const row of S.scope==='automatic'?[]:(S.independent?S.manualResult:W.ManualUpsells?.state.result)?.rows||[]){
       if(row.bucket!=='add'&&!(row.bucket==='review'&&/^Not found in this export, but seller credit needs confirmation\./.test(row.reason)&&row.conf&&row.candidates.length===1&&!row.matches.length))continue;
-      const p=C.resolveProduct({code:row.code,label:row.product},S.snapshot.products),numericFallback=row.seller.basis!=='Opera note'&&/^\d+$/.test(row.seller.name),who=numericFallback?{state:'unmatched',reason:'An Opera posting-user ID is not an IN-Gauge contributor ID.'}:C.resolveSeller(row.seller.employeeId||row.seller.name,S.snapshot.contributors,Object.values(aliases()));
+      const p=C.resolveProduct({label:row.product,kind:row.family||C.kind(row.product)},S.snapshot.products),numericFallback=row.seller.basis!=='Opera note'&&/^\d+$/.test(row.seller.name),who=numericFallback?{state:'unmatched',reason:'An Opera posting-user ID is not an IN-Gauge contributor ID.'}:C.resolveSeller(row.seller.employeeId||row.seller.name,S.snapshot.contributors,Object.values(aliases()));
       const values={unitCents:row.cents,totalCents:row.cents,chargeDays:1,arrival:row.day,departure:row.day,businessDate:row.day,room:row.room,memo:'Opera journal '+row.transaction+' · '+row.note};
       const op={key:'t-'+row.transaction,transaction:row.transaction,action:'add',source:'Opera manual sale',confirmation:row.conf,productId:p.product?.id||'',contributorId:who.person?.id||'',values,statusAfter:'PENDING',reason:'',requireAssignment:true,assignmentReviewed:false,assignmentContributorId:'',sellerCredit:{named:row.seller.name,recommendedContributorId:row.seller.basis==='Opera note'&&row.seller.mapped?row.seller.employeeId:'',basis:row.seller.basis,warning:row.seller.warning||'',postedBy:row.cashier||row.username||row.userId||'Unknown posting user',postingLogin:row.username||'',explanation:row.seller.explanation},evidence:row.seller.explanation+' · '+row.reason+' · Guest: '+row.guest+' · Room: '+row.room+' · Reservation stay: '+(row.candidates[0]?.TRUNC_BEGIN||'')+' → '+(row.candidates[0]?.TRUNC_END||'')+' · Opera posting user: '+(row.username||row.cashier)+' · Journal line '+row.line+' · '+row.note};
       applySellerPin(op);S.drafts.set(op.key,op);
@@ -266,7 +275,7 @@
     S.busy=true;clearReview();renderScope();renderControls();
     try{
       importSnapshot();
-      if(S.scope!=='automatic'){if(S.independent){S.manualResult=W.ManualUpsells.reconcile(S.reports.journal.rows,S.reports.reservations.rows,S.targetIngauge.rows,{contributors:S.snapshot.contributors,coverage:{complete:S.snapshot.complete,from:S.snapshot.from,to:S.snapshot.to}});}else{await W.ManualUpsells.run();if(W.ManualUpsells.state.error)throw Error(W.ManualUpsells.state.error);}}
+      if(S.scope!=='automatic'){if(S.independent){S.manualResult=W.ManualUpsells.reconcile(S.reports.journal.rows,S.reports.reservations.rows,S.targetIngauge.rows,{contributors:S.snapshot.contributors,coverage:{complete:S.snapshot.complete,from:S.snapshot.from,to:S.snapshot.to},...(W.InGaugeSettings?.journal?.(S)||{})});}else{await W.ManualUpsells.run(W.InGaugeSettings?.journal?.(S)||{});if(W.ManualUpsells.state.error)throw Error(W.ManualUpsells.state.error);}}
       if(S.scope!=='manual'){
         if(S.independent){if(typeof W.pkgComputeForTarget!=='function')throw Error('Refresh the app to load the independent hotel audit engine.');const computed=W.pkgComputeForTarget({rows:tableRows(S.snapshot),events:S.targetPdf.events,reservationText:S.reservationText,context:S.targetContext});S.autoResults=computed.results;if(computed.memoryPatch&&Object.keys(computed.memoryPatch).length){await db().child('ingauge/targets/'+S.targetKey+'/auditContext/memory').update(computed.memoryPatch);S.targetContext.memory=computed.memoryNext;}}else if(typeof pkgRun==='function'&&typeof pkgUnknowns!=='undefined'&&pkgUnknowns.length)await pkgRun();
         else if(typeof pkgResults!=='undefined')pkgResults=[];
@@ -637,6 +646,6 @@
     render();return true;
   }
   async function fetchMonth(p){if(!preferences().monthly)throw Error('Monthly totals is turned off in IN-Gauge settings.');if(S.busy)throw Error('Wait for the current run.');if(S.selected.size)throw Error('Apply or unselect your saved changes before refreshing the monthly comparison.');S.from=p.from;S.to=p.to;renderControls();return fetchSnapshot();}
-  W.InGaugeWorkspace={settingsLocked:()=>restoring,preferences,updateSettings,openSettings,openHotelSettings,sameTarget,showMonthly,fetchMonth,state:S,setTask,findPackage,setScope,checkReports,reportRequirements,loadHistory,renderHistory,renderGuide,runSteps,liveConsole,open,openRun,closeRun,cancelRun,renderRun,fromAudit,upload,mount,tableRows,buildProposals,hydrate};
+  W.InGaugeWorkspace={settingsLocked:()=>restoring||!S.independent&&!!W.ManualUpsells?.state.busy,preferences,updateSettings,updateJournalCodes,openSettings,openHotelSettings,sameTarget,showMonthly,fetchMonth,state:S,setTask,findPackage,setScope,checkReports,reportRequirements,loadHistory,renderHistory,renderGuide,runSteps,liveConsole,open,openRun,closeRun,cancelRun,renderRun,fromAudit,upload,mount,tableRows,buildProposals,hydrate};
   if(D.readyState==='loading')D.addEventListener('DOMContentLoaded',mount);else mount();
 })(window);
