@@ -320,6 +320,9 @@ function gpSaveAccorUrl(url) {
   try { localStorage.setItem(GP_URL_KEY(), url); localStorage.setItem('gp_accor_url_v1', url); } catch (_) {}
   try { if (typeof fbSet === 'function') fbSet('enrollPortalUrl', { url, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '' }); } catch (_) {}
 }
+function gpValidAccorUrl(value) {
+  try { if(window.GPEnrollmentLinks){GPEnrollmentLinks.validate(value);return true;}const u=new URL(value);return u.protocol==='https:'&&u.hostname==='secure.guestinternet.com'&&!u.username&&!u.password&&!u.port; } catch (_) { return false; }
+}
 const gpAccKey = () => { try { return localStorage.getItem(GP_ACC_GH.key) || ''; } catch (_) { return ''; } };
 async function gpAccGh(path, opt) {
   const token = gpAccKey(); if (!token) throw new Error('Set up the GitHub start key first in Neorcha → Run in the cloud.');
@@ -346,12 +349,13 @@ async function gpAccCloudRestart() {
   const {rows,held}=gpCloudSelection();
   const url = (document.getElementById('gpAccorUrl')?.value || '').trim();
   const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
-  if (!url || !rows.length) { showToast(held.length?'Enter the held guests’ country in Review details first.':'Review the selected guests and the enrolment portal link first', 'err'); return; }
-  if (!confirm(`Start the enrolment again for ${rows.length} ready guest(s)?${held.length?' '+held.length+' selected guest(s) without a country stay held.':''}`)) return;
+  if (!gpValidAccorUrl(url) || !rows.length) { showToast(held.length?'Enter the held guests’ country in Review details first.':'Review the selected guests and the enrolment portal link first', 'err'); return; }
+  const destination=window.GPEnrollmentLinks?.selected(url),portalName=destination?.name||'';
+  if (!confirm(`Start the enrolment again for ${rows.length} ready guest(s)${portalName?' · '+portalName:''}?${held.length?' '+held.length+' selected guest(s) without a country stay held.':''}`)) return;
   gpCloudTag = 'acc' + Date.now().toString(36);
   try {
     await fbUpdate('enrollLive', { at: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: rows.length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
-    await fbSet('enrollJob', { tsv: gpEnrollTsv(rows, true), n: rows.length, at: Date.now(), test: false, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
+    await fbSet('enrollJob', { tsv: gpEnrollTsv(rows, true), n: rows.length, at: Date.now(), test: false, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url,portalName });
     try { if (window.hoRuns) window.hoRuns.start('enrol', gpCloudTag, { hotel: (document.getElementById('hotelName') || {}).textContent || '', n: rows.length, test: false, how: 'run again' }); } catch (_) {}
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: '', tag: gpCloudTag, hid, portal_url: url } }) });
     GP_ACC.at = Date.now();
@@ -363,12 +367,13 @@ async function gpAccCloudRestart() {
 async function gpAccCloudEnroll(test) {
   const {rows,held} = gpCloudSelection(); if (!rows.length) { showToast(held.length?'Enter the held guests’ country in Review details first.':'Tick Agreed and choose a civility first', 'err'); return; }
   const url = (document.getElementById('gpAccorUrl')?.value || '').trim();
-  if (!/^https:\/\/secure\.guestinternet\.com\//i.test(url)) { showToast('Enter the enrolment portal link first', 'err'); return; }
-  if (!test && !confirm(`Run the cloud enrolment for ${rows.length} ready guest(s)? Only guests marked Agreed will be sent.${held.length?' '+held.length+' selected guest(s) without a country stay held.':''}`)) return;
+  if (!gpValidAccorUrl(url)) { showToast('Enter a valid HTTPS enrolment link on secure.guestinternet.com first', 'err'); return; }
+  const destination=window.GPEnrollmentLinks?.selected(url),portalName=destination?.name||'';
+  if (!test && !confirm(`Run the cloud enrolment for ${rows.length} ready guest(s)${portalName?' · '+portalName:''}? Only guests marked Agreed will be sent.${held.length?' '+held.length+' selected guest(s) without a country stay held.':''}`)) return;
   gpCloudTag = 'acc' + Date.now().toString(36); const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
   gpSaveAccorUrl(url);
   try {
-    await fbSet('enrollJob', { tsv: gpEnrollTsv(rows, true), n: rows.length, at: Date.now(), by: (currentProfile && currentProfile.name) || '', test: !!test, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
+    await fbSet('enrollJob', { tsv: gpEnrollTsv(rows, true), n: rows.length, at: Date.now(), by: (currentProfile && currentProfile.name) || '', test: !!test, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url,portalName });
     await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Starting the cloud enrolment…', con: [] });
     try { if (window.hoRuns) window.hoRuns.start('enrol', gpCloudTag, { hotel: (document.getElementById('hotelName') || {}).textContent || '', n: rows.length, test: !!test, how: 'cloud' }); } catch (_) {}
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: test ? '1' : '', tag: gpCloudTag, hid, portal_url: url } }) });
@@ -502,7 +507,8 @@ function gpQuickPaint() {
   const srcNote = GP_SOURCE === 'opera' ? `<div class="gq-src">📡 These came from the <b>Opera reader</b> (guests you opened with a real e-mail). Opera does not know who agreed to join ALL — tick only the guests who actually said yes.</div>`
     : GP_SOURCE === 'sheet' ? `<div class="gq-src">📄 From the <b>uploaded sheet</b> (guests with an e-mail). Check the country is filled and tick only the guests who agreed to join ALL.</div>`
     : GP_SOURCE === 'neorcha' ? `<div class="gq-src">🪪 From the <b>Neorcha cards</b>. Tick only the guests who agreed to join ALL.</div>` : '';
-  body.innerHTML = `${srcNote}<label class="gq-url"><span>🔗 Enrolment portal link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>
+  const portalPicker=window.GPEnrollmentLinks?GPEnrollmentLinks.html('gq',url):`<label class="gq-url"><span>🔗 Enrolment portal link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>`;
+  body.innerHTML = `${srcNote}${portalPicker}
     ${can.length ? `<div class="gq-bar"><span>Tap a guest to tick them</span><button type="button" class="btn sm" onclick="gpQuickAll(${can.every(([r]) => r.consent) ? 'false' : 'true'})">${can.every(([r]) => r.consent) ? '✕ Untick all' : '✓ Tick all'}</button></div><div class="gq-list">${can.map(([r, i]) => `<div class="gq-row${r.consent ? ' on' : ''}" onclick="if(!event.target.closest('.gq-title,input,label,button,details,summary'))gpQuickTick(${i})">
       <label class="gq-yes"><input type="checkbox" ${r.consent ? 'checked' : ''} onchange="gpSet(${i},'consent',this.checked);gpQuickPaint()"><span>Agreed</span></label>
       <div class="gq-who"><b>${escapeHtml(r.name || '—')}</b><small>${r.room ? 'Room ' + escapeHtml(r.room) + ' · ' : ''}${escapeHtml(r.email)}${r.phone ? ' · 📞' : ''}${r.nat ? ' · ' + escapeHtml(r.nat) : ''}</small>${gpTracked(r) ? `<small class="gq-last">Last try ${escapeHtml(gpTracked(r).date || '')}: ${escapeHtml(gpTryWords(gpTracked(r).status))}</small>` : ''}</div>
@@ -586,7 +592,7 @@ function gpCloudPaint(v) {
   const body = document.getElementById('gpAccorModalBody'); if (!body) return;
   const sub = document.getElementById('gpAccorModalSub');
   const t0 = (live && +live.started) || GP_ACC.at || Date.now(), sec = Math.max(0, Math.round(((st.state === 'run' ? Date.now() : (live && +live.at) || Date.now()) - t0) / 1000));
-  if (sub) sub.textContent = (window.hoRuns && window.hoRuns.label('enrol') ? window.hoRuns.label('enrol') + ' · ' : '') + (test ? '🧪 Test run · nothing is submitted · ' : '') + (live ? Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') : 'No run yet');
+  if (sub) sub.textContent = (window.hoRuns && window.hoRuns.label('enrol') ? window.hoRuns.label('enrol') + ' · ' : '') + (live?.portalName?live.portalName+' · ':'') + (test ? '🧪 Test run · nothing is submitted · ' : '') + (live ? Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') : 'No run yet');
   if (!live && !GP_ACC.gh) { body.innerHTML = '<div class="acr-empty">No enrolment run yet. Tick <b>Agreed</b> for the guests who said yes, paste the enrolment portal link, then press <b>☁️ Start cloud computer</b> (or 🧪 Test first).</div>'; gpAccPaintCon([], st); return; }
   const cg = live && live.current;
   const guests = (live && live.report && Array.isArray(live.report.guests)) ? live.report.guests : [];
@@ -667,8 +673,9 @@ function gpAgentBeat() {
   if ((typeof fbListen !== 'function' || typeof _ref === 'undefined' || !_ref) && tries < 400) return setTimeout(() => gpCloudListen(tries + 1), 1500);
   const t = document.getElementById('gpAgentOn'); if (t) t.checked = gpIsAgent();
   const au = document.getElementById('gpAccorUrl'); if (au) { au.value = gpLoadAccorUrl(); if (!au.dataset.wired) { au.dataset.wired = '1'; au.addEventListener('change', () => gpSaveAccorUrl(au.value)); au.addEventListener('blur', () => gpSaveAccorUrl(au.value)); } }
+  window.GPEnrollmentLinks?.mount();
   // the hotel's saved link (shared by the team): fill it unless you are typing in the field right now
-  fbListen('enrollPortalUrl', v => { const a = document.getElementById('gpAccorUrl'); if (a && v && v.url && document.activeElement !== a && !a.value) a.value = v.url; });
+  fbListen('enrollPortalUrl', v => { const a = document.getElementById('gpAccorUrl'); if (a && v && v.url && document.activeElement !== a && !a.value) { if(window.GPEnrollmentLinks)GPEnrollmentLinks.adoptLegacy(v.url);else a.value = v.url; } });
   fbListen('enrollLive', v => { if (v && (Date.now() - (+v.at || 0) < 24 * 3600e3)) gpCloudPaint(v); });
   fbListen('enrollAgent', gpAgentPaint);
   fbListen('enrollJob', job => { if (job && job.state === 'queued' && !job.accorLoop) gpAgentTake(job); });

@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 582, items: [
+    { ico: '🏨', title: 'Saved hotel enrolment links',
+      what: 'Paste a link once, give it a hotel name and save it. Then choose Ibis, Mercure, Adagio or any other saved hotel directly in the enrolment window.',
+      does: 'You can edit or remove saved links, or paste a link for one-time use. Your selection is remembered on this device, saved links sync in the same HotelOps space when connected, and the run confirmation names the hotel you selected.' }
+  ] },
   { v: 581, items: [
     { ico: '✍️', title: 'Review and correct enrolment details',
       what: 'Open Review details on a guest to correct the country or confirmed contact details. Missing countries stay in review while ready guests can run. Changing the name or email clears Agreed for rechecking.',

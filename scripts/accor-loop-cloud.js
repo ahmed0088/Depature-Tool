@@ -208,6 +208,7 @@ async function main() {
   const job = await FB.get('enrollJob');
   const rows = consenting(job && job.tsv);
   const test = /^(1|true|yes)$/i.test(String(E.TEST || '')) || !!(job && job.test);
+  const portalName = String(job && job.portalName || '').trim().slice(0, 80);
   const checkpoint = enrollmentCheckpoint({patch:FB.patch,test});
   if (!rows.length) fail('No consenting guests with civility and email were found in the enrollment list');
   // never let a guest's name, e-mail or confirmation reach the public GitHub log (whole name AND each part of it)
@@ -217,7 +218,7 @@ async function main() {
   const tag = String(E.TAG || (job && job.tag) || ('accor' + Date.now().toString(36))).slice(0, 40);
   const history = require('./cloud-run-history')({patch:FB.patch,tag,kind:'enrol',run:E.GITHUB_RUN_ID?'https://github.com/ahmed0088/Depature-Tool/actions/runs/'+E.GITHUB_RUN_ID:''});
   ACTIVE_HISTORY = history;
-  const live = p => Promise.all([history(p), FB.patch('enrollLive', Object.assign({ at: Date.now(), tag, con: CON.slice(-120) }, p)).catch(() => {})]);
+  const live = p => Promise.all([history(p), FB.patch('enrollLive', Object.assign({ at: Date.now(), tag, portalName, con: CON.slice(-120) }, p)).catch(() => {})]);
   await history({state:'run',n:rows.length,done:0,test,note:'Preparing the cloud browser…'});
   const stopRequested = async () => {
     try { const state = await FB.get('enrollLive'); return state && state.tag === tag && (state.control === 'stop' || state.stopRequested === true); }
@@ -230,7 +231,7 @@ async function main() {
   };
 
   await FB.put('enrollLive', {
-    at: Date.now(), started: Date.now(), state: 'run', step: 'open', tag, test,
+    at: Date.now(), started: Date.now(), state: 'run', step: 'open', tag, test, portalName,
     n: rows.length, done: 0, control: 'run', note: 'Preparing the cloud browser…', con: CON.slice(-120)
   });
   say(`${test ? 'TEST ONLY · ' : ''}Enrollment queued for ${rows.length} consenting guest(s).`);

@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v581"/>
+<meta name="ho-version" content="v582"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -1570,7 +1570,7 @@
           <div class="gp-accor-actions"><button class="btn gold" type="button" onclick="gpQuickShow()">✍️ Enroll guests</button><button class="btn" type="button" onclick="gpAccorRunWin(true)">📡 Progress</button></div>
           <div class="gp-cloud-live" id="gpCloudLive" hidden></div>
           <details class="gp-more"><summary>More options</summary>
-            <label class="gp-accor-url">Enrolment portal link<input id="gpAccorUrl" type="url" placeholder="https://secure.guestinternet.com/..." autocomplete="url"></label>
+            <div id="gpPortalPicker"><label class="gp-accor-url">Enrolment portal link<input id="gpAccorUrl" type="url" placeholder="https://secure.guestinternet.com/..." autocomplete="url"></label></div>
             <div class="gp-accor-actions"><button class="btn" id="gpAccCloudGo" onclick="gpAccCloudEnroll(false)" disabled>☁️ Enroll the ticked list</button><button class="btn" id="gpAccCloudTest" onclick="gpAccCloudEnroll(true)" disabled>🧪 Test run</button><button class="btn" id="gpCopyEnroll" onclick="gpCopyEnroll()" disabled>📋 Copy enrollment list</button><button class="btn" onclick="gpCopyScript('enroll', this)" title="PC script for fc.accor.net; cloud enrolment uses the secure.guestinternet.com link above">📋 PC script · fc.accor.net</button></div>
           </details>
         </div>
@@ -5550,6 +5550,7 @@ async function appInit() {
 <script src="nav-order.js"></script>
 <script src="standards-quiz.js"></script>
 <script src="accor-standards.js"></script>
+<script src="enrolment-links.js"></script>
 <script src="guest-pipeline.js"></script>
 <script src="found-web.js"></script>
 <script src="stratum-fx.js"></script>
