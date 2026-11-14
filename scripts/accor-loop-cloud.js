@@ -86,6 +86,10 @@ function tokenSession(auth, { refresh, now = Date.now }) {
     return renewing;
   } };
 }
+function countryAudit(row) {
+  const a = row && row.countryAudit;
+  return a && typeof a === 'object' ? {countryAudit:{requested:String(a.requested || '').slice(0,80),selected:String(a.selected || '').slice(0,80),fallback:a.fallback === true,reason:String(a.reason || '').slice(0,40)}} : {};
+}
 function enrollmentCheckpoint({ patch, test, now = Date.now }) {
   const saved = new Set();
   return async results => {
@@ -96,7 +100,7 @@ function enrollmentCheckpoint({ patch, test, now = Date.now }) {
       const identity = JSON.stringify([index, row.email, row.conf, row.status]);
       if (saved.has(identity)) continue;
       pending.push(identity);
-      updates[key(row.email)] = { email: String(row.email).toLowerCase(), status: String(row.status || 'unknown'), date: today, name: String(row.name || ''), conf: String(row.conf || '') };
+      updates[key(row.email)] = { email: String(row.email).toLowerCase(), status: String(row.status || 'unknown'), date: today, name: String(row.name || ''), conf: String(row.conf || ''), ...countryAudit(row) };
     }
     if (!pending.length) return 0;
     await patch('enrollLog', updates);
@@ -184,9 +188,9 @@ function resultReport(results, total) {
   const skipped = count('skipped'), errors = count('error'), other = count('other');
   return {
     processed: results.length, total, submitted, alreadyMember: already, pending,
-    skipped, errors, other, complete: results.length >= total,
-    // the per-guest list, so HotelOps can show who is in each tile and why (name + confirmation only — no e-mail)
-    guests: results.map(r => ({ name: String(r && r.name || '').slice(0, 60), conf: String(r && r.conf || ''), status: String(r && r.status || 'unknown'), cat: cat(String(r && r.status || '')) })),
+    skipped, errors, other, complete: results.length >= total, countryFallbacks: results.filter(r => r.countryAudit && r.countryAudit.fallback).length,
+    // the per-guest list, so HotelOps can show who is in each tile and why (display details and country decision — no e-mail)
+    guests: results.map(r => ({ name: String(r && r.name || '').slice(0, 60), conf: String(r && r.conf || ''), status: String(r && r.status || 'unknown'), cat: cat(String(r && r.status || '')), ...countryAudit(r) })),
     statuses: results.reduce((out, r) => {
       const status = String(r && r.status || 'unknown');
       out[status] = (out[status] || 0) + 1;
@@ -196,7 +200,7 @@ function resultReport(results, total) {
 }
 function reportNote(report, test) {
   const prefix = test ? 'TEST ONLY — nothing was submitted. ' : '';
-  return `${prefix}Finished: ${report.submitted} enrolled · ${report.alreadyMember} already members · ${report.pending} pending · ${report.skipped} skipped · ${report.errors} errors · ${report.processed}/${report.total} processed.`;
+  return `${prefix}Finished: ${report.submitted} enrolled · ${report.alreadyMember} already members · ${report.pending} pending · ${report.skipped} skipped · ${report.errors} errors · ${report.processed}/${report.total} processed.${report.countryFallbacks ? ' ' + report.countryFallbacks + ' used UAE country fallback.' : ''}`;
 }
 
 // A navigation can make a poll unavailable. Only confirmed worker results may replace the checkpoint.
@@ -457,7 +461,7 @@ async function main() {
       if (r && /@/.test(r.email || '')) {
         patch[key(r.email)] = {
           email: String(r.email).toLowerCase(), status: String(r.status || 'unknown'), date: today,
-          name: String(r.name || ''), conf: String(r.conf || '')
+          name: String(r.name || ''), conf: String(r.conf || ''), ...countryAudit(r)
         };
       }
     });

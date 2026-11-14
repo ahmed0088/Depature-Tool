@@ -64,7 +64,7 @@ function gpNormEmail(raw) {
 function gpLogKey(email) { return String(email || '').toLowerCase().replace(/[.#$\[\]\/@]/g, '_'); }
 function gpReviewKey(r) { return JSON.stringify([typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '', r.conf, r.name, r.email, r.phone, r.nat]); }
 function gpCountryMissing(r) { return !String(r.nat || '').trim() || /^(unknown|n\/a|none|not (provided|given|known)|no nationality|-+)$/i.test(String(r.nat).trim()); }
-function gpCloudSelection() { const selected=gpEnrollRows().filter(r=>!r.member);return {rows:selected.filter(r=>!gpCountryMissing(r)),held:selected.filter(gpCountryMissing)}; }
+function gpCloudSelection() { const selected=gpEnrollRows().filter(r=>!r.member);return {rows:selected,held:[],fallback:selected.filter(gpCountryMissing)}; }
 
 function gpParse(text) {
   const lines = String(text || '').split(/\r?\n/).filter(l => l.trim());
@@ -182,14 +182,18 @@ function gpAccRenderCat() {
   box.hidden = false;
   const head = { enrolled: '✅ Enrolled', already: '👤 Already members', skipped: '⏭ Skipped', error: '⚠️ Needs review' }[cat] || cat;
   gpAccHtml(box, `<div class="acr-cat-h">${head} (${list.length})</div>` + (list.length
-    ? list.map(g => `<div class="acr-cat-row"><b>${escapeHtml(g.name || 'Guest')}</b><small>${g.conf ? 'Conf. ' + escapeHtml(g.conf) + ' · ' : ''}${escapeHtml(gpTryWords(g.status))}</small></div>`).join('')
+    ? list.map(g => `<div class="acr-cat-row"><b>${escapeHtml(g.name || 'Guest')}</b><small>${g.conf ? 'Conf. ' + escapeHtml(g.conf) + ' · ' : ''}${escapeHtml(gpTryWords(g.status))}${gpCountryWords(g)?'<br>'+escapeHtml(gpCountryWords(g)):''}</small></div>`).join('')
     : '<div class="acr-cat-row"><small>None in this group.</small></div>'));
+}
+function gpCountryWords(row) {
+  const a = row && row.countryAudit;
+  return a && a.fallback ? 'Country fallback: ' + a.selected + ' · source: ' + (a.requested || 'missing') + ' · ' + (a.reason === 'country_missing' ? 'no country provided' : 'source country unavailable in portal') : '';
 }
 function gpTryWords(st) {
   const s = String(st || '');
   return /^success/.test(s) ? 'enrolled' : /already/.test(s) ? 'already an ALL member' : /submission_uncertain/.test(s) ? 'Submission outcome uncertain after a portal reload — verify it in Accor before retrying. Automatic re-submission is held.' : /bad_email/.test(s) ? 'The Accor portal returned “email undeliverable” for this attempt. The address has not been changed; compare this guest with the working extension.'
-    : /country_missing/.test(s) ? 'country missing — enter it before retrying; nothing was submitted'
-    : /name_not_latin/.test(s) ? 'No usable first and family name after normalization — review the actual guest name; nothing submitted' : /bad_name/.test(s) ? 'The portal refused the name' : /country_not_found/.test(s) ? 'country not found in the portal list'
+    : /country_missing/.test(s) ? 'country missing in this earlier attempt — new cloud runs use UAE fallback'
+    : /name_not_latin/.test(s) ? 'No usable first and family name after normalization — review the actual guest name; nothing submitted' : /bad_name/.test(s) ? 'The portal refused the name' : /country_not_found/.test(s) ? (/UAE fallback unavailable/.test(s) ? 'Source country and UAE fallback could not be selected; nothing submitted' : 'country not found in the portal list')
     : /bad_data/.test(s) ? 'the portal refused the data' : /title/.test(s) ? 'title could not be set' : s.replace(/^skipped:\s*/, '').replace(/_/g, ' ');
 }
 function gpCanEnroll(r) { const t = gpTracked(r); return gpEligible(r) && !(t && GP_DONE_RE.test(t.status)); }
@@ -227,7 +231,7 @@ function gpRenderSummary() {
     <span class="gp-stat warn"><b>${n(r => !r.email)}</b> no email / OTA</span>
     <span class="gp-stat info"><b>${n(r => gpTracked(r))}</b> already in the tracker</span>
     <span class="gp-stat ${ready ? 'ok' : ''}"><b>${ready}</b> selected with agreement + civility</span>
-    ${cloud.held.length?`<span class="gp-stat warn"><b>${cloud.held.length}</b> held before cloud enrolment — enter their country in Review details</span>`:''}`;
+    ${cloud.fallback.length?`<span class="gp-stat warn"><b>${cloud.fallback.length}</b> use UAE fallback · source country missing</span>`:''}`;
   const all = document.getElementById('gpAllConsent');
   if (all) { const can = gpRows.filter(gpCanEnroll); all.checked = can.length > 0 && can.every(r => r.consent); }
   const btn = document.getElementById('gpCopyEnroll');
@@ -346,12 +350,12 @@ async function gpAccControl(action) {
   } catch (e) { showToast('Could not send control command: ' + e.message, 'err'); }
 }
 async function gpAccCloudRestart() {
-  const {rows,held}=gpCloudSelection();
+  const {rows}=gpCloudSelection();
   const url = (document.getElementById('gpAccorUrl')?.value || '').trim();
   const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
-  if (!gpValidAccorUrl(url) || !rows.length) { showToast(held.length?'Enter the held guests’ country in Review details first.':'Review the selected guests and the enrolment portal link first', 'err'); return; }
+  if (!gpValidAccorUrl(url) || !rows.length) { showToast('Review the selected guests and the enrolment portal link first', 'err'); return; }
   const destination=window.GPEnrollmentLinks?.selected(url),portalName=destination?.name||'';
-  if (!confirm(`Start the enrolment again for ${rows.length} ready guest(s)${portalName?' · '+portalName:''}?${held.length?' '+held.length+' selected guest(s) without a country stay held.':''}`)) return;
+  if (!confirm(`Start the enrolment again for ${rows.length} ready guest(s)${portalName?' · '+portalName:''}? UAE is used if a country is missing or unavailable in the portal.`)) return;
   gpCloudTag = 'acc' + Date.now().toString(36);
   try {
     await fbSet('enrollLive', { at: Date.now(), started: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: rows.length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
@@ -365,11 +369,11 @@ async function gpAccCloudRestart() {
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function gpAccCloudEnroll(test) {
-  const {rows,held} = gpCloudSelection(); if (!rows.length) { showToast(held.length?'Enter the held guests’ country in Review details first.':'Tick Agreed and choose a civility first', 'err'); return; }
+  const {rows} = gpCloudSelection(); if (!rows.length) { showToast('Tick Agreed and choose a civility first', 'err'); return; }
   const url = (document.getElementById('gpAccorUrl')?.value || '').trim();
   if (!gpValidAccorUrl(url)) { showToast('Enter a valid HTTPS enrolment link on secure.guestinternet.com first', 'err'); return; }
   const destination=window.GPEnrollmentLinks?.selected(url),portalName=destination?.name||'';
-  if (!test && !confirm(`Run the cloud enrolment for ${rows.length} ready guest(s)${portalName?' · '+portalName:''}? Only guests marked Agreed will be sent.${held.length?' '+held.length+' selected guest(s) without a country stay held.':''}`)) return;
+  if (!test && !confirm(`Run the cloud enrolment for ${rows.length} ready guest(s)${portalName?' · '+portalName:''}? Only guests marked Agreed will be sent. UAE is used if a country is missing or unavailable in the portal.`)) return;
   gpCloudTag = 'acc' + Date.now().toString(36); const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
   gpSaveAccorUrl(url);
   try {
@@ -381,7 +385,7 @@ async function gpAccCloudEnroll(test) {
     gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'GitHub accepted the run · waiting for a cloud computer…', con: [{ t: Date.now(), g: 'GH', m: 'Run requested from HotelOps · ' + rows.length + ' guest(s) who agreed' }] });
     gpAccorRunWin(true);
     gpAccPoll(gpCloudTag);
-    showToast((test ? '🧪 Test started — nothing will be submitted' : '☁️ Enrolment started')+(held.length?' · '+held.length+' without a country stay in review':''), 'ok');
+    showToast((test ? '🧪 Test started — nothing will be submitted' : '☁️ Enrolment started'), 'ok');
   } catch (e) { showToast(e.message, 'err'); gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'error', step: 'error', note: e.message, con: [{ t: Date.now(), g: 'ERR', m: e.message }] });
     try { await fbUpdate('enrollLive', { at: Date.now(), state: 'error', step: 'error', tag: gpCloudTag, note: 'Not started: ' + e.message }); } catch (_) {} }   // every device (and 🗂 Runs) sees it stopped
 }
@@ -452,7 +456,7 @@ function gpSaveReviewed(i) {
   Object.assign(r,{name,email,nat:get('nat').replace(/[\t\r\n|]+/g,' '),phone:get('phone').replace(/[\t\r\n|]+/g,' '),flag:'',emailWas:'',reviewed:true});
   if(recipientChanged)r.consent=false;
   GP_REVIEW_DRAFTS.delete(r.reviewKey);editor.open=false;gpSaveDraft();gpRender();gpQuickPaint();
-  showToast(recipientChanged?'Details saved. Recheck Agreed for this guest.':gpCountryMissing(r)?'Details saved; the country is still needed before cloud enrolment.':'Details saved','ok');
+  showToast(recipientChanged?'Details saved. Recheck Agreed for this guest.':gpCountryMissing(r)?'Details saved; UAE will be used if the country is missing.':'Details saved','ok');
 }
 /** Build the enroll sheet from any guest list (Opera reader, an uploaded Purpose/Excel sheet…) — only real, non-OTA e-mails. */
 function gpEnrollFromList(list, source, emptyMsg) {
@@ -508,18 +512,18 @@ function gpQuickPaint() {
   gpAutoTitles();
   const sub = document.getElementById('gqSub'); if (sub) sub.textContent = can.length + ' guest' + (can.length === 1 ? '' : 's') + ' can be enrolled · tick only the ones who said YES · titles fill themselves';
   const srcNote = GP_SOURCE === 'opera' ? `<div class="gq-src">📡 These came from the <b>Opera reader</b> (guests you opened with a real e-mail). Opera does not know who agreed to join ALL — tick only the guests who actually said yes.</div>`
-    : GP_SOURCE === 'sheet' ? `<div class="gq-src">📄 From the <b>uploaded sheet</b> (guests with an e-mail). Check the country is filled and tick only the guests who agreed to join ALL.</div>`
+    : GP_SOURCE === 'sheet' ? `<div class="gq-src">📄 From the <b>uploaded sheet</b> (guests with an e-mail). Check the guest details and tick only the guests who agreed to join ALL.</div>`
     : GP_SOURCE === 'neorcha' ? `<div class="gq-src">🪪 From the <b>Neorcha cards</b>. Tick only the guests who agreed to join ALL.</div>` : '';
   const portalPicker=window.GPEnrollmentLinks?GPEnrollmentLinks.html('gq',url):`<label class="gq-url"><span>🔗 Enrolment portal link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>`;
-  body.innerHTML = `${srcNote}${portalPicker}
+  body.innerHTML = `${srcNote}<div class="gq-src">Country: keep the matching source country; use <b>UAE</b> if it is missing or unavailable in the portal. Fallbacks are marked in the results.</div>${portalPicker}
     ${can.length ? `<div class="gq-bar"><span>Tap a guest to tick them</span><button type="button" class="btn sm" onclick="gpQuickAll(${can.every(([r]) => r.consent) ? 'false' : 'true'})">${can.every(([r]) => r.consent) ? '✕ Untick all' : '✓ Tick all'}</button></div><div class="gq-list">${can.map(([r, i]) => `<div class="gq-row${r.consent ? ' on' : ''}" onclick="if(!event.target.closest('.gq-title,input,label,button,details,summary'))gpQuickTick(${i})">
       <label class="gq-yes"><input type="checkbox" ${r.consent ? 'checked' : ''} onchange="gpSet(${i},'consent',this.checked);gpQuickPaint()"><span>Agreed</span></label>
-      <div class="gq-who"><b>${escapeHtml(r.name || '—')}</b><small>${r.room ? 'Room ' + escapeHtml(r.room) + ' · ' : ''}${escapeHtml(r.email)}${r.phone ? ' · 📞' : ''}${r.nat ? ' · ' + escapeHtml(r.nat) : ''}</small>${gpTracked(r) ? `<small class="gq-last">Last try ${escapeHtml(gpTracked(r).date || '')}: ${escapeHtml(gpTryWords(gpTracked(r).status))}</small>` : ''}</div>
-      <button type="button" class="gq-title ${escapeHtml(r.civSrc || 'guess')}" onclick="gpCycleTitle(${i})" title="Filled by itself — tap to change">${escapeHtml(r.civility || 'Mr')}<small>${{ card: 'from card', name: 'from name', you: 'set by you' }[r.civSrc] || 'guessed · tap'}</small></button>${gpCountryMissing(r)?'<p class="gq-missing">Country needed · held before cloud enrolment</p>':''}${gpReviewEditor(r,i)}</div>`).join('')}</div>`
+      <div class="gq-who"><b>${escapeHtml(r.name || '—')}</b><small>${r.room ? 'Room ' + escapeHtml(r.room) + ' · ' : ''}${escapeHtml(r.email)}${r.phone ? ' · 📞' : ''}${r.nat ? ' · ' + escapeHtml(r.nat) : ''}</small>${gpTracked(r) ? `<small class="gq-last">Last try ${escapeHtml(gpTracked(r).date || '')}: ${escapeHtml(gpTryWords(gpTracked(r).status))}${gpCountryWords(gpTracked(r))?'<br>'+escapeHtml(gpCountryWords(gpTracked(r))):''}</small>` : ''}</div>
+      <button type="button" class="gq-title ${escapeHtml(r.civSrc || 'guess')}" onclick="gpCycleTitle(${i})" title="Filled by itself — tap to change">${escapeHtml(r.civility || 'Mr')}<small>${{ card: 'from card', name: 'from name', you: 'set by you' }[r.civSrc] || 'guessed · tap'}</small></button>${gpCountryMissing(r)?'<p class="gq-missing">UAE fallback · source country missing</p>':''}${gpReviewEditor(r,i)}</div>`).join('')}</div>`
       : '<div class="acr-empty">None of these guests can be enrolled (no e-mail, already members or already enrolled).</div>'}
     ${off.length ? `<details class="gq-off"><summary>${off.length} guest${off.length === 1 ? '' : 's'} left out</summary>${off.map(r => `<div><b>${escapeHtml(r.name || r.conf)}</b> · ${escapeHtml(why(r))}${gpReviewEditor(r,gpRows.indexOf(r))}</div>`).join('')}</details>` : ''}`;
   const selection=gpCloudSelection(),ready = selection.rows.filter(r => !r.member), ticked = can.filter(([r]) => r.consent).length, noCiv = can.filter(([r]) => r.consent && !r.civility).length;
-  if (foot) foot.innerHTML = `<div class="gq-count"><b>${ready.length}</b> ready${selection.held.length?` · <span class="gq-warn">${selection.held.length} need a country</span>`:''}${noCiv ? ` · <span class="gq-warn">${noCiv} ticked without Mr/Ms</span>` : ''}${!ticked ? ' · tick who said yes' : ''}</div>
+  if (foot) foot.innerHTML = `<div class="gq-count"><b>${ready.length}</b> ready${selection.fallback.length?` · <span class="gq-warn">${selection.fallback.length} use UAE fallback</span>`:''}${noCiv ? ` · <span class="gq-warn">${noCiv} ticked without Mr/Ms</span>` : ''}${!ticked ? ' · tick who said yes' : ''}</div>
     <button type="button" class="btn" onclick="gpQuickGo(true)"${ready.length ? '' : ' disabled'}>🧪 Test</button><button type="button" class="btn gold" onclick="gpQuickGo(false)"${ready.length ? '' : ' disabled'}>☁️ Enroll ${ready.length || ''} guest${ready.length === 1 ? '' : 's'}</button>`;
   body.querySelectorAll('details[data-gq-review]').forEach(editor=>{const r=gpRows[+editor.dataset.gqReview],draft=r&&GP_REVIEW_DRAFTS.get(r.reviewKey);if(draft){editor.open=true;editor.querySelectorAll('[data-gq-field]').forEach(el=>{if(el.dataset.gqField in draft)el.value=draft[el.dataset.gqField];});}});
   body.scrollTop=scroll;
@@ -687,7 +691,7 @@ function gpCloudPaint(v) {
   gpAccHtml(body, `<div data-acr-key="bar" class="acr-bar ${st.state}"><i style="width:${pct}%"></i></div>
     <ol data-acr-key="steps" class="acr-steps">${GP_ACC_STEPS.map(([id, ic, lb], i) => { const s2 = st.state === 'done' || i < st.k ? 'ok' : i === st.k ? (st.state === 'error' ? 'bad' : st.state === 'stopped' ? 'stop' : 'now') : '';
       return `<li class="${s2}"><span class="d">${s2 === 'ok' ? '✓' : s2 === 'bad' ? '!' : s2 === 'stop' ? '■' : ic}</span><span class="l">${escapeHtml(lb)}${id === 'enroll' && n ? ` <em>${done} / ${n}</em>` : ''}</span>${s2 === 'now' ? '<span class="sp"></span>' : ''}</li>`; }).join('')}</ol>
-    ${cg && st.state === 'run' ? `<div data-acr-key="guest" class="acr-guest"><span>👤</span><div><b>Guest ${escapeHtml(String(cg.index || '?'))} of ${escapeHtml(String(cg.total || n || '?'))}: ${escapeHtml(cg.title || '')} ${escapeHtml(cg.name || '')}</b><small>Confirmation ${escapeHtml(String(cg.conf || '—'))} · ${escapeHtml(String(cg.country || '—'))} · phone ${escapeHtml(String(cg.phone || '—'))}</small></div></div>` : ''}
+    ${cg && st.state === 'run' ? `<div data-acr-key="guest" class="acr-guest"><span>👤</span><div><b>Guest ${escapeHtml(String(cg.index || '?'))} of ${escapeHtml(String(cg.total || n || '?'))}: ${escapeHtml(cg.title || '')} ${escapeHtml(cg.name || '')}</b><small>Confirmation ${escapeHtml(String(cg.conf || '—'))} · ${escapeHtml(String(cg.country || '—'))} ${cg.countryAudit?.fallback?' (UAE fallback; source: '+escapeHtml(cg.countryAudit.requested||'missing')+')':''} · phone ${escapeHtml(String(cg.phone || '—'))}</small></div></div>` : ''}
     <div data-acr-key="tiles" class="acr-tiles">${tile('✅', test ? 'Checked' : 'Enrolled', ty ? (test ? done : +ty.enrolled || 0) : '—', 'ok', 'enrolled')}${tile('👤', 'Already members', ty ? +ty.already || 0 : '—', 'info', 'already')}${tile('⏭', 'Skipped', ty ? +ty.skipped || 0 : '—', 'warn', 'skipped')}${tile('⚠️', 'Errors', ty ? +ty.errors || 0 : '—', 'bad', 'error')}</div><div class="acr-cat" id="acrCat" hidden></div>
     <div data-acr-key="note" class="acr-note ${st.state}">${icon} ${escapeHtml(st.note || '…')}${!ty && done ? '<small class="acr-reconnecting">Last guest position restored. Result totals are reconnecting; — means unavailable.</small>' : ''}</div>
     <div data-acr-key="actions" class="acr-act">${active ? `<button type="button" class="btn" onclick="gpAccControl('stop')">■ Stop after this guest</button>` : ''}${!active && live && live.step !== 'queued' ? `<button type="button" class="btn" onclick="gpAccCloudRestart()">▶ Run again</button>` : ''}${st.url ? `<a class="btn" href="${escapeHtml(st.url)}" target="_blank" rel="noopener">Open on GitHub ↗</a>` : ''}${st.state === 'run' ? '<span class="acr-hint">You can close this — the cloud computer keeps going and the results land in the tracker.</span>' : ''}</div>`);
@@ -820,7 +824,7 @@ function gpRenderTracker() {
       <div class="gp-kpi"><div class="gp-kpi-n">${counts.review}</div><div class="gp-kpi-l">Needs review / not sent</div></div>
     </div>
     ${recent.length ? `<table class="gp-table" style="margin-top:10px;"><thead><tr><th>Date</th><th>Guest</th><th>Email</th><th>Result</th></tr></thead><tbody>
-      ${recent.map(x => `<tr><td style="font-family:var(--mono);font-size:.7rem;">${escapeHtml(x.date || '')}</td><td>${escapeHtml(x.name || '')}</td><td style="font-size:.74rem;">${escapeHtml(x.email)}</td><td>${escapeHtml(x.status)}</td></tr>`).join('')}
+      ${recent.map(x => `<tr><td style="font-family:var(--mono);font-size:.7rem;">${escapeHtml(x.date || '')}</td><td>${escapeHtml(x.name || '')}</td><td style="font-size:.74rem;">${escapeHtml(x.email)}</td><td>${escapeHtml(x.status)}${gpCountryWords(x)?'<br><small>'+escapeHtml(gpCountryWords(x))+'</small>':''}</td></tr>`).join('')}
     </tbody></table>` : '<div style="font-size:.76rem;color:var(--text3);margin-top:8px;">Nothing logged yet.</div>'}`;
   const badge = document.getElementById('badge-pipeline');
   if (badge) badge.textContent = c('submitted') || '—';

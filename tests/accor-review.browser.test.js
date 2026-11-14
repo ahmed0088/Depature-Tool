@@ -13,8 +13,8 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
     gpAccGh=async(path,options)=>operations.push({dispatch:path,options});gpAccPoll=()=>{};gpAccorRunWin=()=>{};gpCloudPaint=()=>{};
     window.cards=[{conf:'1',name:'Example One',email:'one@example.test',nat:'Turkey'},{conf:'2',name:'Example Two',email:'two@example.test',nat:''},{conf:'3',name:'Known Member',email:'member@example.test',nat:'Canada',member:true},{conf:'4',name:'Example Four',email:'four@example.test',nat:'NA'},{conf:'5',name:'Address Needed',email:'bad',nat:'India'}];window.originalCards=JSON.stringify(cards);gpLog[gpLogKey('one@example.test')]={status:'bad_email'};gpQuickEnroll(cards,'neorcha');gpRows.forEach(r=>{r.consent=true});gpQuickPaint();
    });
-   assert.match(await page.locator('#gqFoot').innerText(),/2.*ready/s);assert.match(await page.locator('#gqFoot').innerText(),/1 need a country/);assert.equal(await page.locator('#gqEdit-2').count(),0,'known members cannot be edited into a new submission');
-   assert.deepEqual(await page.evaluate(()=>gpCloudSelection().rows.map(r=>r.conf)),['1','4']);
+   assert.match(await page.locator('#gqFoot').innerText(),/3.*ready/s);assert.match(await page.locator('#gqFoot').innerText(),/1 use UAE fallback/);assert.equal(await page.locator('#gqEdit-2').count(),0,'known members cannot be edited into a new submission');
+   assert.deepEqual(await page.evaluate(()=>gpCloudSelection().rows.map(r=>r.conf)),['1','2','4']);
    await page.locator('#gqUrl').fill('https://secure.guestinternet.com/portal-system/portal/?hotel=example');
    await page.locator('#gqEdit-1>summary').click();await page.locator('#gqEdit-1 [data-gq-field=nat]').fill('United Arab Emirates');if(width===390&&process.env.ACCOR_REVIEW_SCREENSHOT)await page.screenshot({path:process.env.ACCOR_REVIEW_SCREENSHOT});
    await page.evaluate(()=>{gpQuickTick(0)});assert.equal(await page.locator('#gqEdit-1').evaluate(el=>el.open),true);assert.equal(await page.locator('#gqEdit-1 [data-gq-field=nat]').inputValue(),'United Arab Emirates','unsaved detail text survives another row repaint');
@@ -29,10 +29,10 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
    await page.locator('#gqEdit-0 [data-gq-field=email]').fill('corrected@example.test');await page.locator('#gqEdit-0 button').click();
    await page.locator('#gqEdit-1>summary').click();await page.locator('#gqEdit-1 [data-gq-field=nat]').fill('');await page.locator('#gqEdit-1 button').click();
    await page.evaluate(()=>{gpRows[0].consent=true;gpRows[1].consent=true;gpRows[2].consent=true;gpRows[3].consent=true;gpQuickPaint()});
-   assert.match(await page.locator('#gqFoot').innerText(),/1 need a country/);assert(await page.locator('.gq-card').evaluate(el=>el.getBoundingClientRect().right<=innerWidth+1),'review fits screen');
-   await page.locator('#gqFoot .gold').click();const operations=await page.evaluate(()=>window.operations),job=operations.find(o=>o.path==='enrollJob');assert.equal(job.value.n,2);assert(job.value.tsv.includes('corrected@example.test'));assert(!job.value.tsv.includes('two@example.test'));assert(!job.value.tsv.includes('member@example.test'));assert.equal(operations.filter(o=>o.dispatch==='/dispatches').length,1);
+   assert.match(await page.locator('#gqFoot').innerText(),/1 use UAE fallback/);assert(await page.locator('.gq-card').evaluate(el=>el.getBoundingClientRect().right<=innerWidth+1),'review fits screen');
+   await page.locator('#gqFoot .gold').click();const operations=await page.evaluate(()=>window.operations),job=operations.find(o=>o.path==='enrollJob');assert.equal(job.value.n,3);assert(job.value.tsv.includes('corrected@example.test'));assert(job.value.tsv.includes('two@example.test'),'missing countries use the authorized fallback');assert(!job.value.tsv.includes('member@example.test'));assert.equal(operations.filter(o=>o.dispatch==='/dispatches').length,1);
    assert.deepEqual(errors,[]);if(width===390)await page.screenshot({path:'/tmp/hotelops-enrolment-review581.png'});await page.close();
   }
-  console.log('Enrolment review desktop/phone passed: country holds, local reviewed details, consent reset, source/hotel isolation, OTA/typo guards, edit preservation and ready-only cloud dispatch. All external actions mocked.');
+  console.log('Enrolment review desktop/phone passed: visible UAE fallback, local reviewed details, consent reset, source/hotel isolation, OTA/typo guards, edit preservation and ready-only cloud dispatch. All external actions mocked.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1)});

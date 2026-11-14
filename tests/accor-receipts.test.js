@@ -40,3 +40,8 @@ test('unknown submissions count as errors and are excluded from automatic guest 
  const pipeline=fs.readFileSync('guest-pipeline.js','utf8'),a=pipeline.indexOf('const GP_DONE_RE'),b=pipeline.indexOf('/**',a);const done=new Function(pipeline.slice(a,b)+';return GP_DONE_RE;')();assert(done.test('submission_uncertain'));assert(!done.test('bad_email'));
  const fn=pipeline.slice(pipeline.indexOf('function gpTryWords('),pipeline.indexOf('function gpCanEnroll('));const words=new Function(fn+';return gpTryWords;')();assert.match(words('submission_uncertain'),/verify it in Accor/i);assert.match(words('bad_email'),/working extension/);
 });
+
+
+test('the exact country fallback survives a portal redirect without resubmitting',async()=>{
+ const f=fixture(),countryAudit={requested:'Unknownland',selected:'United Arab Emirates',fallback:true,reason:'country_not_in_portal'},rec={...guest,countryAudit};await f.ledger.begin(rec,0);f.ledger.capture({status:200,body:'{}'},f.ledger.current());const recovered=await f.resume().recover(guest,0);assert.equal(recovered.status,'success');assert.deepEqual(recovered.countryAudit,countryAudit);
+});

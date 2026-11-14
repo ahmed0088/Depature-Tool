@@ -35,7 +35,7 @@
     return {
       classify,
       async begin(rec, index) {
-        active = { key: identity(rec, index), id: Date.now() + ":" + Math.random().toString(36).slice(2), index, at: Date.now(), outcome: null };
+        active = { key: identity(rec, index), id: Date.now() + ":" + Math.random().toString(36).slice(2), index, at: Date.now(), outcome: null, ...(rec.countryAudit ? {countryAudit:rec.countryAudit} : {}) };
         await write(active); // persisted BEFORE clicking submit
       },
       current() { return active && { ...active }; },
@@ -51,7 +51,7 @@
         const wanted = identity(rec, index), candidates = [sessionRead(), await storage.get(key)].filter(r => r && r.key === wanted).sort((a,b) => b.at - a.at);
         const latest = candidates[0], receipt = latest && (candidates.find(r => r.id === latest.id && r.outcome) || latest);
         if (!receipt) return null;
-        return { status: receipt.outcome || "submission_uncertain", recovered: true, httpStatus: receipt.httpStatus || null };
+        return { status: receipt.outcome || "submission_uncertain", recovered: true, httpStatus: receipt.httpStatus || null, ...(receipt.countryAudit ? {countryAudit:receipt.countryAudit} : {}) };
       },
       async clear() { active = null; await write(null); }
     };
@@ -154,6 +154,25 @@
       .toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
   }
   function sameCountry(a, b) { const key = countryKey(a); return !!key && key === countryKey(b); }
+
+  // Explicit user policy: preserve a matching source country, otherwise use UAE.
+  // The dropdown picker remains strict; this is a visible substitution, not a guessed identity.
+  async function pickEnrollmentCountry(rec) {
+    const requested = String(rec.countryRaw == null ? rec.country || "" : rec.countryRaw).trim().slice(0, 80);
+    const desired = mapCountry(rec.country || requested), fallbackCountry = "United Arab Emirates";
+    let selected = desired, ok = !!desired && await pickReactSelectByLabel("Country", desired), usedFallback = false;
+    if (!ok && !sameCountry(desired, fallbackCountry)) {
+      selected = fallbackCountry;
+      log("  COUNTRY FALLBACK · source: " + (requested || "missing") + " · trying United Arab Emirates", "warn");
+      ok = await pickReactSelectByLabel("Country", fallbackCountry);
+      usedFallback = !!ok;
+    }
+    rec.countryAudit = { requested, selected: ok ? selected : "", fallback: usedFallback,
+      reason: usedFallback ? (desired ? "country_not_in_portal" : "country_missing") : ok ? "matched" : "fallback_unavailable" };
+    if (usedFallback) log("  COUNTRY FALLBACK · using United Arab Emirates · source country kept unchanged", "info");
+    if (!ok) log("  Country selection failed, including the UAE fallback; nothing will be submitted", "warn");
+    return !!ok;
+  }
 
   function sanitizePhone(raw) {
     if (!raw) return "";
@@ -944,7 +963,9 @@
   }
 
   async function processOne(rec, idx, total) {
-    await cset({ [CURRENT_KEY]: { index: idx + 1, total, conf: rec.conf, name: rec.first_name + " " + rec.last_name, title: rec.title, country: rec.country, phone: rec.phone ? "provided" : "not provided", email: "provided" } });
+    const current = { index: idx + 1, total, conf: rec.conf, name: rec.first_name + " " + rec.last_name, title: rec.title, country: rec.country, phone: rec.phone ? "provided" : "not provided", email: "provided" };
+    await cset({ [CURRENT_KEY]: current });
+    const recordResult = row => results.push({ ...row, ...(rec.countryAudit ? {countryAudit:rec.countryAudit} : {}) });
     log("═════ [" + (idx + 1) + "/" + total + "] " + rec.first_name + " " + rec.last_name + " · " + rec.conf + " ═════");
     log("  guest: " + rec.title + " " + rec.first_name + " " + rec.last_name + " · " + rec.email + " · " + (rec.phone || "no phone") + " · " + rec.country);
     if (rec.emailFixedFrom) log("  fixed a typo in the e-mail: " + rec.emailFixedFrom + " -> " + rec.email);
@@ -955,7 +976,8 @@
 
     const recovered = await receipts.recover(rec, idx);
     if (recovered) {
-      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: recovered.status });
+      if (recovered.countryAudit) rec.countryAudit = recovered.countryAudit;
+      recordResult({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: recovered.status });
       log("  GUEST RESULT · " + (recovered.status === "success" ? "ENROLLED" : "REVIEW") + " · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · " + recovered.status + " · recovered after portal reload; not submitted again");
       await persist(idx + 1);
       await receipts.clear();
@@ -965,16 +987,10 @@
     if (!rec.nameOk) {
       log("  name has no first AND last name in Latin letters — skipped (the portal accepts only A–Z)", "warn");
       const actualName = rec.originalName || rec.first_name + " " + rec.last_name;
-      results.push({ email: rec.email, conf: rec.conf, name: actualName, status: "skipped: name_not_latin" });
+      recordResult({ email: rec.email, conf: rec.conf, name: actualName, status: "skipped: name_not_latin" });
       log("  GUEST RESULT · SKIPPED · " + actualName + " · " + (rec.conf || "no confirmation") + " · no usable first/family name pair; nothing submitted");
       await persist(idx + 1);
       return { status: "skipped: name_not_latin" };
-    }
-    if (!String(rec.country || "").trim()) {
-      const status = "skipped: country_missing";
-      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status });
-      log("  GUEST RESULT · SKIPPED · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · country missing; nothing submitted");
-      await persist(idx + 1); return { status };
     }
     await goHome();
     await openSignupForm();
@@ -999,21 +1015,22 @@
     }
     if (!titleOk) {
       log("  Title selection failed — skipping this record", "warn");
-      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: "skipped: title_not_committed" });
+      recordResult({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: "skipped: title_not_committed" });
       log("  GUEST RESULT · SKIPPED · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · title was not committed");
       await persist(idx + 1);
       return { status: "title_not_committed" };
     }
+    const countryOk = await pickEnrollmentCountry(rec);
+    if (!countryOk) {
+      const status = "skipped: country_not_found: " + (rec.countryRaw || rec.country || "missing") + " (UAE fallback unavailable)";
+      recordResult({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status });
+      log("  GUEST RESULT · SKIPPED · country and UAE fallback unavailable; nothing submitted", "warn");
+      await persist(idx + 1); return { status };
+    }
+    await cset({ [CURRENT_KEY]: {...current, country:rec.countryAudit.selected, countryAudit:rec.countryAudit} });
     if (diagnosticOnly) {
-      const countryOk = await pickReactSelectByLabel("Country", rec.country);
-      if (!countryOk) {
-        const status = "skipped: country_not_found: " + rec.country;
-        results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status });
-        log("  DIAGNOSTIC: country could not be selected; nothing submitted", "warn");
-        await persist(idx + 1); return { status };
-      }
       log("DIAGNOSTIC: title and country selection committed; stopping before typing or submission", "info");
-      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: "test: form_ready" });
+      recordResult({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: "test: form_ready" });
       log("  GUEST RESULT · TEST ONLY · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · no submission made");
       await persist(idx + 1);
       return { status: "diagnostic_form_ready" };
@@ -1022,16 +1039,6 @@
     await humanType(inputByLabel("Family name"), rec.last_name);
     await humanType(inputByLabel("Email address"), rec.email);
     if (phEl) await humanType(phEl, rec.phone);
-    const cOk = await pickReactSelectByLabel("Country", rec.country);
-
-    if (cOk === false) {
-      const status = "skipped: country_not_found: " + rec.country;
-      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: status });
-      log("  GUEST RESULT · SKIPPED · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · country not found: " + rec.country);
-      await persist(idx + 1);
-      return { status: status };
-    }
-
     const submit = await waitFor(() => {
       return document.querySelector("button[type=submit]") ||
              findByText("button", "Become a member");
@@ -1071,7 +1078,7 @@
     if (refusedName) status = "bad_name";
     log("  ✅ result: " + status);
 
-    results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: status });
+    recordResult({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: status });
     const enrolled = status === "success" || status === "success_stuck";
     log("  GUEST RESULT · " + (enrolled ? "ENROLLED" : status === "already_member" ? "ALREADY ENROLLED" : "NOT ENROLLED") + " · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · " + status);
     await persist(idx + 1);
@@ -1109,8 +1116,8 @@
       log("  ❌ " + records[i].email + ": " + e.message, "error");
       status = "error: " + e.message;
       const inFlight = await receipts.recover(records[i], i);
-      if (inFlight) status = inFlight.status;
-      results.push({ email: records[i].email, conf: records[i].conf, name: records[i].first_name + " " + records[i].last_name, status: inFlight ? status : "skipped: " + status });
+      if (inFlight) { status = inFlight.status; if (inFlight.countryAudit) records[i].countryAudit = inFlight.countryAudit; }
+      results.push({ email: records[i].email, conf: records[i].conf, name: records[i].first_name + " " + records[i].last_name, status: inFlight ? status : "skipped: " + status, ...(records[i].countryAudit ? {countryAudit:records[i].countryAudit} : {}) });
       await persist(i + 1);   // advance past the failed record
       await receipts.clear();
       log("  GUEST RESULT · SKIPPED · " + records[i].first_name + " " + records[i].last_name + " · " + (records[i].conf || "no confirmation") + " · " + status);

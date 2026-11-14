@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 584, items: [
+    { ico: '🌍', title: 'UAE fallback for enrolment countries',
+      what: 'Enrolment first tries the guest’s reported country. If it is missing or cannot be matched in the portal, it selects United Arab Emirates instead.',
+      does: 'Missing countries can now stay in your selected list. The live guest, result details and tracker mark each fallback with its source country and reason. The source Opera/Neorcha data stays unchanged. This applies to new cloud enrolment runs.' }
+  ] },
   { v: 583, items: [
     { ico: '📊', title: 'Enrolment figures stay visible',
       what: 'The live window remembers confirmed enrolment totals after closing or reopening the app. Portal reloads no longer reset the figures to zero.',
