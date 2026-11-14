@@ -27,6 +27,9 @@ jobs:
       - name: Mobile chat lifecycle checks
         run: node tests/chat-mobile.test.js
 
+      - name: BackTrack appearance and touch controls
+        run: node tests/backtrack.browser.test.js
+
       - name: Run history checks
         run: node tests/run-history.test.js
       - name: Run history on mobile

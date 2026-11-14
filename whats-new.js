@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 585, items: [
+    { ico: '⌨', title: 'BackTrack · a new app style',
+      what: 'Choose Theme → BackTrack for a charcoal and crimson look with terminal typography, crisp panels and a redesigned shift dashboard.',
+      does: 'The style covers sign-in, menus, reports, settings, package editors, dropdowns, cloud consoles and team chat. Phone actions fit their screen, menus open solidly, and result colours stay distinct. Your theme choice is personal and remembered.' }
+  ] },
   { v: 584, items: [
     { ico: '🌍', title: 'UAE fallback for enrolment countries',
       what: 'Enrolment first tries the guest’s reported country. If it is missing or cannot be matched in the portal, it selects United Arab Emirates instead.',

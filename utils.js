@@ -333,6 +333,7 @@ const HO_THEMES = {
   'sakura': { label: 'Sakura', emoji: '🌸', base: 'opera', skin: 'sakura', bg: '#fae6ee', a: '#db2777', btn: '#ffffff' },
   'sand': { label: 'Desert', emoji: '🏜', base: 'opera', skin: 'sand', bg: '#f1e7d6', a: '#b45309', btn: '#ffffff' },
   // App styles (themes-pro.css): the whole app dressed like an app people know
+  'backtrack': { label: 'BackTrack', emoji: '⌨', group: 'style', base: 'night-ops', skin: 'backtrack', bg: '#090b10', a: '#ff647c', btn: '#ffffff' },
   'notes':    { label: 'Apple Notes', emoji: '📝', group: 'style', base: 'opera', skin: 'notes', bg: '#f6f5f0', a: '#e0a800', btn: '#1c1c1e' },
   'whatsapp': { label: 'WhatsApp', emoji: '💬', group: 'style', base: 'opera', skin: 'whatsapp', bg: '#efeae2', a: '#00a884', btn: '#ffffff' },
   'telegram': { label: 'Telegram', emoji: '✈️', group: 'style', base: 'opera', skin: 'telegram', bg: '#dfe8cf', a: '#3390ec', btn: '#ffffff' },
@@ -667,7 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v584';
+const APP_VERSION = 'v585';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;
