@@ -1,0 +1,25 @@
+name: IN-Gauge monthly read-only investigation
+on:
+  push:
+    branches: ['study/monthly-20261114-readonly']
+    paths: ['scripts/ingauge-monthly-read.cjs', 'scripts/monthly-read-public.pem', '.github/workflows/ingauge-monthly-read.yml']
+permissions:
+  contents: read
+concurrency:
+  group: ingauge-monthly-readonly
+  cancel-in-progress: false
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Read saved snapshot without changing sales
+        run: node scripts/ingauge-monthly-read.cjs
+        env:
+          HOTELOPS_HOTEL: ibis_dubai
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
