@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 588, items: [
+    { ico: '🔎', title: 'Recognize Opera guests due to check out',
+      what: 'The manual audit and monthly breakdown now recognize Opera’s DUOT reservation status when matching journal postings to confirmations.',
+      does: 'This removes false missing-booking warnings for due-out guests. Posted and approved totals stay based on the source amounts; seller corrections alone do not reconcile different fees or missing manual sales.' }
+  ] },
   { v: 587, items: [
     { ico: '🍳', title: 'Choose your breakfast journal code',
       what: 'Breakfast upsells default to Opera code 2090. Open IN-Gauge automation → Settings → Opera journal codes to change it or restore 2090.',

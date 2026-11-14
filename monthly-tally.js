@@ -16,7 +16,7 @@
     const index=new Map();
     for(const r of reservations||[]){
       const conf=text(r.CONFIRMATION_NO),name=guestKey(r.FULL_NAME),room=roomKey(r.ROOM_NO||r.DISP_ROOM_NO),arrival=dateOf(r.TRUNC_BEGIN),departure=dateOf(r.TRUNC_END);
-      if(!conf||!name||!room||!iso(arrival)||!iso(departure)||!['CKIN','CKOT','DUEIN','DUEOUT'].includes(text(r.SHORT_RESV_STATUS)))continue;
+      if(!conf||!name||!room||!iso(arrival)||!iso(departure)||!['CKIN','CKOT','DUEIN','DUEOUT','DUOT'].includes(text(r.SHORT_RESV_STATUS)))continue;
       const key=JSON.stringify([room,name]);if(!index.has(key))index.set(key,[]);index.get(key).push({conf,arrival,departure});
     }
     return (r,day)=>{

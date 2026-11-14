@@ -50,3 +50,9 @@ test('CSV exports every evidence row, actual negative numbers, source details an
  const journal=Array.from({length:25},(_,i)=>post(i+1,'10',{CONFIRMATION_NO:'C'+i,GUEST_FULL_NAME:i===0?'=HYPERLINK("bad")':'Example'}));
  const r=run(journal,[record(1,40000,'APPROVED',{seller:'Example "Quoted" Seller'})]);const csv=T.differenceCsv(r);assert(csv.startsWith('\ufeff'));assert.equal(csv.split('\r\n').length,r.evidence.length+1);assert(csv.includes('"-400"'));assert(csv.includes("'=HYPERLINK("));assert(csv.includes('Example ""Quoted"" Seller'));assert(csv.includes('IN-Gauge entries'));balanced(r);
 });
+
+test('DUOT due-out status resolves journal identity without altering either revenue total',()=>{
+ const journal=[post(1,'100')],records=[record(1,10000)];
+ const before=run(journal,records,{reservations:[reservation('12345',{SHORT_RESV_STATUS:'DUOT'})]});
+ assert.equal(before.unresolvedPostings,0);assert.equal(before.evidence.length,1);assert.equal(before.evidence[0].confirmation,'12345');assert.equal(before.opera,10000);assert.equal(before.approved,10000);assert.equal(before.gap,0);balanced(before);
+});

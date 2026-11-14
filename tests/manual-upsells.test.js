@@ -271,3 +271,9 @@ test('configured breakfast code replaces 2090 and retains notes, pending and rev
  f.j.CASHIER_CREDIT='122.45';assert.match(custom().reason,/reverse/);
  assert.throws(()=>M.reconcile([f.j],[f.r],[f.g],{breakfastCode:'1010'}),/conflicts/);
 });
+
+test('Opera DUOT due-out guests keep their exact confirmation and existing request',()=>{
+ const f=fixtures();f.r.SHORT_RESV_STATUS='DUOT';f.g.conf=f.r.CONFIRMATION_NO;f.g.cents=12245;f.g.status='APPROVED';
+ const r=run(f).rows[0];assert.equal(r.conf,f.r.CONFIRMATION_NO);assert.equal(r.bucket,'existing');assert.equal(r.matches.length,1);
+ f.r.SHORT_RESV_STATUS='CXL';assert.equal(run(f).rows[0].conf,'','cancelled reservations are still excluded');
+});

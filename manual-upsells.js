@@ -152,7 +152,7 @@
     }
     const result = journal.map(j => {
       const day = date(j.BUSINESS_DATE), code = clean(j.TRX_CODE), product = products[code] || clean(j.TRX_DESC) || 'Unmapped product', cents = amount(j.CASHIER_DEBIT) - amount(j.CASHIER_CREDIT), seller = sellerOf(j, employees);
-      const candidates = [...new Map((guestIndex.get(room(j.ROOM) + '|' + norm(j.GUEST_FULL_NAME)) || []).filter(r => ['CKIN','CKOT','DUEIN','DUEOUT'].includes(r.SHORT_RESV_STATUS) && day && date(r.TRUNC_BEGIN) <= day && day <= date(r.TRUNC_END)).map(r => [r.CONFIRMATION_NO, r])).values()];
+      const candidates = [...new Map((guestIndex.get(room(j.ROOM) + '|' + norm(j.GUEST_FULL_NAME)) || []).filter(r => ['CKIN','CKOT','DUEIN','DUEOUT','DUOT'].includes(r.SHORT_RESV_STATUS) && day && date(r.TRUNC_BEGIN) <= day && day <= date(r.TRUNC_END)).map(r => [r.CONFIRMATION_NO, r])).values()];
       const r = { transaction: j.TRX_NO, day, code, product, family:mapping[code]||'', cents, room: clean(j.ROOM), guest: clean(j.GUEST_FULL_NAME), currency: clean(j.CURRENCY1).toUpperCase(), note: noteText(j), seller, cashier: clean(j.CASHIER_NAME), username: clean(j.USER_NAME), userId: clean(j.INSERT_USER), conf: candidates.length === 1 ? candidates[0].CONFIRMATION_NO : '', candidates, matches: [], line: j.line, bucket: '', reason: '', action: '' };
       const decide = (bucket, reason, action) => Object.assign(r, { bucket, reason, action });
       if (/\[NA\s+Pkgs\./i.test(r.note)) return decide('package', 'Automatic package posting. Package Audit handles package corrections.', 'Use the Audit tab for package corrections.');
