@@ -2,7 +2,7 @@
 (function(W){
   'use strict';
   const FAMILIES={EC:'Early check-in',LC:'Late checkout',BB:'Breakfast',ROOM:'Room upselling',DIN:'Dinner',HB:'Half board',FB:'Full board'};
-  const DEFAULTS={'1061':'EC','1062':'LC','2090':'BB'};
+  const DEFAULTS={'1010':'ROOM','1061':'EC','1062':'LC','2090':'BB'};
   function period(month){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('Choose a valid month.');const [y,m]=month.split('-').map(Number);if(y<2000||y>2100)throw Error('Choose a month between 2000 and 2100.');return {from:month+'-01',to:month+'-'+new Date(Date.UTC(y,m,0)).getUTCDate()};}
   const iso=v=>{const s=String(v||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return '';const d=new Date(s+'T00:00Z');return Number.isFinite(+d)&&d.toISOString().slice(0,10)===s?s:'';};
   const cents=v=>{const s=String(v??'').trim().replace(/,/g,'').replace(/^\((.*)\)$/,'-$1');if(!s)return 0;if(!/^-?\d+(?:\.\d{1,2})?$/.test(s))throw Error('An Opera posting has an invalid amount.');const negative=s.startsWith('-'),[whole,fraction='']=s.replace(/^-/,'').split('.');const n=(Number(whole)*100+Number(fraction.padEnd(2,'0')))*(negative?-1:1);if(!Number.isSafeInteger(n))throw Error('An Opera amount is outside the supported range.');return n;};

@@ -72,7 +72,7 @@
     if(/(?:LC$|^1062$)/.test(compact)||['LATECHECKOUT','LATEDEPARTURE'].includes(compact))return 'LC';
     if(/BB$|^BB|BREAKFAST/.test(compact)||compact==='2090')return 'BB';
     if(/DIN$|^DINNER$/.test(compact))return 'DIN';if(/^HB|HALFBOARD/.test(compact))return 'HB';if(/^FB|FULLBOARD/.test(compact))return 'FB';
-    if(/^USS\d+$/.test(compact)||/^ROOMUPGRADE$|^STANDARDROOM|^CLASSICROOM|^SUPERIOR(?:FAMILY)?ROOM|^PRIVILEGEROOM|^STUDIO(?:WITH|WITHOUT)|^(?:ONE|TWO|THREE|\d+)BEDROOMAPARTMENT/.test(compact))return 'ROOM';
+    if(/^(?:1010|ROOMUPSELL(?:ING)?|ROOMUPGRADE|USS\d+)$/.test(compact)||/^STANDARDROOM|^CLASSICROOM|^SUPERIOR(?:FAMILY)?ROOM|^PRIVILEGEROOM|^STUDIO(?:WITH|WITHOUT)|^(?:ONE|TWO|THREE|\d+)BEDROOMAPARTMENT/.test(compact))return 'ROOM';
     return '';
   }
   function resolveProduct(proposal,products){
@@ -119,6 +119,7 @@
       }
       if(['deny','delete'].includes(op.action)&&text(op.reason).length<5)fail('Enter a clear reason for this denial or removal.');
       if(['add','edit'].includes(op.action)){
+        if(op.sellerFreeze&&id(op.sellerFreeze.contributorId)!==id(op.contributorId))fail('The reviewed contributor differs from the fixed seller. Reopen the sale to change or unfreeze it.');
         const p=snapshot.products.find(p=>p.id===id(op.productId));if(!p||p.activeStatus!=='NORMAL'||/UNKNOWN|UNMAPPED/.test(key(p.code+' '+p.name)))fail('Choose an active, identified product from this hotel.');
         if(op.requireAssignment&&(!op.assignmentReviewed||!id(op.assignmentContributorId)||id(op.assignmentContributorId)!==id(op.contributorId)))fail('Review and explicitly assign the seller before selecting this sale.');
         if(op.sellerCredit?.recommendedContributorId&&id(op.contributorId)!==id(op.sellerCredit.recommendedContributorId)&&text(op.reason).length<5)fail('Explain why credit should differ from the seller identified in the Opera note.');

@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 586, items: [
+    { ico: '🛏️', title: 'Recognize room-upsell fees from Opera',
+      what: 'Include transaction code 1010 in your Opera journal to compare room-upsell fees with IN-Gauge and include them in monthly totals.',
+      does: 'Existing room requests are checked before suggesting an addition. Choose the exact room product when several match; the journal fee is never multiplied across the stay.' },
+    { ico: '📌', title: 'Keep a package assigned to one seller',
+      what: 'In IN-Gauge automation, open a sale, choose Credit to and turn on Keep this seller fixed. Save it to remember that contributor for the same confirmation and package, including its daily rows.',
+      does: 'The choice is shared with Package Audit and scoped to the selected hotel. Contributor IDs keep matching names distinct. Uncheck it to unfreeze. If IN-Gauge already has that seller, only the rule is saved; financial changes still wait for your reviewed run.' }
+  ] },
   { v: 585, items: [
     { ico: '⌨', title: 'BackTrack · a new app style',
       what: 'Choose Theme → BackTrack for a charcoal and crimson look with terminal typography, crisp panels and a redesigned shift dashboard.',

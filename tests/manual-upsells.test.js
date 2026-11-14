@@ -242,3 +242,21 @@ for(const withCore of [false,true]) {
     assert.equal(duplicates.mapped,false);assert.equal(duplicates.employeeId,'');
   });
 }
+
+test('1010 room-upsell fee matches room families without treating ordinary charges as upgrades', () => {
+  const f=fixtures();f.j.TRX_CODE='1010';f.j.TRX_DESC='Upgrade / Upsell Fee';f.j.REFERENCE='Upsell Room ** Lina';
+  let row=run(f).rows[0];assert.equal(row.product,'Room upselling');assert.equal(row.cents,12245);assert.equal(row.bucket,'add');assert.equal(M.rowValues(row)['Charge days'],1);assert(M.howSteps(row).some(s=>/do not multiply/.test(s)));
+  for(const name of ['Standard Room','Standard Room with Balcony','Superior Room','USS50','Room Upgrade','Room upselling']){
+    f.g.product=name;f.g.conf=f.r.CONFIRMATION_NO;f.g.cents=12245;
+    for(const status of ['PENDING','APPROVED']){f.g.status=status;row=run(f).rows[0];assert.equal(row.bucket,'existing',name+' '+status);assert.equal(row.matches.length,1);}
+  }
+  f.j.TRX_CODE='1000';assert.equal(run(f).rows[0].bucket,'review','the base room transaction is never mapped as a fee');
+});
+test('1010 keeps automatic packages separate and stops duplicate multi-night or reversed fees', () => {
+  const f=fixtures();f.j.TRX_CODE='1010';f.j.REFERENCE='[NA Pkgs.USS50]';assert.equal(run(f).rows[0].bucket,'package');
+  f.j.REFERENCE='Upsell Room';assert.equal(run(f).rows[0].bucket,'review','posting-user fallback needs seller review');
+  f.j.REFERENCE='Upsell Room ** Lina';f.g.product='Standard Room';f.g.conf=f.r.CONFIRMATION_NO;f.g.day='2026-11-02';
+  let row=M.reconcile([f.j],[f.r],[f.g],{coverage:{complete:true,from:'2026-11-01',to:'2026-11-03'}}).rows[0];assert.equal(row.bucket,'review');assert.match(row.reason,/may cover several nights/);assert.equal(row.matches.length,1);
+  f.g.day='2026-11-01';f.g.cents=24490;assert.match(run(f).rows[0].reason,/amount differs/,'do not divide a stay total or add the posting again');
+  f.j.CASHIER_CREDIT='122.45';assert.match(run(f).rows[0].reason,/reverse/);
+});

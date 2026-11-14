@@ -1,14 +1,31 @@
 'use strict';
 const crypto=require('node:crypto');
 const C=require('../ingauge-audit-core.js');
+const Pins=require('../ingauge-seller-pins.js');
 const {connectDb,privateError}=require('./manual-sales-cloud.js');
 const {InGaugeAccount}=require('./ingauge-account.js');
 const {ReferenceCache}=require('./ingauge-reference-cache.js');
 const portalError=error=>error?.name==='TimeoutError'?'The portal did not finish the requested screen or sign-in. No further operation was sent.':privateError(error);
 const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
 const targetKey=(b,hid)=>b?'ig-'+sha(C.stable(C.binding(b))).slice(0,32):'discover-'+hid;
-async function execute(plan,snapshot,{portal,db,test,publish,stop}){
-  C.validatePlan(plan,snapshot);const results=[];const save=async(op,result)=>{const before=snapshot.records.find(r=>r.id===op.recordId),product=snapshot.products.find(p=>p.id===op.productId),person=snapshot.contributors.find(p=>p.id===op.contributorId);results.push({...result,action:op.action,at:Date.now(),hotel:snapshot.binding.property,currency:snapshot.settings.currency,before:before?{...C.values(before),status:before.status,product:before.product,seller:before.seller}:null,requested:{...op.values,status:op.statusAfter||({approve:'APPROVED',deny:'DENIED',delete:'PURGED'})[op.action],product:product?.name||'',seller:person?.name||''},reason:op.reason||op.evidence||''});await publish(results);};
+async function sellerPinGuard(db,plan,snapshot){
+  const legacy=await db.get('ingauge/legacyContext'),binding=legacy?.schema===1?legacy.binding:await db.get('ingauge/binding');
+  const context='ingauge/targets/t'+sha(C.stable(Pins.identity(plan.binding))).slice(0,40)+'/auditContext';
+  const base=Pins.sameTarget(binding,plan.binding)?'pkgPins':context+'/pins';
+  const initial=await db.get(base)||{};
+  const aliases=Object.values(initial).some(pin=>pin?.seller&&!pin.contributorId)?Object.values(await db.get(base==='pkgPins'?'packageAudit/staff':context+'/staff')||{}):[];
+  return async op=>{
+    if(!['add','edit','approve'].includes(op.action))return;
+    let pins=initial;
+    if(op.sellerFreeze?.key){
+      const key=String(op.sellerFreeze.key);if(!key||key.length>512||/[.#$\[\]\/]/.test(key))throw Error('The fixed seller reference is invalid. Review this sale again.');
+      const current=await db.get(base+'/'+key);pins={...initial,[key]:current};
+    }
+    const issue=Pins.issue(op,snapshot,pins,aliases);if(issue)throw Error(issue);
+  };
+}
+async function execute(plan,snapshot,{portal,db,test,publish,stop,verifySeller}){
+  C.validatePlan(plan,snapshot);const results=[];const save=async(op,result)=>{const before=snapshot.records.find(r=>r.id===op.recordId),product=snapshot.products.find(p=>p.id===op.productId),person=snapshot.contributors.find(p=>p.id===op.contributorId);results.push({...result,action:op.action,at:Date.now(),hotel:snapshot.binding.property,currency:snapshot.settings.currency,before:before?{...C.values(before),status:before.status,product:before.product,seller:before.seller}:null,...(op.sellerFreeze?{sellerFreeze:op.sellerFreeze}:{}),requested:{...op.values,status:op.statusAfter||({approve:'APPROVED',deny:'DENIED',delete:'PURGED'})[op.action],product:product?.name||'',seller:person?.name||''},reason:op.reason||[op.evidence,op.sellerFreezeEvidence].filter(Boolean).join(' · ')});await publish(results);};
   for(const [index,op] of plan.operations.entries()){
     if(await stop())return {results,stopped:true};
     const ledgerKey=sha(C.stable(C.binding(plan.binding))+'|'+(op.action==='add'?'transaction:'+op.transaction:'record:'+op.recordId+'|'+op.expected+'|'+op.action));
@@ -16,11 +33,13 @@ async function execute(plan,snapshot,{portal,db,test,publish,stop}){
     try{
       const old=await db.get('ingauge/ledger/'+ledgerKey);
       if(!test&&old&&['intent','uncertain','applied'].includes(old.state))throw Error('A prior operation may already have been sent. Refresh IN-Gauge and verify its outcome before retrying.');
+      if(verifySeller)await verifySeller(op);
       await portal.progress?.('preflight','Checking change '+(index+1)+' of '+plan.operations.length);
       const checked=await portal.testOperation(op,snapshot);
       if(op.action==='edit'&&C.matches(op,checked.current)){await save(op,{key:op.key,confirmation:op.confirmation,state:'unchanged',note:'The selected record already has the reviewed values.',recordId:op.recordId});continue;}
       if(test){if(await stop())return {results,stopped:true};await save(op,{key:op.key,confirmation:op.confirmation,state:'tested',note:'Hotel, permissions, product, contributor, record version, duplicates and period lock checked. No financial change sent.'});continue;}
       if(await stop())return {results,stopped:true};
+      if(verifySeller)await verifySeller(op);
       await portal.progress?.('apply','Applying and verifying change '+(index+1)+' of '+plan.operations.length);
       await db.put('ingauge/ledger/'+ledgerKey,{state:'intent',at:Date.now(),job:plan.jobTag||'',action:op.action,recordId:op.recordId||'',confirmation:op.confirmation});
       if(await stop()){await db.patch('ingauge/ledger/'+ledgerKey,{state:'cancelled_before_send'});return {results,stopped:true};}
@@ -95,7 +114,8 @@ async function main(){
       console.log('[IN-Gauge] Record fetch complete: '+result.records.length+' records');
       await publish([],'done',result.records.length+' live records retrieved with all statuses and complete pagination.');return;
     }
-    const outcome=await execute(plan,snapshot,{portal,db,test,publish,stop:async()=>!!(await db.get(node))?.stopRequested});
+    const verifySeller=await sellerPinGuard(db,plan,snapshot);
+    const outcome=await execute(plan,snapshot,{portal,db,test,publish,verifySeller,stop:async()=>!!(await db.get(node))?.stopRequested});
     await invalidateSnapshot(outcome.results);
     const ready=test&&!outcome.stopped&&outcome.results.every(r=>['tested','unchanged'].includes(r.state));
     if(test)await db.put('ingauge/tests/'+hash,{ready,at:Date.now(),tag});
@@ -104,4 +124,4 @@ async function main(){
   finally{if(heartbeat)clearInterval(heartbeat);if(browser)await browser.close().catch(()=>{});}
 }
 if(require.main===module)main().catch(()=>{console.error('::error::IN-Gauge could not validate the queued job or cloud account.');process.exitCode=1;});
-module.exports={execute,targetKey,completionNote};
+module.exports={execute,targetKey,completionNote,sellerPinGuard};

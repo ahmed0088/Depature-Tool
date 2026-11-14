@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v585';
+const CACHE_NAME = 'ibis-ops-shell-v586';
 
 const SHELL_FILES = [
   './',
@@ -67,6 +67,7 @@ const SHELL_FILES = [
   './ingauge-settings.js',
   './monthly-tally.js',
   './ingauge-audit-core.js',
+  './ingauge-seller-pins.js',
   './trends.js',
   './td-audit.js',
   './dtcm-core.js',

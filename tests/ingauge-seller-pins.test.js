@@ -1,0 +1,53 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),crypto=require('node:crypto');
+const C=require('../ingauge-audit-core'),P=require('../ingauge-seller-pins'),{execute,sellerPinGuard}=require('../scripts/ingauge-audit-cloud');
+const binding=(property='2')=>C.binding({portalUrl:'https://app.fpg-ingauge.com/',tenantId:'1',propertyId:property,departmentId:'3',property:'Example '+property,department:'Front Desk'});
+function snapshot(){const b=binding(),record=C.record({id:100,confirmationNumber:'12345678',tenantLocationId:2,locationGroupId:3,locationGroupProductId:4,userId:5,pname:'Late Check Out',userName:'Same Seller',auditStatus:'APPROVED',upsellCharge:100,totalUpsellAmount:100,roomNights:1,arrivalDate:'2026-11-01',departureDate:'2026-11-03',businessDate:'2026-11-01',roomNumber:'101',memo:'',updatedOn:1});return {schema:1,id:'pins',hotelId:'example',binding:b,complete:true,pagination:{verified:true,total:1,read:1},fetchedAt:Date.now(),from:'2026-11-01',to:'2026-11-07',settings:{currency:'AED',validation:'BUSINESS_DATE',metricType:'DAILY',industryId:1,maxChargeCents:100000},permissions:{canAdd:true,canEdit:true,canApprove:true,canDeny:true,canDelete:true,canReassign:true},products:[{id:'4',name:'Late Check Out',code:'1062',activeStatus:'NORMAL',recurring:false}],contributors:[{id:'5',name:'Same Seller',pulseId:'A5',activeStatus:'NORMAL'},{id:'6',name:'Same Seller',pulseId:'B6',activeStatus:'NORMAL'}],records:[record]};}
+function pin(s=snapshot(),extra={}){return {...P.decision({confirmation:'12345678',product:s.products[0],person:s.contributors[1],binding:s.binding,by:'Manager',at:'2026-11-14T10:00:00Z',reason:'Confirmed at the desk'}),...extra};}
+const key='12345678|Late Check Out';
+function operation(s,extra={}){const r=s.records[0];return {key:'r-100',action:'edit',recordId:r.id,expected:C.fingerprint(r),confirmation:r.confirmation,productId:r.productId,contributorId:'6',values:C.values(r),statusAfter:r.status,reason:'Reviewed seller choice',sellerFreeze:{key,contributorId:'6'},...extra};}
+const plan=(s,op)=>({schema:2,hotelId:s.hotelId,mode:'apply',scope:'all',binding:s.binding,snapshotId:s.id,operations:[op]});
+test('fixed ownership uses the exact contributor ID even with duplicate or renamed display names',()=>{
+ const s=snapshot(),fixed=pin(s);assert.equal(P.owner(fixed,s).person.id,'6');s.contributors[1].name='Renamed Seller';assert.equal(P.owner(fixed,s).person.name,'Renamed Seller');s.contributors=s.contributors.filter(p=>p.id!=='6');assert.equal(P.owner(fixed,s).state,'unmatched');assert.match(P.owner(fixed,s).reason,/matching name cannot replace/);
+});
+test('choices are scoped to the exact account, hotel and department; labels may change',()=>{
+ const s=snapshot(),fixed=pin(s);assert(P.applicable(fixed,{...s.binding,property:'New display name'}));for(const b of [binding('9'),{...s.binding,departmentId:'99'},{...s.binding,tenantId:'99'},{...s.binding,portalUrl:'https://demo.fpg-ingauge.com/'}])assert(!P.applicable(fixed,b));
+});
+test('unfreezing preserves an existing manual-sale decision and never creates a global alias',()=>{
+ assert.equal(P.release(pin()),null);const manual=P.decision({confirmation:'12345678',product:snapshot().products[0],person:snapshot().contributors[0],binding:binding(),previous:{manual:true,seller:'Old name'}});const released=P.release(manual);assert.equal(released.manual,true);assert.equal(released.seller,undefined);assert.equal(released.contributorId,undefined);assert.equal(released.logins,undefined);assert.equal(released.binding.propertyId,'2');
+ assert.throws(()=>P.decision({confirmation:'',product:{id:'4'},person:{id:'6',name:'X'},binding:binding()}));assert.throws(()=>P.decision({confirmation:'12345678',product:{id:'4'},person:{id:'0',name:'Unassigned'},binding:binding()}));
+});
+test('the reviewed operation cannot credit a different ID than the frozen choice',()=>{
+ const s=snapshot(),op=operation(s);assert.equal(C.operationError(op,s),'');const body=C.payload(op,s,s.records[0]);assert.equal(body.userId,6);assert.equal(body.upsellCharge,100);assert.equal(body.totalUpsellAmount,100);assert.equal(body.sellerFreeze,undefined,'rule metadata is never sent as an IN-Gauge product field');assert.match(C.operationError({...op,contributorId:'5'},s),/fixed seller/);assert.match(P.issue({...op,contributorId:'5'},s,{[key]:pin(s)}),/fixed to Same Seller \(ID 6\)/);
+ assert.match(P.issue(op,s,{}),/removed or changed/);assert.equal(P.issue({...op,action:'deny'},s,{[key]:pin(s)}),'');
+ assert.equal(P.issue({...op,sellerFreeze:undefined,confirmation:'87654321'},s,{[key]:pin(s)}),'','another reservation does not inherit this choice');
+ assert.equal(P.issue({...op,sellerFreeze:undefined,productId:'8'},s,{[key]:pin(s)}),'','another package does not inherit this choice');
+});
+function database(initial){const store={...initial},reads=[];return {store,reads,get:async path=>(reads.push(path),store[path]??null),put:async(path,value)=>{store[path]=value},patch:async(path,value)=>{store[path]={...store[path],...value}}};}
+test('cloud checks read the selected target’s store without borrowing the host hotel’s pins',async()=>{
+ const s=snapshot(),target='ingauge/targets/t'+crypto.createHash('sha256').update(C.stable(P.identity(s.binding))).digest('hex').slice(0,40)+'/auditContext/pins',d=database({'ingauge/legacyContext':{schema:1,binding:binding('99')},[target]:{[key]:pin(s)},[target+'/'+key]:pin(s),pkgPins:{[key]:pin(s,{contributorId:'5'})}}),gate=await sellerPinGuard(d,plan(s,operation(s)),s);await gate(operation(s));assert(d.reads.includes(target));assert(!d.reads.includes('pkgPins'));
+});
+test('a changed freeze holds an operation before portal access or an intent ledger',async()=>{
+ const s=snapshot(),op=operation(s),d=database({'ingauge/legacyContext':{schema:1,binding:s.binding},pkgPins:{[key]:pin(s)},['pkgPins/'+key]:pin(s,{contributorId:'5'})}),gate=await sellerPinGuard(d,plan(s,op),s);let sent=0,checked=0;
+ const outcome=await execute(plan(s,op),s,{db:d,test:false,stop:async()=>false,publish:async()=>{},verifySeller:gate,portal:{testOperation:async()=>{checked++;return{current:s.records[0]}},apply:async()=>{sent++}}});assert.equal(outcome.results[0].state,'held');assert.equal(sent,0);assert.equal(checked,0);assert(!Object.keys(d.store).some(k=>k.includes('/ledger/')));
+});
+test('a freeze changed during live preflight is checked again before sending',async()=>{
+ const s=snapshot(),op=operation(s),d=database({'ingauge/legacyContext':{schema:1,binding:s.binding},pkgPins:{[key]:pin(s)},['pkgPins/'+key]:pin(s)}),gate=await sellerPinGuard(d,plan(s,op),s);let sent=0;
+ const outcome=await execute(plan(s,op),s,{db:d,test:false,stop:async()=>false,publish:async()=>{},verifySeller:gate,portal:{testOperation:async()=>{d.store['pkgPins/'+key]=pin(s,{contributorId:'5'});return{current:s.records[0]}},apply:async()=>{sent++}}});assert.equal(outcome.results[0].state,'held');assert.equal(sent,0);assert(!Object.keys(d.store).some(k=>k.includes('/ledger/')));
+});
+test('the original Package Audit and independent hotel audit honor exact frozen IDs',()=>{
+ const s=snapshot(),sb={console,URL,setTimeout:()=>0,setInterval:()=>0,clearTimeout(){},localStorage:{getItem:()=>null,setItem(){}},document:{readyState:'loading',addEventListener(){},getElementById:()=>null,querySelectorAll:()=>[]},addEventListener(){}};sb.window=sb;sb.globalThis=sb;vm.createContext(sb);
+ for(const file of ['ingauge-audit-core.js','ingauge-seller-pins.js','package-audit.js'])vm.runInContext(fs.readFileSync(file,'utf8'),sb);
+ sb.InGaugeWorkspace={state:{snapshot:s}};sb.input={rows:[['ID','Product','Product ID','Employee','Employee ID','Confirmation no','Room No','Product Charge','Charge Days','Arrival Date','Departure Date','Daily Date','Status','Manually Added Record'],['100','Late Check Out','4','Same Seller','5','12345678','101','100','1','01-Nov-2026','03-Nov-2026','01-Nov-2026','APPROVED','No']],events:{'12345678':[{action:'ADDED',code:'USS100LC',ts:202611011200,user:'Same Seller',price:'100',from:'01-Nov-2026',to:'03-Nov-2026'}]},context:{pins:{[key]:pin(s)}}};
+ vm.runInContext("pkgPins={HOST:{seller:'Host seller'}};pkgMemory={};",sb);const before=vm.runInContext('JSON.stringify(pkgPins)',sb),r=vm.runInContext('pkgComputeForTarget(input).results[0]',sb);assert.equal(r.pinnedContributorId,'6');assert.equal(r.reassign,true);assert.equal(r.alreadyComplete,false);assert.equal(vm.runInContext('JSON.stringify(pkgPins)',sb),before);
+ sb.row={conf:'12345678',product:'Late Check Out',code:'1062'};const kinds=vm.runInContext('PKG_KINDS.slice()',sb);assert.equal(vm.runInContext('pkgSellerPinKey(row,{settings:{}})',sb),key);assert.deepEqual(vm.runInContext('PKG_KINDS.slice()',sb),kinds);
+ s.contributors=s.contributors.filter(p=>p.id!=='6');const held=vm.runInContext('pkgComputeForTarget(input).results[0]',sb);assert.equal(held.verdict,'review');assert.equal(held.identityReview,true);assert.match(held.note,/fixed contributor ID/);
+});
+
+test('catalog renames retain the saved choice by product ID without borrowing another reservation',()=>{
+ const s=snapshot(),saved=pin(s),entry=P.entry({[key]:saved},'12345678','4','12345678|New label',s.binding);assert.equal(entry.key,key);assert.equal(entry.pin.contributorId,'6');assert.equal(P.entry({[key]:saved},'87654321','4','87654321|New label',s.binding).pin,null);
+});
+test('the original Freeze seller control preserves scoped identity metadata when changing a new choice',()=>{
+ const s=snapshot();s.contributors.push({id:'7',name:'New Contributor',activeStatus:'NORMAL'});const source=fs.readFileSync('package-audit.js','utf8'),fn=source.slice(source.indexOf('function pkgPinChange('),source.indexOf('/** The names a seller',source.indexOf('function pkgPinChange(')));
+ const sb={pkgPins:{[key]:pin(s)},_pkgGroupRows:()=>[{conf:'12345678',product:'Late Check Out',code:'USS100LC'}],_pkgMe:()=> 'Manager',_pkgSavePins(){},_pkgRecompute(){},pkgResults:[],_pkgView:'audit',showToast(){},InGaugeSellerPins:P,_pkgLiveSnapshot:()=>s,pkgStaffDb:{}};vm.createContext(sb);vm.runInContext(fn,sb);sb.pkgPinChange(key,'Same Seller');assert.equal(sb.pkgPins[key].contributorId,'6');assert.equal(sb.pkgPins[key].binding.propertyId,'2');sb.pkgPinChange(key,'New Contributor');assert.equal(sb.pkgPins[key].contributorId,'7');assert.equal(sb.pkgPins[key].productId,'4');sb.pkgPinChange(key,'__manual');assert.equal(sb.pkgPins[key].manual,true);assert.equal(sb.pkgPins[key].productId,'4');assert.equal(sb.pkgPins[key].seller,undefined);sb.pkgPinChange(key,'__clear');assert.equal(sb.pkgPins[key],undefined);
+});

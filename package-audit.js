@@ -1528,13 +1528,27 @@ function _pkgPinKey(r) { return `${String(r.conf || '').trim()}|${_pkgFamilyName
 function _pkgApplyPins(results) {
   results.forEach(r => {
     let pin = pkgPins[_pkgPinKey(r)];
+    if (typeof InGaugeSellerPins !== 'undefined' && _pkgLiveSnapshot()?.binding) { const stored = InGaugeSellerPins.entry(pkgPins,r.conf,r.productId,_pkgPinKey(r),_pkgLiveSnapshot().binding); pin=stored.pin; if(pin)r.sellerPinKey=stored.key; }
     // No pin of its own: a rule learned from earlier decisions (accepted by a person) decides the same way.
     if (!pin) { const L = typeof _pkgLearnedFor === 'function' ? _pkgLearnedFor(r) : null; if (L) { pin = L.pin; r.learned = L.rule; _pkgHit(r, 'learned'); } }
+    const fixedApi = typeof InGaugeSellerPins !== 'undefined' ? InGaugeSellerPins : null;
+    const live = _pkgLiveSnapshot();
+    if (pin && pin.binding && live?.binding && fixedApi && !fixedApi.applicable(pin, live.binding)) pin = null;
     r.pin = pin || null;
     if (!('prePinUser' in r)) { r.prePinUser = r.user; r.prePinVerdict = r.verdict; }
     if (!pin) return;
     _pkgHit(r, 'pin');
     if (pin.skip) { r.pinSkip = true; return; }
+    if (pin.contributorId && fixedApi && pin.seller && r.verdict !== 'settled' && (pin.manual || ['credit','review'].includes(r.verdict))) {
+      const who = live ? fixedApi.owner(pin, live, Object.values(pkgStaffDb || {})) : null;
+      r.pinnedContributorId = String(pin.contributorId); r.user = who?.person?.name || pin.seller;
+      r.reassign = String(r.employeeId || '') !== String(pin.contributorId); r.needsEmployee = !r.employeeId;
+      r.alreadyComplete = !r.reassign && !r.needsEmployee && !r.needsProduct; r.wasUser = r.reassign ? r.employee : ''; r.splitSeller = false; r.noSeller = false;
+      r.verdict = who && who.state !== 'matched' ? 'review' : 'credit';
+      if (who && who.state !== 'matched') { r.identityReview = true; r.alreadyComplete = false; r.pinIssue = who.reason; r.note = who.reason; }
+      if (pin.manual) { r.manualSale = true; r.denyReason = ''; }
+      return;
+    }
     if (pin.manual) {
       // Sold by hand in IN-Gauge (e.g. a 6 pm late checkout that cannot be
       // added as an Opera package): there is nothing in Opera to match, so the
@@ -1587,6 +1601,7 @@ function _pkgSavePins() {
 // Sam's", "sold by hand in IN-Gauge" or "skip it". Saved per package
 // (confirmation + package family), shared with the team, applied on every run.
 function pkgPinChange(key, val) {
+  const previous = pkgPins[key];
   const rows = _pkgGroupRows(key), r = rows[0];
   if (!r && val !== '__clear') return;
   const by = _pkgMe(), at = new Date().toISOString();
@@ -1602,7 +1617,14 @@ function pkgPinChange(key, val) {
     pkgPins[key] = { seller: name, by, at };
   } else if (val) pkgPins[key] = { seller: val, by, at };
   else { pkgRender(); return; }
-  if (pkgPins[key]) tag(pkgPins[key]);
+  if (pkgPins[key]) {
+    tag(pkgPins[key]);
+    if (previous?.confirmation && previous?.productId) {
+      const next=pkgPins[key];next.confirmation=previous.confirmation;next.productId=previous.productId;if(previous.binding)next.binding=previous.binding;
+      if(next.seller===previous.seller&&previous.contributorId)next.contributorId=previous.contributorId;
+      else if(next.seller&&typeof InGaugeSellerPins!=='undefined'&&_pkgLiveSnapshot()){const who=InGaugeSellerPins.owner(next,_pkgLiveSnapshot(),Object.values(pkgStaffDb||{}));if(who.state==='matched')next.contributorId=who.person.id;}
+    }
+  }
   _pkgSavePins();
   if (typeof logActivity === 'function') {
     const p = pkgPins[key];
@@ -1627,6 +1649,7 @@ function _pkgSellerChoices(extra) {
 }
 
 function _pkgPinPicker(r, key) {
+  if (r.sellerPinKey && pkgPins[r.sellerPinKey]) key = r.sellerPinKey;
   const cur = r.pin ? (r.pin.skip ? '__skip' : r.pin.manual ? (r.pin.seller ? '__manual:' + r.pin.seller : '__manual') : r.pin.seller) : '';
   const staff = _pkgSellerChoices(r.pin && r.pin.seller ? [r.pin.seller] : []);
   const J = v => escapeHtml(JSON.stringify(v));
@@ -1756,7 +1779,7 @@ function _pkgGroupRows(key) {
   const src = pkgResults;
   if (_pkgKeyCache.src !== src || _pkgKeyCache.n !== src.length) {
     const map = new Map();
-    src.forEach(x => { const k = _pkgPinKey(x); if (!map.has(k)) map.set(k, []); map.get(k).push(x); });
+    src.forEach(x => { for(const k of new Set([_pkgPinKey(x),x.sellerPinKey].filter(Boolean))){if (!map.has(k)) map.set(k, []); map.get(k).push(x);} });
     _pkgKeyCache = { src, n: src.length, map };
   }
   return _pkgKeyCache.map.get(key) || [];
@@ -4527,6 +4550,18 @@ async function pkgLoadTargetPdf(files, prior = {}) {
   }
   return { events, files: loaded, range: _pkgTargetLogRange(events) };
 }
+function pkgSellerPinKey(row, context) {
+  if (!context) return _pkgPinKey(row);
+  const saved = PKG_KINDS.slice();
+  try { _pkgSetKinds(_pkgMergeSettings(_pkgTargetCopy(context.settings || {})).kinds); return _pkgPinKey(row); }
+  finally { PKG_KINDS.splice(0, PKG_KINDS.length, ...saved); }
+}
+function pkgInstallSavedPin(key, value) {
+  if (value) { pkgPins[key] = value; _pkgPinsLast[key] = JSON.stringify(value); }
+  else { delete pkgPins[key]; delete _pkgPinsLast[key]; }
+  try { localStorage.setItem(PKG_PIN_KEY, JSON.stringify(pkgPins)); } catch (_) {}
+  if (pkgResults.length) _pkgRecompute();
+}
 function pkgComputeForTarget({ rows, events = {}, guests = {}, reservationText, context = {} } = {}) {
   if (!Array.isArray(rows)) throw new Error('A target IN-Gauge table is required.');
   // Everything below is synchronous: callbacks and Firebase listeners cannot
@@ -4559,4 +4594,4 @@ function pkgComputeForTarget({ rows, events = {}, guests = {}, reservationText, 
     PKG_KINDS.splice(0, PKG_KINDS.length, ...saved.kinds);
   }
 }
-if (typeof window !== 'undefined') Object.assign(window, { pkgLoadTargetPdf, pkgComputeForTarget });
+if (typeof window !== 'undefined') Object.assign(window, { pkgLoadTargetPdf, pkgComputeForTarget, pkgSellerPinKey, pkgInstallSavedPin });

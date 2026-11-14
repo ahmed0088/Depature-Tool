@@ -42,3 +42,18 @@ test('catalog code resolves an unrecognized product name and retains all approve
   assert.equal(r.products[0].family,'LC');
   assert.deepEqual(r.warnings,[]);
 });
+
+test('1010 is an incremental room-upsell fee with credits, scope and pending kept separate',()=>{
+  const journal=[post(1,'81.64',{TRX_CODE:'1010',REFERENCE:'[NA Pkgs.USS50]'}),post(2,'48.98',{TRX_CODE:'1010'}),post(3,'0',{TRX_CODE:'1010',CASHIER_CREDIT:'40.82',REFERENCE:'[NA Pkgs.USS50]'})];
+  const records=[record(1,4082,'APPROVED',{product:'Standard Room'}),record(2,4898,'PENDING',{product:'Standard Room with Balcony',isManuallyAddedRecord:true})];
+  let r=run(journal,records);assert.equal(r.opera,8980);assert.equal(r.approved,4082);assert.equal(r.pending,4898);assert.equal(r.gap,4898);assert.equal(r.unmapped.length,0);assert.equal(r.products[0].family,'ROOM');assert.deepEqual(r.warnings,[]);
+  assert.equal(run(journal,records,{scope:'manual'}).opera,4898);assert.equal(run(journal,records,{scope:'automatic'}).opera,4082);
+  assert.equal(run(journal,records,{mapping:{1010:'exclude'}}).opera,0,'the hotel can explicitly exclude this transaction code');
+});
+test('1010 and room-upsell labels resolve the family but do not guess one of several room products',()=>{
+  for(const name of ['1010','Room upsell','Room upselling','Room Upgrade','USS50'])assert.equal(C.kind(name),'ROOM');
+  assert.equal(C.kind('1000'),'');
+  const products=[{id:'1',name:'Standard Room',code:'USS50',activeStatus:'NORMAL'},{id:'2',name:'Standard Room with Balcony',code:'USS75',activeStatus:'NORMAL'}];
+  assert.equal(C.resolveProduct({code:'1010',label:'Room upselling'},products).state,'ambiguous');
+  assert.equal(C.resolveProduct({code:'1010',label:'Room upselling'},products.slice(0,1)).product.id,'1');
+});

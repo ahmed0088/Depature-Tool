@@ -45,6 +45,11 @@ jobs:
       - name: Reviewed sales automation guards
         run: node tests/manual-sales-automation.test.js
 
+      - name: Fixed sellers in package automation
+        run: |
+          node tests/ingauge-seller-pins.test.js
+          node tests/ingauge-seller-pins.browser.test.js
+
       - name: Accor enrollment country and result checks
         run: |
           node tests/accor-enrollment.test.js

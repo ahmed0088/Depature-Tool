@@ -7,7 +7,7 @@
   const id = v => clean(v).replace(/\.0$/, '');
   const room = v => id(v).replace(/^0+(?=\d)/, '');
   const esc = v => clean(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const products = { '1061': 'Early Check In', '1062': 'Late Check Out', '2090': 'Breakfast' };
+  const products = { '1010': 'Room upselling', '1061': 'Early Check In', '1062': 'Late Check Out', '2090': 'Breakfast' };
   const labels = { add: 'What to add', review: 'Needs review', coverage: 'Await newer export', existing: 'Already submitted', package: 'Automatic packages' };
   const money = cents => (cents / 100).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   function amount(v) {
@@ -132,7 +132,7 @@
     const employees = context.contributors || [...new Map(ig.map(g => [(id(g['Employee ID']) ? 'id:' + id(g['Employee ID']) : 'name:' + norm(g.employee)), { name: g.employee, id: id(g['Employee ID']) }])).values()].filter(e => e.name && !/^[-—]$/.test(e.name));
     const dates = [...new Set(ig.map(g => g.day).filter(Boolean))].sort(), dateSet = new Set(dates), guestIndex = new Map(), exactIndex = new Map(), confIndex = new Map();
     if(context.coverage?.complete){ for(let d=new Date(context.coverage.from+'T00:00:00Z'); d.toISOString().slice(0,10)<=context.coverage.to; d.setUTCDate(d.getUTCDate()+1)) dateSet.add(d.toISOString().slice(0,10)); dates.splice(0,dates.length,...[...dateSet].sort()); }
-    const productKey = v => global.InGaugeAuditCore?.kind(v) || clean(v).toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const productKey = v => global.InGaugeAuditCore?.kind(v) || (/^(?:1010|ROOMUPSELL(?:ING)?|ROOMUPGRADE|USS\d+|STANDARDROOM.*|CLASSICROOM.*|SUPERIOR(?:FAMILY)?ROOM.*|PRIVILEGEROOM.*|STUDIO(?:WITH|WITHOUT).*|(?:ONE|TWO|THREE|\d+)BEDROOMAPARTMENT.*)$/.test(clean(v).toUpperCase().replace(/[^A-Z0-9]/g, '')) ? 'ROOM' : clean(v).toLowerCase().replace(/[^a-z0-9]+/g, ''));
     for (const r of reservations) {
       const key = room(r.ROOM_NO || r.DISP_ROOM_NO) + '|' + norm(r.FULL_NAME);
       if (!guestIndex.has(key)) guestIndex.set(key, []); guestIndex.get(key).push(r);
@@ -172,9 +172,9 @@
       }
       const unnamed = ig.filter(g => g.conf === r.conf && g.day === day && /unknown|unmapped|^[-—]$|^$/i.test(g.product));
       if (unnamed.length) { r.matches = unnamed; return decide('review', 'An unidentified IN-Gauge product already exists on this confirmation and date.', 'Use Audit to identify the existing product before submitting another request.'); }
-      if (otherDay.length && ['1061','1062'].includes(code)) {
+      if (otherDay.length && ['1010','1061','1062'].includes(code)) {
         r.matches = otherDay;
-        return decide('review', 'This one-off product already exists on the same confirmation with a different daily date.', 'Check the existing request before adding another.');
+        return decide('review', code === '1010' ? 'Room upselling already exists on the same confirmation with a different daily date. That request may cover several nights.' : 'This one-off product already exists on the same confirmation with a different daily date.', 'Check the existing request before adding another.');
       }
       // A different confirmation with the same seller/day/amount may be an extension or a missing identity link.
       const weak = ig.filter(g => g.day === day && productKey(g.product) === productKey(product) && Math.abs(g.cents - cents) <= 2 && norm(g.employee) === norm(seller.name));
@@ -230,7 +230,7 @@
     else if (global.navigator?.clipboard) global.navigator.clipboard.writeText(text).then(() => toast('Copied', 'ok')).catch(() => toast('Copy failed. Select and copy the text.', 'err'));
   }
   function rowValues(r) {
-    return { 'Transaction ID': r.transaction, 'Posting date': r.day, 'Product': r.product, 'Transaction code': r.code, 'Room': r.room, 'Guest': r.guest, 'Confirmation': r.conf, 'Candidate confirmations': r.candidates.map(c => c.CONFIRMATION_NO).join(', '), 'Net charge AED': r.cents / 100, 'Charge days': ['1061','1062'].includes(r.code) ? 1 : '', 'Seller': r.seller.name, 'Employee ID': r.seller.employeeId, 'Seller evidence': r.seller.basis, 'Seller explanation': r.seller.explanation, 'Seller warning': r.seller.warning, 'Posted by': r.cashier, 'Posting username': r.username, 'Posting user ID': r.userId, 'Opera note': r.note, 'IN-Gauge IDs': r.matches.map(g => id(g.ID)).join(', '), 'IN-Gauge confirmations': [...new Set(r.matches.map(g => g.conf))].join(', '), 'IN-Gauge statuses': [...new Set(r.matches.map(g => g.status))].join(', '), 'Result': labels[r.bucket], 'Why': r.reason, 'Next step': r.action, 'Journal line': r.line };
+    return { 'Transaction ID': r.transaction, 'Posting date': r.day, 'Product': r.product, 'Transaction code': r.code, 'Room': r.room, 'Guest': r.guest, 'Confirmation': r.conf, 'Candidate confirmations': r.candidates.map(c => c.CONFIRMATION_NO).join(', '), 'Net charge AED': r.cents / 100, 'Charge days': ['1010','1061','1062'].includes(r.code) ? 1 : '', 'Seller': r.seller.name, 'Employee ID': r.seller.employeeId, 'Seller evidence': r.seller.basis, 'Seller explanation': r.seller.explanation, 'Seller warning': r.seller.warning, 'Posted by': r.cashier, 'Posting username': r.username, 'Posting user ID': r.userId, 'Opera note': r.note, 'IN-Gauge IDs': r.matches.map(g => id(g.ID)).join(', '), 'IN-Gauge confirmations': [...new Set(r.matches.map(g => g.conf))].join(', '), 'IN-Gauge statuses': [...new Set(r.matches.map(g => g.status))].join(', '), 'Result': labels[r.bucket], 'Why': r.reason, 'Next step': r.action, 'Journal line': r.line };
   }
   function exportWorkbook() {
     if (!state.result || !global.XLSX) return;
@@ -245,7 +245,7 @@
     addSheet('Summary', [['Manual sales review', ''], ['Created', new Date().toISOString()], ['IN-Gauge report', state.files.ingauge.name], ['Daily dates observed', state.result.dates[0] + ' to ' + state.result.dates.at(-1)], ['Important', 'Missing means absent from the uploaded export. Recheck live IN-Gauge before adding.'], ['Seller rule', 'Notes first. Posting identity is a flagged fallback. Pending requests already exist.'], ...Object.entries(state.result.summary).map(([k, v]) => [labels[k], v]), ...Object.values(state.files).map(f => ['Source file', f.name])]);
     const headers = Object.keys(rowValues(state.result.rows[0]));
     for (const key of Object.keys(labels)) addSheet(labels[key].slice(0, 31), [headers, ...state.result.rows.filter(r => r.bucket === key).map(r => Object.values(rowValues(r)))]);
-    addSheet('Data quality', [['Report notes'], ...Object.values(state.data).flatMap(d => d.warnings).map(w => [w]), ['Net charges are debit minus credit; no VAT multiplier or breakfast quantity is inferred.'], ['This journal has verified mappings for early check-in, late checkout and breakfast only.']]);
+    addSheet('Data quality', [['Report notes'], ...Object.values(state.data).flatMap(d => d.warnings).map(w => [w]), ['Net charges are debit minus credit; no VAT multiplier or breakfast quantity is inferred.'], ['Transaction 1010 is treated as the room-upsell fee, not the full room charge. Mapped products also include early check-in, late checkout and breakfast.']]);
     X.writeFile(wb, 'Manual-Sales-Review-' + new Date().toISOString().slice(0, 10) + '.xlsx');
   }
   const entryText = r => Object.entries(rowValues(r)).filter(([, v]) => v !== '').map(([k, v]) => `${k}: ${v}`).join('\n');
@@ -254,7 +254,7 @@
     return [
       ['Confirmation number', r.conf], ['Product', r.product], ['Seller', r.seller.name],
       ['Daily date', r.day], ['Product charge · net', (r.cents / 100).toFixed(2)], ['Currency', r.currency],
-      ['Charge days', ['1061','1062'].includes(r.code) ? '1' : ''], ['Employee ID', r.seller.employeeId || '']
+      ['Charge days', ['1010','1061','1062'].includes(r.code) ? '1' : ''], ['Employee ID', r.seller.employeeId || '']
     ].filter(([, value]) => value !== '');
   }
   function additionText(r) {
@@ -266,7 +266,7 @@
       `Search confirmation ${r.conf} in IN-Gauge and verify the guest and room.`,
       'Check its current product list, including Pending requests. If this sale already exists, use that entry instead of adding another.',
       `Create one manual request for ${r.product}, credit ${r.seller.name}, and use daily date ${r.day}. Copy the values above.`,
-      ['1061','1062'].includes(r.code) ? 'Use 1 charge day for this one-off sale. The amount shown is the net journal charge; confirm the amount basis in IN-Gauge.' : 'Check breakfast quantity and the amount basis against the billing. The journal amount is the total net posting; no quantity or tax multiplier is inferred.',
+      r.code === '1010' ? 'Use only the room-upsell fee from this posting. Confirm the correct room product and covered nights; do not multiply this amount across the whole stay or include the base room rate.' : ['1061','1062'].includes(r.code) ? 'Use 1 charge day for this one-off sale. The amount shown is the net journal charge; confirm the amount basis in IN-Gauge.' : 'Check breakfast quantity and the amount basis against the billing. The journal amount is the total net posting; no quantity or tax multiplier is inferred.',
       'After submission, upload a fresh IN-Gauge export. A Pending request is already submitted; approve or reject that existing request in IN-Gauge.'
     ];
     if (r.bucket === 'existing') return [
@@ -324,7 +324,7 @@
       <div class="msu-list">${matches.length ? matches.slice(0, state.limit).map(({ r, i }) => card(r, i)).join('') : `<div class="msu-empty"><h3>${state.search ? 'No matching sales' : 'Nothing in this list'}</h3><p>${state.search ? 'Try another room, seller or confirmation.' : 'Choose another result above to see its details.'}</p></div>`}</div>
       ${matches.length > state.limit ? `<button type="button" class="btn msu-more" data-ms-more>Show more · ${matches.length - state.limit} remaining</button>` : ''}
       ${warnings.length ? `<details class="msu-quality"><summary>Report checks · ${warnings.length} note${warnings.length === 1 ? '' : 's'}</summary><ul>${warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></details>` : ''}
-      <p class="msu-fine">Net charge = debit minus credit. No tax conversion or breakfast quantity is inferred. Verified codes: 1061, 1062 and 2090. Unsupported codes require review.</p>`;
+      <p class="msu-fine">Net charge = debit minus credit. No tax conversion or breakfast quantity is inferred. Mapped codes: 1010 (room-upsell fee), 1061, 1062 and 2090. Unsupported codes require review.</p>`;
     if (global.ManualSalesAutomation) global.ManualSalesAutomation.render();
   }
   function render() {
@@ -366,7 +366,7 @@
       <div class="msu-runbar"><div><button type="button" class="btn gold" id="msuRun" disabled>Check manual sales</button><button type="button" class="msu-link" id="msuClear">Clear reports</button></div><span>Reports are processed on this device.</span></div>
       <div class="msu-error" id="msuError" role="alert" hidden></div>
       <div id="msuResults" aria-live="polite"></div>
-      <details class="msu-help"><summary>Which reports do I need, and how does matching work?</summary><ol><li><b>Opera journal:</b> export Journal by Transaction Code as text for your month. Include early check-in (1061), late checkout (1062), breakfast (2090) and any reversals.</li><li><b>Reservation Detail:</b> export as text with stays covering those postings, including checked-out guests and extensions. A wider stay range helps resolve missing confirmations.</li><li><b>IN-Gauge:</b> export the complete product list for the same month, all employees and all statuses. Download a fresh copy after approving or adding requests.</li><li>We link room + full guest name + stay dates to a confirmation, then compare confirmation + product + daily date + net charge. Uncertain matches stay in Needs review.</li><li>The seller explicitly named after <code>**</code> in the Opera note comes first. A posting-user fallback is always flagged. Pending, approved, denied and automatically imported records are checked before proposing additions.</li></ol></details>
+      <details class="msu-help"><summary>Which reports do I need, and how does matching work?</summary><ol><li><b>Opera journal:</b> export Journal by Transaction Code as text for your month. Include room-upsell fees (1010), early check-in (1061), late checkout (1062), breakfast (2090) and any reversals. Code 1010 must contain the extra upsell fee, not the full room rate.</li><li><b>Reservation Detail:</b> export as text with stays covering those postings, including checked-out guests and extensions. A wider stay range helps resolve missing confirmations.</li><li><b>IN-Gauge:</b> export the complete product list for the same month, all employees and all statuses. Download a fresh copy after approving or adding requests.</li><li>We link room + full guest name + stay dates to a confirmation, then compare confirmation + product + daily date + net charge. Uncertain matches stay in Needs review.</li><li>The seller explicitly named after <code>**</code> in the Opera note comes first. A posting-user fallback is always flagged. Pending, approved, denied and automatically imported records are checked before proposing additions.</li></ol></details>
       <div class="msu-audit-link"><div><b>One workspace, two checks</b><p>Audit fixes existing package records. Manual sales finds journal charges that need a request.</p></div><button type="button" class="btn" id="msuShareAudit" disabled>Use these reports in Audit →</button></div>`;
     main.parentNode.insertBefore(view, main.nextSibling);
     view.addEventListener('change', e => { if (e.target.dataset.msKind && e.target.files[0]) load(e.target.dataset.msKind, e.target.files[0]); });
