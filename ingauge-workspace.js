@@ -400,6 +400,8 @@
     }
     captureEditPosition(el('igMonthlyTally'));S.editing=op;applySellerPin(op);paintEditor();
   }
+  function editSelectedChange(key,source){if(!S.selected.has(key))throw Error('This change is no longer selected. Review its remaining case.');edit(key,source);}
+  function unselectChange(key){if(S.busy||S.switching||S.uploading||restoring)throw Error('Wait for the current run or report upload before changing your selection.');if(!S.selected.delete(key))return;invalidate();renderProposals();renderControls();notify('Unselected · no change was sent to IN-Gauge','ok');}
   function showReviewSelection(){setTask('audit');el('igStepRun')?.scrollIntoView({behavior:'smooth',block:'start'});}
   function moneyEvidence(op){const proof=op.reconciliation;if(!proof)return '';const currency=S.snapshot.settings.currency;
     return `<section class="iga-money-evidence"><h3>Why this needs attention</h3><p>${E(proof.why)}</p><div class="iga-money-source"><span>Opera net posting <b>${E(currency)} ${money(proof.journalCents)}</b></span><span>Transaction${proof.journalIds.length>1?'s':''} <b>${E(proof.journalIds.join(', '))}</b></span></div><p><b>How to fix it</b><br>${E(proof.how)}</p><small>Review this hotel, the bill, posting date, amount and seller. Only your saved selection is sent to the cloud automation.</small></section>`;
@@ -689,6 +691,6 @@
     render();return true;
   }
   async function fetchMonth(p){if(!preferences().monthly)throw Error('Monthly totals is turned off in IN-Gauge settings.');if(S.busy)throw Error('Wait for the current run.');if(S.selected.size)throw Error('Apply or unselect your saved changes before refreshing the monthly comparison.');choosePeriod(p);return fetchSnapshot();}
-  W.InGaugeWorkspace={settingsLocked:()=>restoring||!S.independent&&!!W.ManualUpsells?.state.busy,preferences,updateSettings,updateJournalCodes,reviewMoneyDifference,showReviewSelection,activePeriod,choosePeriod,restorePeriod,openSettings,openHotelSettings,sameTarget,showMonthly,fetchMonth,state:S,setTask,findPackage,setScope,checkReports,reportRequirements,loadHistory,renderHistory,renderGuide,runSteps,liveConsole,open,openRun,closeRun,cancelRun,renderRun,fromAudit,upload,mount,tableRows,buildProposals,hydrate};
+  W.InGaugeWorkspace={settingsLocked:()=>restoring||!S.independent&&!!W.ManualUpsells?.state.busy,preferences,updateSettings,updateJournalCodes,reviewMoneyDifference,editSelectedChange,unselectChange,showReviewSelection,activePeriod,choosePeriod,restorePeriod,openSettings,openHotelSettings,sameTarget,showMonthly,fetchMonth,state:S,setTask,findPackage,setScope,checkReports,reportRequirements,loadHistory,renderHistory,renderGuide,runSteps,liveConsole,open,openRun,closeRun,cancelRun,renderRun,fromAudit,upload,mount,tableRows,buildProposals,hydrate};
   if(D.readyState==='loading')D.addEventListener('DOMContentLoaded',mount);else mount();
 })(window);

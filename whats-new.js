@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 590, items: [
+    { ico: '✅', title: 'Reviewed selections leave the remaining list',
+      what: 'Save & select moves reviewed money corrections into Selected for automation. The remaining count shows what still needs review. Open your selection to edit or unselect a saved change.',
+      does: 'Unselect returns a case to the remaining list. A one-off cleanup stays visible until the keeper and extra entries have reviewed decisions. Saving queues changes; live totals update after applying and refreshing IN-Gauge.' }
+  ] },
   { v: 589, items: [
     { ico: '🧾', title: 'Review money differences and run the corrections',
       what: 'Monthly differences now explain why a fee differs, how to fix it, and which confirmation and IN-Gauge record are involved. Review a correction or missing sale, save selected changes, then run the existing cloud automation.',

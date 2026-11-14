@@ -1,8 +1,14 @@
-# Reviewed money reconciliation (v589)
+# Reviewed money reconciliation (v589; selection queues v590)
 
 Open **Monthly totals → Explain the difference → Fix the money differences**. The cards show the confirmation, posting date, Opera net amount, approved and pending IN-Gauge amounts, why they differ, and the proposed remedy. Posting evidence includes transaction IDs, notes, cashier/login, matched stay and existing record IDs. Relevant Changes Log entries explain customized fees; the journal supplies the posted amount.
 
 Choose **Review correction** or **Review missing sale**, verify the evidence in the existing package editor, and **Save & select**. For ambiguous bookings choose the owning confirmation first. **Review selected changes** opens the existing reviewed cloud apply screen, including the projected change in approved revenue. The usual automation console, cancellation and saved results are reused. Preparing or saving a review does not change IN-Gauge.
+
+## Selected and remaining queues
+
+Saving a valid reviewed correction moves its case out of **Remaining to review** and into the compact **Selected for automation** list. Saved changes can be edited or unselected from that list. Unselecting restores the case; canceling an edit preserves the selection. The duplicate-fee case remains until its keeper and all extra entries have decisions, with each already selected decision labeled on its own row. A keeper that already has the correct approved amount/date does not require a redundant edit.
+
+Selection never changes the snapshot, financial totals or remote records. Pending additions still await approval. Invalid or stale selections cannot hide unresolved cases. When a real run invalidates its snapshot, cached correction cards are discarded until fresh complete data is read. Final outcomes remain in run history. The phone/desktop tests cover these transitions alongside the existing mocked cloud handoff.
 
 ## Matching and proposals
 
