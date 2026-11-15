@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 595, items: [
+    'Mercure totals now include Reviewed sales alongside Approved, with Pending kept separate. The monthly comparison, team totals and goal progress use the same revenue statuses.',
+    'Reviewed sales already matching Opera stay settled. Earlier review decisions are preserved; no sales are approved or added by this reporting correction.',
+    'Renamed room products use their verified catalog IDs for the product breakdown. Fresh reads show when IN-Gauge last processed its dashboard, so cached reports are easier to compare.'
+  ] },
   { v: 594, items: [
     'Daily IN-Gauge overview: each seller’s monthly upsells, approved today, pending requests and downloadable team totals.',
     'Save a monthly HotelOps revenue goal for each hotel; see progress, the remaining gap and daily pace. No guessed IN-Gauge targets.',

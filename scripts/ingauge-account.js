@@ -65,12 +65,12 @@ class InGaugeAccount {
     if(actor.status!=='SUCCESS'||!C.id(actor.data?.id))throw new PortalError('Could not verify the connected account.');
     this.actor={id:C.id(actor.data.id),name:C.text(actor.data.name)};
   }
-  async read(path,data){
+  async read(path,data,timeout=30000){
     await this.checkCancelled();
     if(!this.headers?.authorization)throw new PortalError('The authenticated portal connection is unavailable.');
     const method=data===undefined?'GET':'POST',url=this.origin+path;
     if(!readAllowed(method,url,this.origin,JSON.stringify(data===undefined?{}:data)))throw new PortalError('A read attempted an unverified endpoint.');
-    const options={headers:{...this.headers,...(this.scopeTenant?{tenantid:this.scopeTenant}:{})},timeout:30000};if(data!==undefined)options.data=data===null?'null':data;
+    const options={headers:{...this.headers,...(this.scopeTenant?{tenantid:this.scopeTenant}:{})},timeout};if(data!==undefined)options.data=data===null?'null':data;
     const r=await this.context.request[method==='POST'?'post':'get'](url,options);
     if(!r.ok())throw new PortalError('IN-Gauge read failed ('+r.status()+').');
     try{return await r.json();}catch(_){throw new PortalError('IN-Gauge returned an unreadable response.');}
@@ -169,10 +169,24 @@ class InGaugeAccount {
       return {...base,status:'requires-review'};
     }catch(error){if(error.cancelled)throw error;return {...base,status:'unavailable'};}
   }
+  async reportingStatus(binding,from,to){
+    const b=C.binding(binding),base={source:'IN-Gauge dashboard',checkedAt:Date.now(),from,to};
+    await this.progress('reporting','Checking when IN-Gauge last processed its dashboard');
+    try{
+      const params=new URLSearchParams({tenantId:b.tenantId,tenantLocationId:b.propertyId,locationGroupId:b.departmentId,userId:'-2',actualStartDate:from,actualEndDate:to,showCompare:'false',readyToProcess:'-2',isLastDataUploadTimeRequired:'true'});
+      const data=this.data(await this.read(API+'dashboard/secure/getReconcileData?'+params,undefined,5000)),stamp=data?.dateTime?.[0]?.lastSpProcessedDateTime;
+      if(typeof stamp!=='string'||!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(stamp))return {...base,status:'unavailable'};
+      const processedAt=Date.parse(stamp.replace(' ','T')+'Z');
+      if(!C.day(stamp.slice(0,10))||Number(stamp.slice(11,13))>23||Number(stamp.slice(14,16))>59||Number(stamp.slice(17,19))>59||!Number.isFinite(processedAt)||processedAt<=0)return {...base,status:'unavailable'};
+      return {...base,status:'available',processedAt};
+    }catch(error){if(error.cancelled)throw error;return {...base,status:'unavailable'};}
+  }
   async snapshot(b,from,to,hotelId,snapshotId,{refreshReferences=false,includeGoals=false}={}){
     const scope=await this.scope(b),[products,contributors,records]=await Promise.all([this.products(scope.binding,{refresh:refreshReferences}),this.contributors(scope.binding,{refresh:refreshReferences}),this.search(scope.binding,from,to)]);
+    const reporting=await this.reportingStatus(scope.binding,from,to);
+    if(reporting.status==='available')reporting.updatedAfterProcessing=records.filter(r=>C.isRevenueStatus(r.status)&&Number.isFinite(Number(r.updatedOn))&&Number(r.updatedOn)>reporting.processedAt).length;
     const goals=includeGoals&&from.slice(0,7)===to.slice(0,7)?await this.monthlyGoal(scope.binding,from.slice(0,7)):null;
-    return {schema:1,id:snapshotId,hotelId,...scope,from,to,fetchedAt:Date.now(),complete:true,pagination:{verified:true,total:records.length,read:records.length,sort:'id'},products,contributors,records,actor:this.actor,referenceData:this.referenceCache?{...this.referenceCache.meta}:null,...(goals?{goals}:{})};
+    return {schema:1,id:snapshotId,hotelId,...scope,from,to,fetchedAt:Date.now(),complete:true,pagination:{verified:true,total:records.length,read:records.length,sort:'id'},products,contributors,records,actor:this.actor,reporting,referenceData:this.referenceCache?{...this.referenceCache.meta}:null,...(goals?{goals}:{})};
   }
   async readRecord(id){return C.record(this.data(await this.read(API+'productMetric/secure/'+C.id(id))));}
   async verifyReviewedProduct(op,snapshot){

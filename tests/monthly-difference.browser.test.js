@@ -17,7 +17,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
     window.S={targetKey:'independent-hotel',independent:true,binding,from:'2026-10-01',busy:false,reports:{journal:{rows:journal},reservations:{rows:reservations}},snapshot:{hotelId:'example',binding,complete:true,pagination:{verified:true,total:1,read:1},from:'2026-10-01',to:'2026-10-31',settings:{currency:'AED'},records}};
     window.ManualUpsells={date:v=>v};window.initialRecords=JSON.stringify(records);MonthlyTally.render(S,document.querySelector('#chart'));
    });
-   assert.match(await page.locator('.mt-gap-meaning').innerText(),/IN-Gauge approved is AED 50.00 higher than Opera/);
+   assert.match(await page.locator('.mt-gap-meaning').innerText(),/IN-Gauge approved \/ reviewed is AED 50.00 higher than Opera/);
    await page.locator('.mt-difference>summary').click();
    assert.match(await page.locator('.mt-diff-summary').innerText(),/2026-10-05/);
    const row=page.locator('.mt-diff-row').first();assert.match(await row.innerText(),/Confirmation 12345/);assert.match(await row.innerText(),/EXAMPLE, ALEX/);assert.match(await row.innerText(),/Both systems have entries/);

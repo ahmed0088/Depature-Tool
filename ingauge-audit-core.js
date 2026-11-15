@@ -6,6 +6,9 @@
   const words=v=>key(v).split(' ').filter(Boolean), login=v=>key(text(v).split('@')[0].split('-').pop()).replace(/ /g,'');
   const sameName=(a,b)=>words(a).sort().join(' ')===words(b).sort().join(' ');
   const terminal=new Set(['DENIED','PURGED']), editable=new Set(['PENDING','APPROVED','REVIEWED','ERROR','DENIED']);
+  // REVIEWED settles seller credit; its charge still contributes to revenue.
+  // Reporting eligibility does not grant edit/approval rights or unlock records.
+  const isRevenueStatus=value=>['APPROVED','REVIEWED'].includes(text(value).toUpperCase());
   function fail(message){throw new Error(message);}
   function day(v){
     if(typeof v==='number'&&Number.isFinite(v))v=new Date(v).toISOString().slice(0,10);
@@ -98,6 +101,11 @@
     const r=flatten(raw),dateValue=k=>day(r[k]);
     if(!numId(r.id)||!text(r.confirmationNumber))fail('A live record is missing its identifier or confirmation.');
     return {id:id(r.id),confirmation:text(r.confirmationNumber),propertyId:id(r.tenantLocationId),departmentId:id(r.locationGroupId),productId:id(r.locationGroupProductId||r.product?.id||r.product?.intId),contributorId:id(r.userId||r.user?.id||r.user?.intId||''),product:text(r.pname||r.locationGroupProductName||r.productName||r.product?.name),seller:text(r.userName||r.employeeName),status:text(r.auditStatus).toUpperCase(),unitCents:cents(r.upsellCharge),totalCents:cents(r.totalUpsellAmount),chargeDays:Number(r.roomNights||1),arrival:dateValue('arrivalDate'),departure:dateValue('departureDate'),businessDate:dateValue('businessDate')||dateValue('metricDate'),room:text(r.roomNumber),memo:text(r.memo),updatedOn:r.updatedOn??null,isManuallyAddedRecord:r.isManuallyAddedRecord===true||r.isManuallyAddedRecord==='true',raw:r};
+  }
+  function reportingMessage(snapshot){
+    const p=snapshot?.reporting;if(p?.status!=='available'||!Number.isFinite(p.processedAt)||p.processedAt<=0)return '';
+    const when=new Date(p.processedAt).toLocaleString('en-GB',{timeZone:'Asia/Dubai'});
+    return 'IN-Gauge dashboard processed through '+when+' Dubai time.'+(Number.isSafeInteger(p.updatedAfterProcessing)&&p.updatedAfterProcessing>0?' '+p.updatedAfterProcessing+' accepted sale rows were updated after that run. The dashboard can differ until IN-Gauge processes those changes.':' The dashboard is a processed reporting view; these totals use current sale records.');
   }
   function fingerprint(r){return stable({id:r.id,confirmation:r.confirmation,propertyId:r.propertyId,departmentId:r.departmentId,productId:r.productId,contributorId:r.contributorId,status:r.status,unitCents:r.unitCents,totalCents:r.totalCents,chargeDays:r.chargeDays,arrival:r.arrival,departure:r.departure,businessDate:r.businessDate,room:r.room,memo:r.memo,updatedOn:r.updatedOn});}
   function amountTotal(values,product,settings){
@@ -223,6 +231,6 @@
   function matches(op,r){
     return differences(op,r).length===0;
   }
-  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,matches,differences,terminal,saleCategory,operationCategory,scopeAllows};
+  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,matches,differences,terminal,saleCategory,operationCategory,scopeAllows,isRevenueStatus,reportingMessage};
   root.InGaugeAuditCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
