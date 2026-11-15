@@ -15,9 +15,12 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-save --no-audit --no-fund playwright-core@1.49.1 graphql@16.11.0
-      - name: Read official monthly goal responses
+      - name: Read Mercure records and reporting sources
         run: node scripts/ingauge-goal-read.cjs
         env:
           CHROME_PATH: /usr/bin/google-chrome
+          HOTELOPS_HOTEL: ibis_dubai
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
           INGAUGE_EMAIL: ${{ secrets.INGAUGE_EMAIL }}
           INGAUGE_PASS: ${{ secrets.INGAUGE_PASS }}
