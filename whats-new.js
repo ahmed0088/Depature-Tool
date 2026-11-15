@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 596, items: [
+    'Fixed monthly totals stopping when IN-Gauge returns a fractional-cent fee. Reports now display the amount to two decimal places and identify the source value.',
+    'Team totals and report exports use the same reporting precision. Original sale amounts stay unchanged; display rounding never fills a financial edit automatically.',
+    'If an amount is genuinely missing, the message identifies its record, confirmation and product. Missing values are never treated as zero.'
+  ] },
   { v: 595, items: [
     'Mercure totals now include Reviewed sales alongside Approved, with Pending kept separate. The monthly comparison, team totals and goal progress use the same revenue statuses.',
     'Reviewed sales already matching Opera stay settled. Earlier review decisions are preserved; no sales are approved or added by this reporting correction.',

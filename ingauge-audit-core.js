@@ -22,6 +22,18 @@
     const negative=s[0]==='-',a=s.replace(/^-/,'').split('.');const n=Number(a[0])*100+Number((a[1]||'').padEnd(2,'0'));
     return Number.isSafeInteger(n)?(negative?-n:n):null;
   }
+  // Provider amounts can contain fractional cents. Currency reports use decimal
+  // HALF_UP; user input and every financial operation still use strict cents().
+  function reportingCents(value){
+    if(typeof value!=='string'&&typeof value!=='number')return null;
+    if(typeof value==='number'&&!Number.isFinite(value))return null;
+    const exact=cents(value);if(Number.isSafeInteger(exact))return exact;
+    const input=text(value);if(!/^-?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/.test(input)||input.length>100)return null;
+    const negative=input.startsWith('-'),[whole,fraction='']=input.replace(/,/g,'').replace(/^-/,'').split('.');
+    let amount=BigInt(whole)*100n+BigInt((fraction+'00').slice(0,2));if((fraction[2]||'0')>='5')amount++;
+    if(negative)amount=-amount;if(amount>BigInt(Number.MAX_SAFE_INTEGER)||amount<BigInt(Number.MIN_SAFE_INTEGER))return null;
+    return Number(amount);
+  }
   function stable(v){
     if(v===null||['string','boolean'].includes(typeof v))return JSON.stringify(v);
     if(typeof v==='number'){if(!Number.isFinite(v))fail('A review contains a nonfinite number.');return JSON.stringify(v);}
@@ -102,12 +114,32 @@
     if(!numId(r.id)||!text(r.confirmationNumber))fail('A live record is missing its identifier or confirmation.');
     return {id:id(r.id),confirmation:text(r.confirmationNumber),propertyId:id(r.tenantLocationId),departmentId:id(r.locationGroupId),productId:id(r.locationGroupProductId||r.product?.id||r.product?.intId),contributorId:id(r.userId||r.user?.id||r.user?.intId||''),product:text(r.pname||r.locationGroupProductName||r.productName||r.product?.name),seller:text(r.userName||r.employeeName),status:text(r.auditStatus).toUpperCase(),unitCents:cents(r.upsellCharge),totalCents:cents(r.totalUpsellAmount),chargeDays:Number(r.roomNights||1),arrival:dateValue('arrivalDate'),departure:dateValue('departureDate'),businessDate:dateValue('businessDate')||dateValue('metricDate'),room:text(r.roomNumber),memo:text(r.memo),updatedOn:r.updatedOn??null,isManuallyAddedRecord:r.isManuallyAddedRecord===true||r.isManuallyAddedRecord==='true',raw:r};
   }
+  function reportingRecord(value){
+    if(!value||Number.isSafeInteger(value.unitCents)&&Number.isSafeInteger(value.totalCents)||!value.raw)return value;
+    let original;try{original=record(value.raw);}catch(_){return value;}
+    const identity=['id','confirmation','propertyId','departmentId','productId','contributorId','status','chargeDays','arrival','departure','businessDate','room','memo','updatedOn'];
+    if(!identity.every(k=>stable(original[k]??null)===stable(value[k]??null)))return value;
+    for(const k of ['unitCents','totalCents']){const rawField=k==='unitCents'?'upsellCharge':'totalUpsellAmount',sourceAmount=reportingCents(original.raw[rawField]);if(Number.isSafeInteger(value[k])&&Number.isSafeInteger(sourceAmount)&&value[k]!==sourceAmount)return value;}
+    const patch={},amountRounding={};
+    for(const [field,source] of [['unitCents','upsellCharge'],['totalCents','totalUpsellAmount']]){
+      if(Number.isSafeInteger(value[field]))continue;const amount=reportingCents(original.raw[source]);if(!Number.isSafeInteger(amount))continue;
+      patch[field]=amount;amountRounding[field]={source:text(original.raw[source]),cents:amount};
+    }
+    return Object.keys(patch).length?{...value,...patch,reportingOnly:true,amountRounding}:value;
+  }
+  const recordAmountIssue=r=>'IN-Gauge record #'+text(r?.id)+' (confirmation '+text(r?.confirmation||'unavailable')+', '+text(r?.product||'product unavailable')+') has no valid total amount. Refresh IN-Gauge and check that entry. No zero amount was assumed.';
   function reportingMessage(snapshot){
     const p=snapshot?.reporting;if(p?.status!=='available'||!Number.isFinite(p.processedAt)||p.processedAt<=0)return '';
     const when=new Date(p.processedAt).toLocaleString('en-GB',{timeZone:'Asia/Dubai'});
     return 'IN-Gauge dashboard processed through '+when+' Dubai time.'+(Number.isSafeInteger(p.updatedAfterProcessing)&&p.updatedAfterProcessing>0?' '+p.updatedAfterProcessing+' accepted sale rows were updated after that run. The dashboard can differ until IN-Gauge processes those changes.':' The dashboard is a processed reporting view; these totals use current sale records.');
   }
-  function fingerprint(r){return stable({id:r.id,confirmation:r.confirmation,propertyId:r.propertyId,departmentId:r.departmentId,productId:r.productId,contributorId:r.contributorId,status:r.status,unitCents:r.unitCents,totalCents:r.totalCents,chargeDays:r.chargeDays,arrival:r.arrival,departure:r.departure,businessDate:r.businessDate,room:r.room,memo:r.memo,updatedOn:r.updatedOn});}
+  function fingerprint(r){
+    const unparsedAmounts={};
+    if(!Number.isSafeInteger(r.unitCents))unparsedAmounts.unit=text(r.raw?.upsellCharge);
+    if(!Number.isSafeInteger(r.totalCents))unparsedAmounts.total=text(r.raw?.totalUpsellAmount);
+    return stable({id:r.id,confirmation:r.confirmation,propertyId:r.propertyId,departmentId:r.departmentId,productId:r.productId,contributorId:r.contributorId,status:r.status,unitCents:r.unitCents??null,totalCents:r.totalCents??null,chargeDays:r.chargeDays,arrival:r.arrival,departure:r.departure,businessDate:r.businessDate,room:r.room,memo:r.memo,updatedOn:r.updatedOn,...(Object.keys(unparsedAmounts).length?{unparsedAmounts}:{})});
+  }
+
   function amountTotal(values,product,settings){
     const unit=values.unitCents,days=values.chargeDays;
     if(!product||typeof product.recurring!=='boolean')fail('Choose a verified product first.');
@@ -131,6 +163,7 @@
       const before=snapshot.records.find(r=>r.id===id(op.recordId));
       if(op.action!=='add'){
         if(!before||op.expected!==fingerprint(before))fail('The selected record no longer matches the fetched snapshot.');
+        if(before.reportingOnly)fail('A rounded reporting view cannot authorize financial changes. Review the original IN-Gauge record.');
         if(before.propertyId!==snapshot.binding.propertyId||before.departmentId!==snapshot.binding.departmentId)fail('This record belongs to a different hotel or department.');
         if(!editable.has(before.status)&&!(op.action==='delete'&&before.status==='DENIED'))fail('Locked, invoiced, adjusted or removed records need their dedicated IN-Gauge workflow.');
         if(op.action==='edit'&&before.status==='DENIED'&&text(op.reason).length<5)fail('Explain why this denied request should be reopened.');
@@ -231,6 +264,6 @@
   function matches(op,r){
     return differences(op,r).length===0;
   }
-  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,matches,differences,terminal,saleCategory,operationCategory,scopeAllows,isRevenueStatus,reportingMessage};
+  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,matches,differences,terminal,saleCategory,operationCategory,scopeAllows,isRevenueStatus,reportingMessage,reportingCents,reportingRecord,recordAmountIssue};
   root.InGaugeAuditCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

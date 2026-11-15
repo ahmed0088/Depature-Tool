@@ -107,6 +107,11 @@ jobs:
           node tests/monthly-difference.test.js
           node tests/monthly-difference.browser.test.js
 
+      - name: Provider amount precision and exact financial-source guards
+        run: |
+          node tests/ingauge-amounts.test.js
+          node tests/ingauge-amounts.browser.test.js
+
       - name: Reviewed revenue and dashboard processing dates
         run: |
           node tests/ingauge-reviewed.test.js
