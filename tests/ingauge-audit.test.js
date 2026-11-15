@@ -60,7 +60,7 @@ test('payload uses reviewed fields and keeps unrelated existing financial/contex
   const s=snapshot();s.records[0].raw.originalRate=300;s.records[0].raw.newRate=350;const op=edit(s,{productId:'6'}),p=C.payload(op,s,s.records[0]);assert.equal(p.id,100);assert.equal(p.tenantLocationId,2);assert.equal(p.locationGroupProductId,6);assert.equal(p.originalRate,300);assert.equal(p.newRate,350);assert.equal(p.memo,'Original note');assert.equal(p.auditStatus,'PENDING');assert(!('userEmail' in p));
 });
 test('audit actions use distinct exact flags; replacement does not delete and recreate',()=>{
-  assert.equal(C.auditParams({action:'approve',recordId:'100'}).isDeny,'false');assert.equal(C.auditParams({action:'deny',recordId:'100',reason:'Duplicate'}).isDeny,'true');assert.equal(C.auditParams({action:'delete',recordId:'100',reason:'Duplicate'}).isDelete,'true');assert.throws(()=>C.auditParams({action:'edit',recordId:'100'}));
+  assert.throws(()=>C.auditParams({action:'approve',recordId:'100'}),/edit workflow/);assert.equal(C.auditParams({action:'deny',recordId:'100',reason:'Duplicate'}).isDeny,'true');assert.equal(C.auditParams({action:'delete',recordId:'100',reason:'Duplicate'}).isDelete,'true');assert.throws(()=>C.auditParams({action:'edit',recordId:'100'}));
 });
 test('duplicates include Pending, Approved, denied and unidentified products before addition',()=>{
   const s=snapshot(),op={...edit(s),action:'add',productId:'7',values:{...C.values(s.records[0]),businessDate:'2026-11-05'}};

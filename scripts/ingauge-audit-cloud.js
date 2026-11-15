@@ -25,7 +25,7 @@ async function sellerPinGuard(db,plan,snapshot){
   };
 }
 async function execute(plan,snapshot,{portal,db,test,publish,stop,verifySeller}){
-  C.validatePlan(plan,snapshot);const results=[];const save=async(op,result)=>{const before=snapshot.records.find(r=>r.id===op.recordId),product=snapshot.products.find(p=>p.id===op.productId),person=snapshot.contributors.find(p=>p.id===op.contributorId);results.push({...result,action:op.action,at:Date.now(),hotel:snapshot.binding.property,currency:snapshot.settings.currency,before:before?{...C.values(before),status:before.status,product:before.product,seller:before.seller}:null,...(op.sellerFreeze?{sellerFreeze:op.sellerFreeze}:{}),...(op.reconciliation?{reconciliation:op.reconciliation}:{}),requested:{...op.values,status:op.statusAfter||({approve:'APPROVED',deny:'DENIED',delete:'PURGED'})[op.action],product:product?.name||'',seller:person?.name||''},reason:op.reason||[op.evidence,op.sellerFreezeEvidence].filter(Boolean).join(' · ')});await publish(results);};
+  C.validatePlan(plan,snapshot);const results=[];const save=async(op,result)=>{const before=snapshot.records.find(r=>r.id===op.recordId),product=snapshot.products.find(p=>p.id===op.productId),person=snapshot.contributors.find(p=>p.id===op.contributorId);results.push({...result,action:op.action,at:Date.now(),hotel:snapshot.binding.property,currency:snapshot.settings.currency,before:before?{...C.values(before),status:before.status,product:before.product,seller:before.seller}:null,...(op.sellerFreeze?{sellerFreeze:op.sellerFreeze}:{}),...(op.reconciliation?{reconciliation:op.reconciliation}:{}),requested:{...op.values,status:({approve:'APPROVED',deny:'DENIED',delete:'PURGED'})[op.action]||op.statusAfter,product:product?.name||'',seller:person?.name||''},reason:op.reason||[op.evidence,op.sellerFreezeEvidence].filter(Boolean).join(' · ')});await publish(results);};
   for(const [index,op] of plan.operations.entries()){
     if(await stop())return {results,stopped:true};
     const ledgerKey=sha(C.stable(C.binding(plan.binding))+'|'+(op.action==='add'?'transaction:'+op.transaction:'record:'+op.recordId+'|'+op.expected+'|'+op.action));
@@ -36,7 +36,7 @@ async function execute(plan,snapshot,{portal,db,test,publish,stop,verifySeller})
       if(verifySeller)await verifySeller(op);
       await portal.progress?.('preflight','Checking change '+(index+1)+' of '+plan.operations.length);
       const checked=await portal.testOperation(op,snapshot);
-      if(op.action==='edit'&&C.matches(op,checked.current)){await save(op,{key:op.key,confirmation:op.confirmation,state:'unchanged',note:'The selected record already has the reviewed values.',recordId:op.recordId});continue;}
+      if(['edit','approve'].includes(op.action)&&C.matches(op,checked.current)){await save(op,{key:op.key,confirmation:op.confirmation,state:'unchanged',after:checked.current,note:op.action==='approve'?'Already Approved. The existing sale matches your review; no change was sent.':'The selected record already has the reviewed values.',recordId:op.recordId});continue;}
       if(test){if(await stop())return {results,stopped:true};await save(op,{key:op.key,confirmation:op.confirmation,state:'tested',note:'Hotel, permissions, product, contributor, record version, duplicates and period lock checked. No financial change sent.'});continue;}
       if(await stop())return {results,stopped:true};
       if(verifySeller)await verifySeller(op);
@@ -44,8 +44,8 @@ async function execute(plan,snapshot,{portal,db,test,publish,stop,verifySeller})
       await db.put('ingauge/ledger/'+ledgerKey,{state:'intent',at:Date.now(),job:plan.jobTag||'',action:op.action,recordId:op.recordId||'',confirmation:op.confirmation});
       if(await stop()){await db.patch('ingauge/ledger/'+ledgerKey,{state:'cancelled_before_send'});return {results,stopped:true};}
       attempted=true;const outcome=await portal.apply(op,snapshot);
-      await db.patch('ingauge/ledger/'+ledgerKey,{state:'applied',at:Date.now(),recordId:outcome.recordId});
-      await save(op,{key:op.key,confirmation:op.confirmation,state:'applied',recordId:outcome.recordId,after:outcome.after,note:outcome.systemNote||'The final IN-Gauge record was reread and matches the reviewed change.'});
+      await db.patch('ingauge/ledger/'+ledgerKey,{state:outcome.unchanged?'unchanged':'applied',at:Date.now(),recordId:outcome.recordId});
+      await save(op,{key:op.key,confirmation:op.confirmation,state:outcome.unchanged?'unchanged':'applied',recordId:outcome.recordId,after:outcome.after,note:outcome.systemNote||'The final IN-Gauge record was reread and matches the reviewed change.'});
     }catch(error){
       if(error.cancelled&&(!attempted||!portal.sent)){if(attempted)await db.patch('ingauge/ledger/'+ledgerKey,{state:'cancelled_before_send',at:Date.now()});return {results,stopped:true};}
       const uncertain=!!error.uncertain||(attempted&&portal.sent);

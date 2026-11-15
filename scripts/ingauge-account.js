@@ -5,6 +5,7 @@ const API='/pulse/api/';
 const STATUSES=['APPROVED','PENDING','DENIED','LOCKED','ERROR','PURGED','REVIEWED','APPROVED_POST_LOCK','INVOICED_POST_LOCK','DENIED_POST_LOCK','ERROR_POST_LOCK','ADJUSTED_POST_LOCK'];
 class AutomationCancelled extends Error{constructor(){super('Automation cancelled. No further change was sent.');this.cancelled=true;}}
 class PortalError extends Error {constructor(message,uncertain=false){super(message);this.uncertain=uncertain;}}
+const approvalAlreadyMatches=(op,current,snapshot)=>op.action==='approve'&&current?.id===C.id(op.recordId)&&current.status==='APPROVED'&&current.propertyId===snapshot.binding.propertyId&&current.departmentId===snapshot.binding.departmentId&&C.matches(op,current);
 function readQuery(body){try{const ast=parse(JSON.parse(body).query);return ast.definitions.length>0&&ast.definitions.every(d=>d.kind==='OperationDefinition'&&d.operation==='query'&&d.selectionSet.selections.every(f=>f.kind==='Field'&&/^(find|get|is|check|fetch)/.test(f.name.value)&&!/(update|create|delete|remove|save|send|assign|approve|deny|process|reset)/i.test(f.name.value)));}catch(_){return false;}}
 function readAllowed(method,url,origin,body=''){
   const u=new URL(url),p=u.pathname;
@@ -167,7 +168,7 @@ class InGaugeAccount {
     return snapshot.products;
   }
   async testOperation(op,snapshot){
-    let current=null;if(op.action!=='add'){current=await this.readRecord(op.recordId);if(C.fingerprint(current)!==op.expected)throw new PortalError('This record changed since review. Refresh before editing or changing its status.');}
+    let current=null;if(op.action!=='add'){current=await this.readRecord(op.recordId);if(C.fingerprint(current)!==op.expected&&!approvalAlreadyMatches(op,current,snapshot))throw new PortalError('This record changed since review. Refresh before editing or changing its status.');}
     const scope=await this.scope(snapshot.binding),[products,contributors]=await Promise.all([this.verifyReviewedProduct(op,snapshot),this.contributors(scope.binding,{refresh:true})]),fresh={...snapshot,...scope,products,contributors};
     const error=C.operationError(op,fresh);if(error)throw new PortalError(error);
     const v=op.action==='add'||op.action==='edit'?op.values:C.values(current);
@@ -178,13 +179,15 @@ class InGaugeAccount {
     const locked=this.data(lockResponse);
     if(typeof locked!=='boolean'||locked)throw new PortalError('This accounting period is locked or its lock state is unknown. Use IN-Gauge’s adjustment workflow.');
     if(['add','edit'].includes(op.action)&&C.duplicates(op,records.filter(r=>String(r.id)!==String(op.recordId||'')),fresh.products).some(r=>!C.reviewedDuplicate(op,r,snapshot)))throw new PortalError('An existing request or product already represents this sale. It was not duplicated.');
-    const checked={current,snapshot:fresh,payload:['add','edit'].includes(op.action)?C.payload(op,fresh,current):null};this.preflight={key:C.stable(op),binding:C.stable(snapshot.binding),at:Date.now(),checked};return checked;
+    const checked={current,snapshot:fresh,payload:['add','edit'].includes(op.action)?C.payload(op,fresh,current):op.action==='approve'&&!approvalAlreadyMatches(op,current,fresh)?C.approvalPayload(op,fresh,current):null};this.preflight={key:C.stable(op),binding:C.stable(snapshot.binding),at:Date.now(),checked};return checked;
   }
   async apply(op,snapshot){
     this.sent=false;await this.checkCancelled(true);const cached=this.preflight;this.preflight=null;const checked=cached&&cached.key===C.stable(op)&&cached.binding===C.stable(snapshot.binding)&&Date.now()-cached.at<5000?cached.checked:await this.testOperation(op,snapshot);this.preflight=null;
-    if(checked.current){const current=await this.readRecord(op.recordId);if(C.fingerprint(current)!==C.fingerprint(checked.current))throw new PortalError('The record changed immediately before submission. Refresh and review again.');}
+    let current=checked.current;
+    if(current){current=await this.readRecord(op.recordId);if(approvalAlreadyMatches(op,current,snapshot))return {recordId:current.id,after:current,unchanged:true,systemNote:'Already Approved. The existing sale matches all reviewed values; no request was sent.'};if(C.fingerprint(current)!==C.fingerprint(checked.current))throw new PortalError('The record changed immediately before submission. Refresh and review again.');}
     let path,method,data;
     if(['add','edit'].includes(op.action)){path=API+'productMetric/secure';method=op.action==='add'?'post':'put';data=checked.payload;}
+    else if(op.action==='approve'){path=API+'productMetric/secure';method='put';data=C.approvalPayload(op,checked.snapshot||snapshot,current);await this.progress('apply','Saving the existing sale as Approved through the edit workflow');}
     else{path=API+'auditTrail/secure?'+new URLSearchParams(C.auditParams(op));method='post';data={};}
     await this.checkCancelled(true);this.finishingWrite=true;
     try{

@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 593, items: [
+    { ico: '✅', title: 'Approvals use Edit → Approved → Save',
+      what: 'Review approval now saves the existing IN-Gauge sale as Approved through the working edit workflow, then rereads the result. Its product, seller, charge, dates, room and notes are preserved.',
+      does: 'Matching sales already approved manually are verified without another financial request. Changed or unconfirmed records remain held for review, and history shows the requested Approved status correctly.' }
+  ] },
   { v: 592, items: [
     { ico: '📌', title: 'A clearer side menu',
       what: 'Page names, counts and pin buttons now have separate space. The Night Checklist count stays visible, long names shorten neatly, and pinned stars stay visible without a floating dark box.',

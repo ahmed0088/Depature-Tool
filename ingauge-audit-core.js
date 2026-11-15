@@ -148,7 +148,9 @@
       if(op.action==='approve'){
         const p=snapshot.products.find(p=>p.id===before.productId),person=snapshot.contributors.find(p=>p.id===before.contributorId);
         if(!p||p.activeStatus!=='NORMAL'||/UNKNOWN|UNMAPPED/.test(key(p.code+' '+p.name))||!person)fail('Identify the product and contributor before approving this request.');
+        if(id(op.productId)!==before.productId||id(op.contributorId)!==before.contributorId||!op.values||stable(op.values)!==stable(values(before)))fail('An approval must preserve the existing product, seller, amount, dates and notes. Use Edit package to review other changes.');
         if(before.totalCents!==amountTotal(values(before),p,snapshot.settings))fail('Review this request’s configured charge calculation before approval.');
+        if(!snapshot.permissions.canEdit)fail('IN-Gauge approval uses Edit → Approved → Save. This account needs edit permission as well as approval permission.');
       }
       if(['deny','delete'].includes(op.action)&&text(op.reason).length<5)fail('Enter a clear reason for this denial or removal.');
       if(['add','edit'].includes(op.action)){
@@ -195,7 +197,13 @@
     }
     return body;
   }
-  function auditParams(op){if(!['approve','deny','delete'].includes(op.action)||!numId(op.recordId))fail('Invalid audit-status operation.');return {entityIDs:id(op.recordId),isReview:'false',isLock:'false',isDeny:String(op.action==='deny'),isDelete:String(op.action==='delete'),denialNotes:op.action==='approve'?'Approved':text(op.reason),entityType:'PRODUCT_METRIC'};}
+  function approvalPayload(op,snapshot,current){
+    if(op.action!=='approve')fail('Choose an existing Pending request for approval.');
+    const error=operationError(op,snapshot);if(error)fail(error);
+    if(!current||fingerprint(current)!==op.expected)fail('The live request changed after review. Refresh before approving it.');
+    return payload({...op,action:'edit',productId:current.productId,contributorId:current.contributorId,values:values(current),statusAfter:'APPROVED'},snapshot,current);
+  }
+  function auditParams(op){if(op.action==='approve')fail('Approvals use the existing-record edit workflow.');if(!['deny','delete'].includes(op.action)||!numId(op.recordId))fail('Invalid audit-status operation.');return {entityIDs:id(op.recordId),isReview:'false',isLock:'false',isDeny:String(op.action==='deny'),isDelete:String(op.action==='delete'),denialNotes:text(op.reason),entityType:'PRODUCT_METRIC'};}
   function duplicates(op,records,products){
     const product=products.find(p=>p.id===id(op.productId)),once=product&&['EC','LC'].includes(kind(product.code)||kind(product.name));
     const sourceIds=new Set([op.transaction,...(op.reconciliation?.journalIds||[])].map(text).filter(Boolean));
@@ -215,6 +223,6 @@
   function matches(op,r){
     return differences(op,r).length===0;
   }
-  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,payload,auditParams,duplicates,reviewedDuplicate,matches,differences,terminal,saleCategory,operationCategory,scopeAllows};
+  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,matches,differences,terminal,saleCategory,operationCategory,scopeAllows};
   root.InGaugeAuditCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
