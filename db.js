@@ -186,7 +186,7 @@ async function savePurpose(guests) {
   const date = authority ? authority.resolve() : (typeof window !== 'undefined' && /^\d{4}-\d{2}-\d{2}$/.test(window._purDate || '') ? window._purDate : hoLocalISO());
   const meta = authority ? authority.info() : { source: 'saved', at: Date.now(), hotelId: typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || 'local') : 'local' };
   if (typeof window !== 'undefined') window._purDate = date;
-  await fbSet('purpose', { guests, date, businessDate: date, businessDateSource: meta.source, businessDateAt: meta.at, businessDateHotelId: meta.hotelId, updatedAt: new Date().toISOString() });
+  await fbSet('purpose', { guests, date, businessDate: date, businessDateSource: meta.source, businessDateAt: meta.at, businessDateHotelId: meta.hotelId, businessDateMode: meta.mode || 'opera', operaBusinessDate: meta.operaDate || '', operaBusinessDateAt: meta.operaAt || 0, updatedAt: new Date().toISOString() });
 }
 
 /** Update only report-date metadata; the shared guest list is never replaced by a reader heartbeat. */
@@ -196,7 +196,7 @@ async function savePurposeBusinessDate(date, meta) {
   const id = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || 'local') : 'local';
   if (!meta || meta.hotelId !== id) return;
   window._purDate = date;
-  await fbUpdate('purpose', { date, businessDate: date, businessDateSource: meta.source, businessDateAt: meta.at, businessDateHotelId: id, updatedAt: new Date().toISOString() });
+  await fbUpdate('purpose', { date, businessDate: date, businessDateSource: meta.source, businessDateAt: meta.at, businessDateHotelId: id, businessDateMode: meta.mode || 'opera', operaBusinessDate: meta.operaDate || '', operaBusinessDateAt: meta.operaAt || 0, updatedAt: new Date().toISOString() });
 }
 
 async function saveShifts(shiftsObj) {

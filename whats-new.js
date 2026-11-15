@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 597, items: [
+    'Purpose of Stay now has an always-visible date picker. Choose any report date; the table, Excel export and daily history use that date together.',
+    'Manual dates stay selected until you choose Use Opera date. Automatic mode shows the last received Opera business date and explains when it is waiting for the reader.',
+    'The Opera reader recognizes more labelled business-date headers and resends the date when the app reopens, even if the guest list has not changed. Refresh your Opera tab once to load the new reader.'
+  ] },
   { v: 596, items: [
     'Fixed monthly totals stopping when IN-Gauge returns a fractional-cent fee. Reports now display the amount to two decimal places and identify the source value.',
     'Team totals and report exports use the same reporting precision. Original sale amounts stay unchanged; display rounding never fills a financial edit automatically.',

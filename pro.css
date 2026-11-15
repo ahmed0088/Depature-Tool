@@ -3768,7 +3768,7 @@ html, body { background: var(--bg); }
 .gp-cloud-set{margin-top:10px;font-size:.82rem;color:var(--text3)}.gp-cloud-set summary{cursor:pointer}
 .gp-agent-st{margin-top:10px;display:inline-block;padding:4px 10px;border-radius:99px;font-size:.78rem;border:1px solid var(--border);background:var(--card)}.gp-agent-st.on{border-color:color-mix(in srgb,#10b981 55%,var(--border));color:var(--text)}
 .gp-agent-on{display:flex;gap:8px;align-items:center;margin:10px 0 6px;font-size:.88rem;color:var(--text);cursor:pointer}
-:root { --ho-css: "v596"; }
+:root { --ho-css: "v597"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
@@ -4065,3 +4065,6 @@ select option, select optgroup { background: var(--input-bg,var(--card)); color:
 
 /* Enrolment reconnect state: unknown counts are distinct from confirmed zero. */
 .acr-reconnecting{display:block;margin-top:6px;font-size:.78rem;line-height:1.5;color:var(--text2)}
+
+/* Purpose date is always editable; the source and last Opera read stay visible. */
+.purpose-business-bar>.purpose-business-info{flex:1 1 250px;min-width:0}.purpose-business-info small{max-width:68ch;line-height:1.65;overflow-wrap:anywhere}.purpose-business-bar>.purpose-date-controls{display:flex;align-items:flex-end;flex:0 1 auto;gap:12px;flex-wrap:wrap}.purpose-date-controls label{display:grid;gap:6px;margin:0;font-size:.75rem;color:var(--text2)}.purpose-date-controls input{width:190px;max-width:100%;box-sizing:border-box}.purpose-date-controls #purposeUseOpera{height:44px;min-height:44px;margin:0;white-space:nowrap}.purpose-date-controls .btn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}@media(max-width:650px){.purpose-business-bar>.purpose-date-controls{width:100%;flex:1 1 100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end}.purpose-date-controls input{width:100%;min-width:0}.purpose-date-controls .btn{font-size:.75rem;padding-inline:12px}}

@@ -958,16 +958,34 @@ function purposeRenderDate() {
   const date = _purposeDay(), label = document.getElementById('purposeBusinessLabel'), input = document.getElementById('purposeBusinessDate');
   if (label) label.textContent = date.toLocaleDateString('en-GB', {weekday:'long',day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'});
   if (input && document.activeElement !== input) input.value = purposeBusinessISO();
+  const info = window.PurposeBusinessDate?.info(), status = document.getElementById('purposeDateStatus'), follow = document.getElementById('purposeUseOpera');
+  const readonly = typeof currentProfile !== 'undefined' && currentProfile?.role === 'readonly';
+  if (input) input.disabled = readonly;
+  if (follow) { follow.disabled = readonly; follow.setAttribute('aria-pressed', String(info?.mode !== 'manual')); follow.textContent = info?.mode === 'manual' ? 'Use Opera date' : 'Following Opera'; }
+  if (status) {
+    const received = info?.operaAt ? new Date(info.operaAt).toLocaleString('en-GB', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Dubai'})+' Dubai' : '';
+    status.textContent = info?.mode === 'manual' ? 'Manual date · stays until you choose Use Opera date.'+(info.operaDate?' Opera: '+info.operaDate+'.':'')
+      : info?.source === 'opera' ? 'From Opera'+(received?' · last received '+received:'')+'. Updates when its business day changes.'
+      : 'Waiting for Opera’s business date. Saved date kept; open Opera or choose a report date.';
+  }
   document.querySelectorAll('#purposeTable tr').forEach(row=>{if(row.children.length<2)return;row.children[0].textContent=date.toLocaleDateString('en-GB',{weekday:'long',timeZone:'UTC'});row.children[1].textContent=date.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'});});
   const options = document.getElementById('purposeHowHeardOptions');
   if (options && window.PurposeReferral && !options.children.length) options.innerHTML = window.PurposeReferral.options.map(value=>`<option value="${escapeHtml(value)}"></option>`).join('');
 }
 function purposeSetBusinessDate(value) {
-  if (!window.PurposeBusinessDate || !window.PurposeBusinessDate.validISO(value)) { showToast('Choose a valid Opera business date.', 'err'); purposeRenderDate(); return; }
+  if (!window.PurposeBusinessDate || !window.PurposeBusinessDate.validISO(value)) { showToast('Choose a valid report date.', 'err'); const input=document.getElementById('purposeBusinessDate');if(input)input.value=purposeBusinessISO();purposeRenderDate(); return; }
+  if (typeof currentProfile === 'undefined' || !currentProfile || currentProfile.role === 'readonly') { showToast('Your role cannot change the report date.', 'err'); purposeRenderDate(); return; }
   if (!window.PurposeBusinessDate.observe(value, {source:'manual'})) { const input=document.getElementById('purposeBusinessDate');if(input)input.value=purposeBusinessISO();purposeRenderDate(); return; }
-  purposeRender(); showToast('Report date follows '+value+' until Opera changes its business date.', 'ok');
+  purposeRenderDate(); showToast('Report date set to '+value+'. It stays until you choose Use Opera date.', 'ok');
 }
-window.addEventListener('purpose-business-date', () => { const active=document.activeElement;const editing=document.getElementById('purposeTable')?.contains(active)||document.getElementById('purposeCards')?.contains(active);if(editing)purposeRenderDate();else purposeRender(); });
+function purposeUseOperaDate() {
+  if (typeof currentProfile === 'undefined' || !currentProfile || currentProfile.role === 'readonly') { showToast('Your role cannot change the report date.', 'err'); return; }
+  window.PurposeBusinessDate?.useOpera(); purposeRenderDate();
+  showToast(window.PurposeBusinessDate?.info().operaDate ? 'Report follows Opera’s business date.' : 'Waiting for Opera’s business date. Open the linked Opera tab.', 'info');
+}
+// Date/freshness updates touch labels and Day/Date cells only. A reader
+// heartbeat must never rebuild the guest list or disturb an open input.
+window.addEventListener('purpose-business-date', purposeRenderDate);
 
 function purposeRender() {
   purposeRenderDate();

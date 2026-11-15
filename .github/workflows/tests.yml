@@ -77,6 +77,7 @@ jobs:
       - name: Purpose report business day and referral column
         run: |
           node tests/purpose-business-date.test.js
+          node tests/purpose-reader.browser.test.js
           node tests/purpose-referral.test.js
           node tests/purpose-stay.browser.test.js
 

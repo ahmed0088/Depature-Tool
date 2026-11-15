@@ -71,10 +71,59 @@ test('manual overrides are explicit; readonly users never persist date changes',
   assert.equal(x.api.resolve(), '2026-11-10');
   const ro = sandbox({ role: 'readonly' });
   assert.equal(ro.api.observe('2026-11-12', { source: 'manual' }), false);
+  assert.equal(ro.api.useOpera(), false);
   assert.equal(ro.api.observe('2026-11-14', { source: 'opera' }), true);
   assert.equal(ro.api.resolve(), '2026-11-14'); assert.equal(ro.writes.length, 0);
   const anonymous = sandbox({ role: null }); anonymous.api.observe('2026-11-14', { source: 'opera' });
   assert.equal(anonymous.writes.length, 0);
+});
+
+test('any manual report date stays selected through Opera reads and reopening; returning to Opera is immediate', () => {
+  const x = sandbox(); x.api.observe('2026-11-13', { source: 'opera' });
+  x.clock.now += 1000;
+  assert.equal(x.api.observe('2027-01-05', { source: 'manual' }), true);
+  x.clock.now += 1000; x.api.observe('2026-11-16', { source: 'opera' });
+  assert.equal(x.api.resolve(), '2027-01-05'); assert.equal(x.api.info().operaDate, '2026-11-16');
+  assert.equal(x.api.info().mode, 'manual');
+  const reopened = sandbox({ storage:x.storage, at:'2026-11-17T06:00:00Z' });
+  assert.equal(reopened.api.resolve(), '2027-01-05');
+  assert.equal(reopened.api.useOpera(), true);
+  assert.equal(reopened.api.resolve(), '2026-11-16', 'a future manual date must not block the real Opera day');
+  assert.equal(reopened.api.info().mode, 'opera');
+  assert.equal(reopened.api.observe('2026-11-17', { source:'opera' }), true);
+  assert.equal(reopened.api.resolve(), '2026-11-17');
+});
+
+test('a legacy saved day is labelled unverified until explicit Opera arrives, including after a future manual date', () => {
+  const x = sandbox({at:'2026-11-16T06:00:00Z'});
+  x.api.restore({date:'2026-11-13',updatedAt:'2026-11-13T12:00:00Z'});
+  assert.equal(x.api.resolve(),'2026-11-13');assert.equal(x.api.info().operaDate,'');
+  x.api.observe('2027-01-05',{source:'manual'});x.clock.now+=1000;x.api.useOpera();
+  assert.equal(x.api.info().source,'saved');
+  x.clock.now+=1000;x.api.observe('2026-11-16',{source:'opera'});
+  assert.equal(x.api.resolve(),'2026-11-16');
+});
+
+test('fresh shared manual selections replace automatic dates but stale replies cannot change the selection', () => {
+  const x = sandbox();x.api.observe('2026-11-13',{source:'opera'});x.clock.now+=1000;
+  x.api.restore({businessDate:'2026-11-10',businessDateSource:'manual',businessDateMode:'manual',businessDateAt:x.clock.now,operaBusinessDate:'2026-11-13',operaBusinessDateAt:x.clock.now-1000});
+  assert.equal(x.api.resolve(),'2026-11-10');assert.equal(x.api.info().mode,'manual');
+  x.api.restore({businessDate:'2026-11-13',businessDateSource:'opera',businessDateAt:x.clock.now-1000});
+  assert.equal(x.api.resolve(),'2026-11-10');
+  x.api.restore({date:'2026-11-13',updatedAt:new Date(x.clock.now+100000).toISOString()});
+  assert.equal(x.api.resolve(),'2026-11-10','an unrelated legacy guest save cannot undo a manual report date');
+  x.clock.now+=1000;x.api.observe('2026-11-14',{source:'opera'});
+  assert.equal(x.api.resolve(),'2026-11-10');
+  const meta=x.writes.at(-1).meta;
+  assert.equal(meta.mode,'manual');assert.equal(meta.operaDate,'2026-11-14');assert.equal(meta.date,'2026-11-10');
+  const peer=sandbox();peer.api.restore({businessDate:meta.date,businessDateSource:meta.source,businessDateMode:meta.mode,businessDateAt:meta.at,operaBusinessDate:meta.operaDate,operaBusinessDateAt:meta.operaAt});
+  assert.equal(peer.api.resolve(),'2026-11-10');peer.api.useOpera();assert.equal(peer.api.resolve(),'2026-11-14');
+});
+
+test('unchanged reader heartbeats refresh freshness without repeatedly writing the shared guest report', () => {
+  const x=sandbox();x.api.observe('2026-11-13',{source:'opera'});const writes=x.writes.length;
+  x.clock.now+=15000;assert.equal(x.api.observe('2026-11-13',{source:'opera'}),false);
+  assert.equal(x.api.info().operaAt,x.clock.now);assert.equal(x.writes.length,writes);
 });
 
 test('impossible or malformed dates never become a report day', () => {
@@ -96,6 +145,7 @@ test('saving guest edits and date-only observations preserve business date and e
   await vm.runInContext('savePurpose(testGuests)', x.sb);
   assert.equal(sets[0].value.date, '2026-11-13'); assert.equal(sets[0].value.businessDate, '2026-11-13');
   assert.equal(sets[0].value.businessDateSource, 'opera'); assert.deepEqual(sets[0].value.guests, plain(x.sb.testGuests));
+  assert.equal(sets[0].value.businessDateMode, 'opera');assert.equal(sets[0].value.operaBusinessDate, '2026-11-13');
   x.api.observe('2026-11-14', { source: 'opera' });
   assert.equal(patches[0].value.businessDate, '2026-11-14'); assert(!('guests' in patches[0].value), 'rollover is a metadata patch, never a guest-list replacement');
   x.sb.currentProfile = { role: 'readonly' }; await vm.runInContext("savePurposeBusinessDate('2026-11-15', {hotelId:'ibis',source:'opera',at:Date.now()})", x.sb);

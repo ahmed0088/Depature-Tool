@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v596"/>
+<meta name="ho-version" content="v597"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -1049,7 +1049,7 @@
       <button class="btn rose" onclick="clearPurpose()">✕ Clear</button>
     </div>
   </div>
-  <div class="purpose-business-bar"><div><span>Opera business date</span><b id="purposeBusinessLabel"></b><small>Kept until Opera changes its business date</small></div><details><summary>Set report date</summary><label>Current Opera date<input type="date" id="purposeBusinessDate" onchange="purposeSetBusinessDate(this.value)"></label></details></div>
+  <div class="purpose-business-bar" aria-label="Purpose report date"><div class="purpose-business-info"><span>Report date</span><b id="purposeBusinessLabel"></b><small id="purposeDateStatus" role="status"></small></div><div class="purpose-date-controls"><label for="purposeBusinessDate">Choose any report date<input type="date" id="purposeBusinessDate" onchange="purposeSetBusinessDate(this.value)"></label><button type="button" id="purposeUseOpera" class="btn" onclick="purposeUseOperaDate()" aria-pressed="true">Follow Opera date</button></div></div>
   <datalist id="purposeHowHeardOptions"></datalist>
   <div id="purposeSrcWarn" class="src-warn" style="display:none;"></div>
   <div id="purposeColMap" class="colmap" style="display:none;"></div>

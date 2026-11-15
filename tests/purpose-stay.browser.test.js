@@ -19,7 +19,7 @@ async function fixture(browser, { phone, clock = '2026-11-13T18:00:00Z', context
   await page.route('**/*', route => route.request().url() === 'https://purpose.hotelops.test/' ? route.fulfill({ contentType: 'text/html', body: html }) : route.abort());
   await page.goto('https://purpose.hotelops.test/');
   for (const name of ['styles.css', 'pro.css']) await page.addStyleTag({ content: source(name) });
-  await page.addStyleTag({ content: 'body{margin:0;padding:16px;--bg:#0b111a;--bg2:#121a26;--card:#182333;--text:#e8edf5;--text2:#a9b6c8;--text3:#8392a6;--border:#354356;--border2:#354356;--accent:#e8b337;--gold:#e8b337;--mint:#45d1b2;--sky:#58a9f8;--amber:#eab941;color:var(--text);background:var(--bg)}#panel-purpose{display:block!important;max-width:1280px;margin:auto}.tbl-wrap{max-width:100%;overflow:auto}' });
+  await page.addStyleTag({ content: 'body{margin:0;padding:16px;--bg:#0b111a;--bg2:#121a26;--card:#182333;--text:#e8edf5;--text2:#a9b6c8;--text3:#8392a6;--border:#354356;--border2:#354356;--accent:#e8b337;--gold:#e8b337;--mint:#45d1b2;--sky:#58a9f8;--amber:#eab941;color:var(--text);background:var(--bg)}#panel-purpose{display:block!important;width:100%;min-width:0;max-width:1280px;margin:auto}.tbl-wrap{max-width:100%;overflow:auto}' });
   await page.evaluate(({ clock }) => {
     window.fixtureClock = Date.parse(clock); const NativeDate = Date;
     window.Date = class extends NativeDate { constructor(...args) { super(...(args.length ? args : [fixtureClock])); } static now() { return fixtureClock; } };
@@ -180,6 +180,33 @@ function assertBusinessDate(rows, date, weekday) {
         assert.equal(await page.evaluate(() => document.activeElement === livePurposeCardInput && purposeGuests[0] === livePurposeGuest), true, 'card edits must be protected from server list refreshes');
         assert.equal(await cardTyping.inputValue(), 'Typing in card view');
         assert.match(await page.locator('#purposeBusinessLabel').innerText(), /Thursday.*19[\s-]+Nov/i);
+        await page.evaluate(() => { document.activeElement.blur(); fixtureClock=Date.parse('2026-11-19T12:00:00Z'); });
+        await page.evaluate(()=>{window.savedPurposeRow=document.querySelector('#purposeTable tr');PurposeBusinessDate.observe('2026-11-19',{source:'opera',at:Date.now()});});
+        assert.equal(await page.evaluate(()=>savedPurposeRow===document.querySelector('#purposeTable tr')),true,'date heartbeats must not rebuild or flash guest rows');
+        // Date controls are visible without opening a menu, including on a phone.
+        const dateInput=page.locator('#purposeBusinessDate'),follow=page.locator('#purposeUseOpera');
+        await dateInput.scrollIntoViewIfNeeded();assert(await dateInput.isVisible());assert(await follow.isVisible());
+        assert.equal(await dateInput.getAttribute('min'),null);assert.equal(await dateInput.getAttribute('max'),null);
+        await dateInput.fill('2027-01-05');await dateInput.dispatchEvent('change');
+        assert.equal(await page.evaluate(()=>PurposeBusinessDate.resolve()),'2027-01-05');
+        assert.match(await page.locator('#purposeDateStatus').innerText(),/Manual date/);
+        assert.equal(await follow.getAttribute('aria-pressed'),'false');
+        await page.evaluate(()=>{PurposeBusinessDate.observe('2026-11-20',{source:'opera',at:Date.now()+1000});exportPurpose();});
+        assertBusinessDate((await lastExport(page))[2],/05[\s-]+Jan[\s-]+(?:20)?27/i,'Tuesday');
+        assert.equal(await dateInput.inputValue(),'2027-01-05');
+        const manualReload=await fixture(browser,{phone,context,seed:false,clock:'2026-11-20T12:00:00Z'});
+        assert.equal(await manualReload.page.evaluate(()=>PurposeBusinessDate.resolve()),'2027-01-05');
+        assert.equal(await manualReload.page.evaluate(()=>PurposeBusinessDate.info().mode),'manual');await manualReload.page.close();
+        await follow.click();await page.evaluate(()=>exportPurpose());
+        assertBusinessDate((await lastExport(page))[2],/20[\s-]+Nov[\s-]+(?:20)?26/i,'Friday');
+        assert.equal(await page.evaluate(()=>PurposeBusinessDate.info().mode),'opera');
+        assert.match(await page.locator('#purposeDateStatus').innerText(),/From Opera.*Dubai/);
+        assert.equal(await dateInput.inputValue(),'2026-11-20');
+        // Historical reports use the chosen day consistently, without changing Opera.
+        await dateInput.fill('2026-10-31');await dateInput.dispatchEvent('change');await page.evaluate(()=>exportPurpose());
+        assertBusinessDate((await lastExport(page))[2],/31[\s-]+Oct[\s-]+(?:20)?26/i,'Saturday');
+        assert.equal(await page.evaluate(()=>PurposeBusinessDate.info().operaDate),'2026-11-20');
+        if(phone){const sizes=await page.evaluate(()=>{const x=document.querySelector('.purpose-business-bar').getBoundingClientRect(),a=document.querySelector('#purposeBusinessDate').getBoundingClientRect(),b=document.querySelector('#purposeUseOpera').getBoundingClientRect();return{right:x.right,input:a.right,button:b.right,width:innerWidth,inputHeight:a.height,buttonHeight:b.height};});assert(sizes.right<=sizes.width&&sizes.input<=sizes.width&&sizes.button<=sizes.width,JSON.stringify(sizes));assert(sizes.inputHeight>=44&&sizes.buttonHeight>=44);}
         assert.deepEqual(errors, []);
       } finally { await context.close(); }
     }

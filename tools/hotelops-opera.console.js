@@ -1454,25 +1454,31 @@
   }
 
   function businessDate(doc, order) {
-    var result = '';
-    doc.querySelectorAll('label, span, h1, h2, h3, [role="heading"], [class*="date" i], [id*="date" i], [aria-label*="business" i]').forEach(function (e) {
-      if (result || mine(e) || inData(e)) return;
+    var found = [];
+    function editable(node) { return node && (/^(?:INPUT|SELECT|TEXTAREA)$/.test(node.tagName) && !node.readOnly && !node.disabled || node.getAttribute('contenteditable') === 'true' || node.querySelector && node.querySelector('input:not([readonly]):not([disabled]), select:not([disabled]), textarea:not([readonly]):not([disabled]), [contenteditable="true"]')); }
+    function hidden(node) { return node && (node.closest && node.closest('[hidden], [aria-hidden="true"]') || node.getClientRects && !node.getClientRects().length); }
+    doc.querySelectorAll('label, span, h1, h2, h3, time, [role="heading"], [class*="date" i], [id*="date" i], [name*="businessDate" i], [aria-label*="business" i], [title*="business" i], [data-label*="business" i]').forEach(function (e) {
+      if (mine(e) || inData(e)) return;
+      var attrs = [e.getAttribute('aria-label') || '', e.getAttribute('title') || '', e.getAttribute('data-label') || ''].join(' ');
+      var semantic = /business[_:\s-]*date/i.test((e.getAttribute('id') || '') + ' ' + (e.getAttribute('name') || ''));
       // Cheap text-content check avoids layout reads on every ordinary ADF span.
-      if (typeof e.textContent === 'string' && !/business\s*date/i.test(e.textContent + ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.getAttribute('title') || ''))) return;
-      var label = [txt(e), e.getAttribute('aria-label') || '', e.getAttribute('title') || ''].join(' ').replace(/businessDate/gi, 'Business Date');
+      if (!semantic && typeof e.textContent === 'string' && !/business\s*date/i.test(e.textContent + ' ' + attrs)) return;
+      var label = [txt(e), attrs].join(' ').replace(/businessDate/gi, 'Business Date');
+      if (semantic && !/business\s+date/i.test(label)) label = 'Business Date ' + label;
       if (!/\bbusiness\s+date(?=\b|\d)/i.test(label) || label.length > 180) return;
+      if (hidden(e) || editable(e)) return;
       var target = e.tagName === 'LABEL' && e.getAttribute('for') ? doc.getElementById(e.getAttribute('for')) : null;
-      if (e.tagName === 'INPUT' && !e.readOnly && !e.disabled || target && target.tagName === 'INPUT' && !target.readOnly && !target.disabled) return;   // an editable report filter
-      result = businessDateFromText(label, order);
-      if (result) return;
+      if (editable(target) || hidden(target)) return;   // an editable report filter
+      var result = businessDateFromText(label, order);
       var candidates = [target, e, e.nextElementSibling, e.parentElement];
       for (var i = 0; i < candidates.length && !result; i++) {
-        var node = candidates[i]; if (!node || mine(node) || inData(node) || node.tagName === 'INPUT' && !node.readOnly && !node.disabled) continue;
+        var node = candidates[i]; if (!node || mine(node) || inData(node) || hidden(node) || editable(node)) continue;
         var value = node.tagName === 'INPUT' ? node.value : txt(node);
         if (value && value.length < 160) result = businessDateFromText(node === e.parentElement ? value : 'Business Date ' + value, order);
       }
+      if (result && found.indexOf(result) < 0) found.push(result);
     });
-    return result;
+    return found.length === 1 ? found[0] : '';   // conflicting authorities need a reviewer, never the first arbitrary date
   }
 
   // Never in Opera's way: no reading while you type or click (it waits until you pause), only when the
@@ -1819,7 +1825,7 @@
     if (steps.length) flushLearn();
     if (stuckQ.length) flushStuck();
     // the Opera Cloud address (origin + path, no query or hash): HotelOps' "Open Opera" button opens it
-    post({ source: 'ho-op', ping: 1, t: Date.now(), v: VERSION, frame: FRAME, h: view.rows.length ? sentHash : '', home: TOP ? location.origin + location.pathname : '', prop: PROP });
+    post({ source: 'ho-op', ping: 1, t: Date.now(), v: VERSION, frame: FRAME, h: view.rows.length || view.businessDate ? sentHash : '', businessDate: view.businessDate || '', home: TOP ? location.origin + location.pathname : '', prop: PROP });
     Object.keys(frames).forEach(function (k) { if (Date.now() - frames[k].at > 120000) delete frames[k]; });
     render();
   }

@@ -1604,6 +1604,12 @@ W.addEventListener('message', e => {
   if (d.prop && /^[A-Z0-9]{3,8}$/.test(String(d.prop))) LINK.prop = String(d.prop);
   if (d.answer && typeof d.answer === 'object') { const text = safe(() => readerAnswer(d.answer), 'Not changed'); toast('📡 ' + text, 'ok'); reply({ source: 'ho-op-ack', answered: String(d.answer.id || '').slice(0, 80), text, ask: readerAsks() }); safe(paint); return; }
   if (d.ping) {
+    // A reopened app also needs the operating date when the guest list has not
+    // changed, or the header is the only readable item in this Opera frame.
+    if (d.businessDate && W.PurposeBusinessDate) {
+      const dated = sanitize({kind:'other',rows:[],businessDate:d.businessDate,prop:d.prop});
+      if (dated?.businessDate && !propCheck(dated.prop)) safe(() => W.PurposeBusinessDate.observe(dated.businessDate, {source:'opera',at:Date.now()}));
+    }
     // answered at once, signed in or not (only applying waits): the reader shows "linked" as soon as this tab has loaded
     reply({ source: 'ho-op-ack', pong: 1, frame: String(d.frame || ''), again: !!(d.h && !SEEN.has(String(d.h))), auto: CFG.auto, learn: learnOn(), app: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', teach: teachNow(), guard: ogKnown() ? ogMsg() : null, ask: readerAsks() });
     if (d.home) safe(() => rememberHome(d.home));
