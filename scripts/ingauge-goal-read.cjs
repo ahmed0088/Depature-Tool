@@ -11,6 +11,14 @@ function envelope(report){const key=crypto.randomBytes(32),iv=crypto.randomBytes
  for(const h of d.hotels.filter(h=>/mercure/i.test(h.name))){const g=h.departments.find(g=>g.name==='Front Desk');if(!g)continue;out.stage='records '+h.id;const b=C.binding({portalUrl:d.portalUrl,tenantId:h.tenantId,propertyId:h.id,departmentId:g.id,property:h.name,department:g.name}),scope=await p.scope(b),records=await p.search(b,from,to);out.hotels.push({binding:b,settings:scope.settings,permissions:scope.permissions,records});
  }
  out.stage='dashboard requests';
+ const b=out.hotels[0]?.binding;if(b){out.dashboardReads={};for(const [name,path] of [
+ ['processing','/pulse/api/dashboard/secure/getReconcileData?'+new URLSearchParams({tenantId:b.tenantId,tenantLocationId:b.propertyId,locationGroupId:b.departmentId,userId:'-2',actualStartDate:from,actualEndDate:to,showCompare:'false',readyToProcess:'-2',isLastDataUploadTimeRequired:'true'})],
+ ['target','/pulse/api/target/secure/getTargetForReportCode?'+new URLSearchParams({tenantId:b.tenantId,tenantLocationId:b.propertyId,month:to.slice(5,7).replace(/^0/,''),year:to.slice(0,4),reportCode:'IR'})],
+ ['dashboards','/pulse/api/dashboard/secure/findSpecial?'+new URLSearchParams({tenantId:b.tenantId,userId:p.actor.id,getSection:'false'})]
+ ])try{out.dashboardReads[name]=await p.read(path);}catch(e){out.dashboardReads[name]={error:privateError(e)};}
+ const dashboards=out.dashboardReads.dashboards?.data;out.dashboardDetails=[];for(const row of (Array.isArray(dashboards)?dashboards:[]).filter(x=>/goal|front|revenue|performance|how am|command/i.test(x.title||x.name||'')).slice(0,8)){try{out.dashboardDetails.push(await p.read('/pulse/api/dashboard/secure/'+row.id));}catch(e){out.dashboardDetails.push({error:privateError(e)});}}
+ }
+
  try{out.reportDefinitions=await p.read('/pulse/api/report/secure/getAccessibleReport?tenantId='+p.tenantId+'&forTarget=false&accessible=false&getAll=true');}catch(e){out.reportError=privateError(e);}
  out.factories=await page.evaluate(()=>{let runtime;window.webpackChunkin_gauge.push([[991234],{},r=>{runtime=r;}]);const out=[];for(const [id,f] of Object.entries(runtime?.m||{})){const text=f.toString();if(/getCustomReportData\([^)]*\)\{|getDashboardById\([^)]*\)\{|getReconcileData\([^)]*\)\{/.test(text))out.push({id,text:text.slice(0,120000)});}return out;});
  out.jsResources=await page.evaluate(()=>performance.getEntriesByType('resource').map(x=>x.name).filter(x=>/\.js(?:\?|$)/.test(x)));
