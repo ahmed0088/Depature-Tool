@@ -14,6 +14,9 @@ function readAllowed(method,url,origin,body=''){
   if(method==='POST'&&['/m-api/login-service/v1/authenticate-with-auth0','/m-api/api/user/authenticateUserUsingLDAP','/pulse/api/tenantMenu/secure/getTenantMenuSelectedValue'].includes(p))return true;
   if(!p.startsWith('/pulse/api/')&&!p.startsWith('/m-api/'))return method==='GET';
   if(method==='POST'&&p.endsWith('/gql'))return readQuery(body);
+  // The official location-goal screen reads this POST with a literal null body.
+  // This endpoint reads goal configuration; saveGoals remains blocked.
+  if(method==='POST'&&p==='/pulse/api/goal/secure/getRevenueGoal')return body.trim()==='null'&&u.searchParams.get('isLocationGoal')==='true'&&u.searchParams.get('isMultiple')==='false';
   if(/(update|create|delete|remove|save|send|assign|approve|deny|process|suspend|reset|impersonat|set[A-Z])/i.test(p))return false;
   if(method==='GET')return /\/(get[A-Z][^/]*|find[^/]*|is[A-Z0-9][^/]*|check[A-Z][^/]*)(\/[^/]*)*$/.test(p)||/\/secure\/\d+$/.test(p)||['/pulse/api/metricAuditStatus/secure','/pulse/api/currency/secure/list'].includes(p)||/\/avatar_base64\/\d+\/\d+$/.test(p);
   return method==='POST'&&/\/(find|searchProductMetricData|getAllLocaionGroupProduct)$/.test(p);
@@ -66,8 +69,8 @@ class InGaugeAccount {
     await this.checkCancelled();
     if(!this.headers?.authorization)throw new PortalError('The authenticated portal connection is unavailable.');
     const method=data===undefined?'GET':'POST',url=this.origin+path;
-    if(!readAllowed(method,url,this.origin,JSON.stringify(data||{})))throw new PortalError('A read attempted an unverified endpoint.');
-    const options={headers:{...this.headers,...(this.scopeTenant?{tenantid:this.scopeTenant}:{})},timeout:30000};if(data!==undefined)options.data=data;
+    if(!readAllowed(method,url,this.origin,JSON.stringify(data===undefined?{}:data)))throw new PortalError('A read attempted an unverified endpoint.');
+    const options={headers:{...this.headers,...(this.scopeTenant?{tenantid:this.scopeTenant}:{})},timeout:30000};if(data!==undefined)options.data=data===null?'null':data;
     const r=await this.context.request[method==='POST'?'post':'get'](url,options);
     if(!r.ok())throw new PortalError('IN-Gauge read failed ('+r.status()+').');
     try{return await r.json();}catch(_){throw new PortalError('IN-Gauge returned an unreadable response.');}
@@ -153,9 +156,23 @@ class InGaugeAccount {
       if(!data.data.length)throw new PortalError('The live record list ended early.');
     }throw new PortalError('The record list exceeds the verified pagination limit. Narrow the date range.');
   }
-  async snapshot(b,from,to,hotelId,snapshotId,{refreshReferences=false}={}){
+  async monthlyGoal(binding,month){
+    const b=C.binding(binding),base={schema:1,source:'IN-Gauge location goal',month,binding:b,fetchedAt:Date.now()};
+    if(!/^\d{4}-\d{2}$/.test(month)||!C.day(month+'-01'))throw new PortalError('Choose a valid goal month.');
+    await this.progress('goals','Reading the selected hotel’s monthly goal configuration');
+    try{
+      const params=new URLSearchParams({industryId:String(this.headers.industryid||1),tenantId:b.tenantId,tenantLocationId:b.propertyId,month:String(Number(month.slice(5))),year:month.slice(0,4),isMultiple:'false',isLocationGoal:'true',currentMonthGoalsGroupedByCategory:'false'});
+      const data=this.data(await this.read(API+'goal/secure/getRevenueGoal?'+params,null));
+      // totalUpsellGoal is an ARPD/configuration metric, not a cash revenue target.
+      // Do not turn it into a currency goal or sum product targets speculatively.
+      if(data?.goalsExist===false)return {...base,status:'not-set'};
+      return {...base,status:'requires-review'};
+    }catch(error){if(error.cancelled)throw error;return {...base,status:'unavailable'};}
+  }
+  async snapshot(b,from,to,hotelId,snapshotId,{refreshReferences=false,includeGoals=false}={}){
     const scope=await this.scope(b),[products,contributors,records]=await Promise.all([this.products(scope.binding,{refresh:refreshReferences}),this.contributors(scope.binding,{refresh:refreshReferences}),this.search(scope.binding,from,to)]);
-    return {schema:1,id:snapshotId,hotelId,...scope,from,to,fetchedAt:Date.now(),complete:true,pagination:{verified:true,total:records.length,read:records.length,sort:'id'},products,contributors,records,actor:this.actor,referenceData:this.referenceCache?{...this.referenceCache.meta}:null};
+    const goals=includeGoals&&from.slice(0,7)===to.slice(0,7)?await this.monthlyGoal(scope.binding,from.slice(0,7)):null;
+    return {schema:1,id:snapshotId,hotelId,...scope,from,to,fetchedAt:Date.now(),complete:true,pagination:{verified:true,total:records.length,read:records.length,sort:'id'},products,contributors,records,actor:this.actor,referenceData:this.referenceCache?{...this.referenceCache.meta}:null,...(goals?{goals}:{})};
   }
   async readRecord(id){return C.record(this.data(await this.read(API+'productMetric/secure/'+C.id(id))));}
   async verifyReviewedProduct(op,snapshot){

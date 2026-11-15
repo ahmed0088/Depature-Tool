@@ -4,7 +4,7 @@
   const SCHEMA = 1;
   const DEFAULTS = Object.freeze({ monthly: true, manual: true, automatic: true, find: true, automation: true,
     add: true, edit: true, approve: true, deny: true, remove: true, graphs: true, breakdown: true,
-    history: true, hints: true, compact: false, autoOpenRun: true, landing: 'monthly' });
+    history: true, hints: true, compact: false, autoOpenRun: true, landing: W.InGaugeOverview ? 'overview' : 'monthly' });
   const KEYS = Object.freeze(Object.keys(DEFAULTS));
   const BOOL_KEYS = KEYS.filter(k => k !== 'landing');
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -39,13 +39,13 @@
     return next;
   }
   function landingOptions(prefs) {
-    return [['monthly', 'Monthly totals'], ['audit', 'Review & fix'], ['edit', 'Find a sale']].filter(([value]) => value === 'audit' || value === 'monthly' && prefs.monthly || value === 'edit' && prefs.find);
+    return [...(W.InGaugeOverview ? [['overview', 'Daily overview']] : []), ['monthly', 'Compare totals'], ['audit', 'Review & fix'], ['edit', 'Find a sale']].filter(([value]) => value === 'overview' && !!W.InGaugeOverview || value === 'audit' || value === 'monthly' && prefs.monthly || value === 'edit' && prefs.find);
   }
   function normalize(value) {
     const next = { ...DEFAULTS };
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       for (const k of BOOL_KEYS) if (typeof value[k] === 'boolean') next[k] = value[k];
-      if (['monthly', 'audit', 'edit'].includes(value.landing)) next.landing = value.landing;
+      if (['overview', 'monthly', 'audit', 'edit'].includes(value.landing)) next.landing = value.landing;
     }
     if (!next.manual && !next.automatic) { next.manual = true; next.automatic = true; }
     if (!landingOptions(next).some(([v]) => v === next.landing)) next.landing = 'audit';
@@ -61,7 +61,7 @@
     if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw Error('Choose valid settings.');
     for (const k of Object.keys(patch)) {
       if (!KEYS.includes(k)) throw Error('Unknown IN-Gauge setting.');
-      if (k === 'landing' ? !['monthly', 'audit', 'edit'].includes(patch[k]) : typeof patch[k] !== 'boolean') throw Error('Choose a valid value for this setting.');
+      if (k === 'landing' ? !['overview', 'monthly', 'audit', 'edit'].includes(patch[k]) : typeof patch[k] !== 'boolean') throw Error('Choose a valid value for this setting.');
     }
     const merged = { ...get(S), ...patch };
     if (!merged.manual && !merged.automatic) throw Error('Keep Manual upsells or Automatic packages switched on.');

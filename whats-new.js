@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 594, items: [
+    'Daily IN-Gauge overview: each seller’s monthly upsells, approved today, pending requests and downloadable team totals.',
+    'Save a monthly HotelOps revenue goal for each hotel; see progress, the remaining gap and daily pace. No guessed IN-Gauge targets.',
+    'A simpler package audit: Add reports → Review fixes → Apply selected. Saved changes move out of the remaining list; the phone layout is clearer.',
+    'Overview refreshes keep your audit dates and saved selections. Completed reads return after reopening; applied changes mark saved figures for refresh.'
+  ] },
   { v: 593, items: [
     { ico: '✅', title: 'Approvals use Edit → Approved → Save',
       what: 'Review approval now saves the existing IN-Gauge sale as Approved through the working edit workflow, then rereads the result. Its product, seller, charge, dates, room and notes are preserved.',

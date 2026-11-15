@@ -8,6 +8,12 @@ const {ReferenceCache}=require('./ingauge-reference-cache.js');
 const portalError=error=>error?.name==='TimeoutError'?'The portal did not finish the requested screen or sign-in. No further operation was sent.':privateError(error);
 const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
 const targetKey=(b,hid)=>b?'ig-'+sha(C.stable(C.binding(b))).slice(0,32):'discover-'+hid;
+const overviewPath=(binding,month)=>'ingauge/targets/t'+sha(C.stable(Pins.identity(binding))).slice(0,40)+'/overview/'+month;
+async function invalidateOverviewReads(db,plan,snapshot,results,at=Date.now()){
+  if(!snapshot||!results.some(r=>['applied','uncertain'].includes(r.state)))return;
+  const months=new Set();for(const result of results.filter(r=>['applied','uncertain'].includes(r.state))){const op=plan.operations.find(o=>o.key===result.key);if(!op)continue;const before=snapshot.records.find(r=>r.id===op.recordId);for(const value of [before?.businessDate,op.values?.businessDate])if(C.day(value))months.add(value.slice(0,7));}
+  for(const month of months)await db.put(overviewPath(plan.binding,month)+'/changedAt',at);
+}
 async function sellerPinGuard(db,plan,snapshot){
   const legacy=await db.get('ingauge/legacyContext'),binding=legacy?.schema===1?legacy.binding:await db.get('ingauge/binding');
   const context='ingauge/targets/t'+sha(C.stable(Pins.identity(plan.binding))).slice(0,40)+'/auditContext';
@@ -71,7 +77,7 @@ async function main(){
   if(!['discover','snapshot','apply'].includes(plan.mode))throw Error('Unknown job mode.');
   if(E.TARGET_KEY!==targetKey(plan.binding,db.hotelId))throw Error('This workflow does not hold the correct property queue.');
   let snapshot=null;
-  const invalidateSnapshot=async results=>{if(snapshot&&!test&&results.some(r=>['applied','uncertain'].includes(r.state)))await db.patch('ingauge/snapshots/'+snapshot.id,{invalidatedAt:Date.now(),invalidatedBy:tag});};
+  const invalidateSnapshot=async results=>{if(snapshot&&!test&&results.some(r=>['applied','uncertain'].includes(r.state))){await db.patch('ingauge/snapshots/'+snapshot.id,{invalidatedAt:Date.now(),invalidatedBy:tag});await invalidateOverviewReads(db,plan,snapshot,results);}};
   const run=E.GITHUB_RUN_ID?'https://github.com/ahmed0088/Depature-Tool/actions/runs/'+E.GITHUB_RUN_ID:'';
   const publish=async(results,state='running',note='Checking IN-Gauge',extra={})=>{
     publishedResults=results;
@@ -109,8 +115,9 @@ async function main(){
     }
     if(plan.mode==='snapshot'){
       if(!C.day(plan.from)||!C.day(plan.to)||plan.from>plan.to||new Date(plan.to)-new Date(plan.from)>366*86400000)throw Error('Choose an audit period of at most one year.');
-      const result=await portal.snapshot(plan.binding,plan.from,plan.to,db.hotelId,tag,{refreshReferences:plan.refreshReferenceData===true});
+      const result=await portal.snapshot(plan.binding,plan.from,plan.to,db.hotelId,tag,{refreshReferences:plan.refreshReferenceData===true,includeGoals:plan.includeGoals===true&&plan.purpose==='overview'});
       await portal.checkCancelled(true);await db.put('ingauge/snapshots/'+tag,result);await db.patch(node,{snapshotId:tag});
+      if(plan.purpose==='overview')await db.put(overviewPath(plan.binding,plan.from.slice(0,7))+'/snapshotId',tag);
       console.log('[IN-Gauge] Record fetch complete: '+result.records.length+' records');
       await publish([],'done',result.records.length+' live records retrieved with all statuses and complete pagination.');return;
     }
@@ -124,4 +131,4 @@ async function main(){
   finally{if(heartbeat)clearInterval(heartbeat);if(browser)await browser.close().catch(()=>{});}
 }
 if(require.main===module)main().catch(()=>{console.error('::error::IN-Gauge could not validate the queued job or cloud account.');process.exitCode=1;});
-module.exports={execute,targetKey,completionNote,sellerPinGuard};
+module.exports={overviewPath,invalidateOverviewReads,execute,targetKey,completionNote,sellerPinGuard};

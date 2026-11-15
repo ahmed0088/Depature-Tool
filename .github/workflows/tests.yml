@@ -107,6 +107,11 @@ jobs:
           node tests/monthly-difference.test.js
           node tests/monthly-difference.browser.test.js
 
+      - name: Daily team overview and guided package audit
+        run: |
+          node tests/ingauge-overview.test.js
+          node tests/ingauge-overview.browser.test.js
+
       - name: Simple IN-Gauge task screens
         run: node tests/ingauge-simple-ui.browser.test.js
 

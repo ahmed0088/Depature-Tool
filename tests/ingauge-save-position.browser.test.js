@@ -26,10 +26,8 @@ async function fixture(browser,phone,nested){
  return {page,errors};
 }
 async function saveAtPosition(page,{view,id,amount,expectedSelected,nested}){
- await page.locator(`[data-ig-view="${view}"]`).click();
- await page.locator('#igSearch').fill('Late');
- await page.waitForFunction(()=>InGaugeWorkspace.state.query==='Late'&&document.querySelector('#igProposalRows')?.getAttribute('aria-busy')!=='true');
- const selector=view==='proposals'?`[data-ig-edit="r-${id}"]`:`[data-ig-record="${id}"][data-ig-action="edit"]`;
+ if(view==='proposals'){await page.evaluate(()=>{InGaugeWorkspace.showReviewSelection();});}else{await page.locator(`[data-ig-view="${view}"]`).click();await page.locator('#igSearch').fill('Late');await page.waitForFunction(()=>InGaugeWorkspace.state.query==='Late'&&document.querySelector('#igProposalRows')?.getAttribute('aria-busy')!=='true');}
+ const selector=view==='proposals'?`#igReviewActions [data-ig-edit="r-${id}"]`:`[data-ig-record="${id}"][data-ig-action="edit"]`;
  const opener=page.locator(selector);await opener.scrollIntoViewIfNeeded();
  const before=await page.evaluate(()=>({windowY:window.scrollY,shellTop:document.querySelector('#scrollShell').scrollTop,view:InGaugeWorkspace.state.view,query:InGaugeWorkspace.state.query,limit:InGaugeWorkspace.state.limit}));
  assert(before.windowY>100||before.shellTop>100,'fixture must actually be scrolled before editing');
