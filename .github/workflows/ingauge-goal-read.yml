@@ -1,0 +1,23 @@
+name: IN-Gauge goal read only study
+on:
+  push:
+    branches: ['study/goals-20261115-readonly']
+    paths: ['scripts/ingauge-goal-read.cjs', 'scripts/goal-read-public.pem', '.github/workflows/ingauge-goal-read.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-audit --no-fund playwright-core@1.49.1 graphql@16.11.0
+      - name: Read official monthly goal responses
+        run: node scripts/ingauge-goal-read.cjs
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          INGAUGE_EMAIL: ${{ secrets.INGAUGE_EMAIL }}
+          INGAUGE_PASS: ${{ secrets.INGAUGE_PASS }}
