@@ -1,5 +1,13 @@
 # Neorcha portal and property selection (v579)
 
+## Cloud result recovery (v598)
+
+Run [112](https://github.com/ahmed0088/Depature-Tool/actions/runs/43918756753) collected and saved 39 registrations for 16 November 2026. The client incorrectly labelled the successful workflow as a failed process because its live report was missing on that device. GitHub success alone is now shown as an unconfirmed result, without a guessed secrets error or invented process exit code.
+
+When the workflow finishes or the reviewer presses **Refresh status**, the client reads `cloudRuns/<exact tag>` and, if needed, that tag's live report. A newer run's live feed cannot replace the selected run's result. The saved collection is loaded only when its tag, dates and row count agree; older collections without tags additionally require timestamps within the completed run's execution window. Refreshing never dispatches another workflow. The worker adds the run tag and URL to future collections. Live subscriptions requested before the database exists are queued until sign-in, and unchanged status renders preserve phone controls.
+
+`tests/neorcha-status.test.js` and `tests/neorcha-status.browser.test.js` cover successful-but-unconfirmed workflows, stale progress, exact-run recovery, foreign runs/hotels, late replies, verified empty collections, startup listeners and stable phone/desktop controls. Browser tests use synthetic records and block external writes.
+
 Mercure's old `/neorchaWEBPlatform/` login returned HTTP 404 in runs 43503987902 and 43499654615. Run 43504146556 used the new `/tweak` link and signed in successfully, then stopped because its saved HotelOps label `Mercure` did not exactly equal the portal property label `Mercure Dubai Deira`. This was a property-name mismatch after authentication, not a failed password.
 
 Known Mercure legacy links now migrate to the same origin's `/tweak/` path in the app and cloud account resolver. New Mercure profiles default to Tweak, as Ibis already does. Explicit legacy links for other hotels remain unchanged. Reader selection still follows the portal path. Mercure's account still requires its own account Secrets; the main Ibis credentials are never substituted for an unconfigured Mercure account.

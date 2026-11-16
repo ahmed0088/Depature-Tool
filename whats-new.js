@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 598, items: [
+    'Neorcha no longer calls a successful GitHub run a failure when its live status is delayed. It reconnects to that run’s saved result, with a Refresh status button.',
+    'Completed runs recover their saved card count and matching collection without starting another collection. Results from another run or hotel are not substituted.',
+    'Live listeners opened before the database was ready now reconnect after sign-in. The console shows verified results instead of invented process exit codes or a guessed secrets error.'
+  ] },
   { v: 597, items: [
     'Purpose of Stay now has an always-visible date picker. Choose any report date; the table, Excel export and daily history use that date together.',
     'Manual dates stay selected until you choose Use Opera date. Automatic mode shows the last received Opera business date and explains when it is waiting for the reader.',

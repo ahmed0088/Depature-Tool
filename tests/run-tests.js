@@ -238,7 +238,7 @@ const nxAsync = (async () => { const ctx = vm.createContext({ window: {}, docume
     [rs(null, null, T0), rs(null, { status: 'queued' }, T0), rs({ started: T0 + 5e3, step: 'read', state: 'run', n: 12 }, null, T0), rs({ started: T0 - 3600e3, step: 'done', state: 'done' }, { status: 'in_progress' }, T0),
       rs({ started: T0, step: 'login', state: 'error' }, null, T0), rs(null, { status: 'completed', conclusion: 'success' }, T0)[1], rs({ started: T0, step: 'done', state: 'done', n: 87 }, null, 0),
       /connect-src 'self' https:\/\/api\.github\.com /.test(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'))],
-    [[0, 'run', 0], [0, 'run', 0], [4, 'run', 12], [0, 'run', 0], [2, 'error', 0], 'error', [6, 'done', 87], true]);
+    [[0, 'run', 0], [0, 'run', 0], [4, 'run', 12], [0, 'run', 0], [2, 'error', 0], 'unconfirmed', [6, 'done', 87], true]);
   const hx = { console: { log() {}, warn() {}, error() {} }, URL, URLSearchParams, APP_VERSION: 'v478', TextEncoder, crypto: globalThis.crypto, addEventListener() {}, hoNeorcha: N }; hx.window = hx; hx.globalThis = hx;
   vm.createContext(hx); vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-helper.js'), 'utf8'), hx, { filename: 'wa-helper.js' });
   const F = Object.fromEntries(hx.hoWaHelper.files('/*r*/', 'https://app.test', null)), M = JSON.parse(F['manifest.json']);

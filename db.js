@@ -147,7 +147,7 @@ const _fbWaiting = [];
 function _fbSignedIn() { return typeof currentUser === 'undefined' || !!currentUser; }
 function fbSignedInNow() { _fbWaiting.splice(0).forEach(([p, c]) => fbListen(p, c)); }
 function fbListen(path, cb) {
-  if (!_ref) { cb(lsLoad(path)); return; }
+  if (!_ref) { _fbWaiting.push([path, cb]); cb(lsLoad(path)); return; }
   if (!_fbSignedIn()) { _fbWaiting.push([path, cb]); return; }
   _ref.child(path).on('value', snap => {
     const val = snap.val();

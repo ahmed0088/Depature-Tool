@@ -607,7 +607,7 @@ function setupHtml(acct) {
 const GH = { api: 'https://api.github.com/repos/ahmed0088/depature-tool/actions/workflows/neorcha.yml', page: 'https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml', key: 'ho_gh_start_key_v1' };
 const STEPS = [['gh', '🖥️', 'Start a GitHub computer'], ['open', '🌐', 'Open Neorcha'], ['login', '🔑', 'Log in'], ['search', '🔎', 'Search your dates'], ['read', '🪪', 'Read every card'], ['save', '💾', 'Save in HotelOps']];
 let ASK_ENROLL = false;
-const RUN = { at: 0, tag: '', gh: null, live: null, timer: 0, poll: 0, view: 'run', local: [], conOff: false, ghSt: '' };
+const RUN = { at: 0, tag: '', gh: null, live: null, saved: null, collection: null, hotelId: '', refresh: null, timer: 0, poll: 0, view: 'run', local: [], conOff: false, ghSt: '' };
 const ghKey = () => { try { return localStorage.getItem(GH.key) || ''; } catch (_) { return ''; } };
 const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
 async function gh(path, opt) {
@@ -623,11 +623,67 @@ function runState(live, gh, at, tag) {
   let k = mine ? (idx[mine.step] || 1) : 0, state = mine ? (mine.state === 'done' ? 'done' : mine.state === 'error' ? 'error' : 'run') : 'run', note = mine ? mine.note || '' : '';
   if (!mine && gh) {
     if (gh.status === 'completed' && gh.conclusion !== 'success') { state = 'error'; note = 'The GitHub run stopped (' + gh.conclusion + ') before it reached Neorcha — open it on GitHub to see why.'; }
-    else if (gh.status === 'completed') { state = 'error'; note = 'The run finished but sent nothing — are the four Secrets added on GitHub (Settings → Secrets → Actions)?'; }
+    else if (gh.status === 'completed') { k = 1; state = 'unconfirmed'; note = 'GitHub finished successfully. The saved result has not reached this device yet. Refresh status to reconnect; the run has not been marked as failed.'; }
     else note = gh.status === 'queued' ? 'Waiting for a free GitHub computer…' : 'The GitHub computer is getting ready (about a minute)…';
   }
   if (!mine && !gh && at) note = 'Asking GitHub to start…';
+  if (mine && state === 'run' && gh?.status === 'completed') {
+    state = gh.conclusion === 'success' ? 'unconfirmed' : 'error';
+    note = state === 'unconfirmed' ? 'GitHub finished successfully. Reconnecting to the saved HotelOps result…' : 'GitHub stopped ('+gh.conclusion+'). Open the run to see the problem.';
+  }
   return { k, state, note, n: mine ? +mine.n || 0 : 0, prog: mine ? +mine.prog || 0 : 0, run: (mine && mine.run) || (gh && gh.html_url) || '' };
+}
+function runReport(live = RUN.live, saved = RUN.saved, at = RUN.at, tag = RUN.tag) {
+  const reports = [live, saved].filter(v => v && (tag ? v.tag === tag : !at || +v.started >= at - 90000));
+  reports.sort((a,b) => Number(['done','error','stopped'].includes(b.state))-Number(['done','error','stopped'].includes(a.state)) || (+b.at||0)-(+a.at||0));
+  return reports[0] || null;
+}
+function collectionForRun(card, report) {
+  if (!card || !report || report.state !== 'done' || !Array.isArray(card.rows) || card.rows.length !== +report.n || +card.n !== +report.n || card.from !== report.from || card.to !== report.to) return false;
+  if (card.tag) return card.tag === report.tag;
+  // Older collectors did not save a tag. Recover only an exact period/count
+  // inside this run's execution window; a newer collection must not be used.
+  const finished = +report.finishedAt || +report.at || 0;
+  return card.by === 'cloud' && +report.started > 0 && finished >= +report.started && +card.at >= +report.started && +card.at <= finished;
+}
+async function refreshRunStatus() {
+  const tag = RUN.tag, hotelId = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
+  if (!/^[\w-]{1,60}$/.test(tag) || RUN.hotelId && RUN.hotelId !== hotelId) return false;
+  if (RUN.refresh?.tag === tag) return RUN.refresh.promise;
+  const promise = (async () => {
+    if (typeof _ref === 'undefined' || !_ref?.child) return false;
+    const ref = _ref;
+    const current = () => RUN.tag === tag && _ref === ref && (!RUN.hotelId || RUN.hotelId === (typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : ''));
+    const read = async path => { let timer;try { const snap = await Promise.race([ref.child(path).once('value'),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Status read timed out')),5000);})]);return snap.val(); } finally { clearTimeout(timer); } };
+    let found = false;
+    try {
+      const saved = await read('cloudRuns/'+tag);
+      if (!current()) return false;
+      if (saved?.tag === tag && saved.kind === 'neorcha') { RUN.saved = saved; found = true; }
+      if (!['done','error','stopped'].includes(runReport()?.state)) {
+        const live = await read('neorchaLive'); if (!current()) return false;
+        if (live?.tag === tag) { RUN.live = live; found = true; }
+      }
+      const report = runReport();
+      if (report?.state === 'done') {
+        let card = await read('neorcha'); if (!current()) return false;
+        if (!collectionForRun(card,report)) {
+          const index = await read('neorchaCollectionIndex'); if (!current()) return false;
+          const end=+report.finishedAt||+report.at||0;
+          const keys=Object.entries(index||{}).filter(([key,value])=>value&&key==='nx'+value.at&&/^nx\d{10,16}$/.test(key)&&value.from===report.from&&value.to===report.to&&+value.n===+report.n&&+value.at>=+report.started&&+value.at<=end);
+          if(keys.length===1){card=await read('neorchaCollections/'+keys[0][0]);if(!current())return false;}
+        }
+        if (collectionForRun(card,report)) {
+          RUN.collection={tag,card};
+          if (+card.at > (+S?.at||0) && fromCollector(card.rows,card.from,card.to,card.at,card.by,card.account)) draw();
+        }
+      }
+      return found;
+    } catch (_) { return found; }
+    finally { if (current()) paintRun(); }
+  })();
+  RUN.refresh = {tag,promise};
+  try { return await promise; } finally { if (RUN.refresh?.promise === promise) { RUN.refresh = null; const button=document.getElementById('nxr-refresh');if(button)button.disabled=false; } }
 }
 function runWin() {
   let w = document.getElementById('nxRun');
@@ -636,7 +692,8 @@ function runWin() {
     w.innerHTML = '<div class="nxr-bg" data-x="1"></div><div class="nxr-card" role="dialog" aria-label="Neorcha cloud run"><div class="nxr-h"><div class="nxr-ic">☁️</div><div class="nxr-t"><b>Neorcha · cloud run</b><small id="nxr-sub"></small></div><button type="button" class="nxr-x" data-x="1" aria-label="Minimise" title="Minimise — it keeps running; a chip at the bottom-left opens it again">–</button><button type="button" class="nxr-x" data-x="1" data-shut="1" aria-label="Close" title="Close — the window and its chip go away; the run keeps going and stays in 🗂 Runs">✕</button></div><div class="nxr-b" id="nxr-b"></div></div>';
     document.body.appendChild(w);
     w.addEventListener('click', e => { if (e.target.closest('[data-x]')) { w.classList.remove('on'); clearInterval(RUN.timer); try { if (W.hoRuns) W.hoRuns[e.target.closest('[data-shut]') ? 'closed' : 'minimized']('neorcha'); } catch (_) {} }
-      if (e.target.id === 'nxr-con-t') { RUN.conOff = !RUN.conOff; e.target.closest('.nxr-con').classList.toggle('off', RUN.conOff); e.target.textContent = RUN.conOff ? 'Show' : 'Hide'; } });
+      if (e.target.id === 'nxr-con-t') { RUN.conOff = !RUN.conOff; e.target.closest('.nxr-con').classList.toggle('off', RUN.conOff); e.target.textContent = RUN.conOff ? 'Show' : 'Hide'; }
+      if (e.target.id === 'nxr-refresh') { e.target.disabled=true;refreshRunStatus().finally(()=>paintRun()); } });
   }
   w.classList.add('on'); clearInterval(RUN.timer); RUN.timer = setInterval(paintRun, 1000); paintRun();
 }
@@ -645,22 +702,23 @@ function paintRun() {
   if (RUN.view === 'key') return;
   if (!document.getElementById('nxr-main')) b0.innerHTML = '<div id="nxr-main"></div><div class="nxr-con' + (RUN.conOff ? ' off' : '') + '"><div class="nxr-con-h"><i></i><i></i><i></i><span>neorcha-cloud · live console</span><button type="button" id="nxr-con-t">' + (RUN.conOff ? 'Show' : 'Hide') + '</button></div><div class="nxr-term" id="nxr-term"></div></div>';
   const b = document.getElementById('nxr-main');
-  const st = runState(RUN.live, RUN.gh, RUN.at, RUN.tag), t0 = RUN.at || (RUN.live && +RUN.live.started) || Date.now(), sec = Math.max(0, Math.round(((st.state === 'run' ? Date.now() : (RUN.live && +RUN.live.at) || Date.now()) - t0) / 1000));
+  const report = runReport(), st = runState(report, RUN.gh, RUN.at, RUN.tag), t0 = RUN.at || (report && +report.started) || Date.now(), sec = Math.max(0, Math.round(((st.state === 'run' ? Date.now() : (report && +report.at) || Date.parse(RUN.gh?.updated_at) || Date.now()) - t0) / 1000));
   const sub = document.getElementById('nxr-sub'); if (sub) sub.textContent = (W.hoRuns && W.hoRuns.label('neorcha') ? W.hoRuns.label('neorcha') + ' · ' : '') + (RUN.live && RUN.live.from ? dLbl(RUN.live.from) + ' – ' + dLbl(RUN.live.to) + ' · ' : '') + Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
-  const pct = st.state === 'done' ? 100 : Math.round(Math.min(97, st.k / 6 * 100 * (st.k === 4 ? 1 : 1) + (st.k === 4 ? st.prog / 100 * 16 : 0)));
-  b.innerHTML = `<div class="nxr-bar ${st.state}"><i style="width:${pct}%"></i></div>
-    <ol class="nxr-steps">${STEPS.map(([id, ic, lb], i) => { const s2 = st.state === 'done' || i < st.k ? 'ok' : i === st.k ? (st.state === 'error' ? 'bad' : 'now') : '';
+  const pct = ['done','unconfirmed'].includes(st.state) ? 100 : Math.round(Math.min(97, st.k / 6 * 100 * (st.k === 4 ? 1 : 1) + (st.k === 4 ? st.prog / 100 * 16 : 0)));
+  const html = `<div class="nxr-bar ${st.state}"><i style="width:${pct}%"></i></div>
+    <ol class="nxr-steps">${STEPS.map(([id, ic, lb], i) => { const s2 = st.state === 'done' || i < st.k ? 'ok' : i === st.k ? (st.state === 'error' ? 'bad' : st.state === 'run' ? 'now' : '') : '';
       return `<li class="${s2}"><span class="d">${s2 === 'ok' ? '✓' : s2 === 'bad' ? '!' : ic}</span><span class="l">${esc(lb)}${id === 'read' && (st.k === 4 || st.n) ? ` <em>${st.n} card${st.n === 1 ? '' : 's'}</em>` : ''}</span>${s2 === 'now' ? '<span class="sp"></span>' : ''}</li>`; }).join('')}</ol>
     <div class="nxr-note ${st.state}">${st.state === 'done' ? '✅ ' : st.state === 'error' ? '⛔ ' : ''}${esc(st.note || '…')}</div>
-    <div class="nxr-act">${st.state === 'done' ? '<button type="button" class="btn gold" data-x="1" id="nxr-see">See the cards</button>' : ''}${st.run ? `<a class="btn" href="${esc(st.run)}" target="_blank" rel="noopener">Open on GitHub ↗</a>` : ''}${st.state === 'run' ? '<span class="nxr-hint">You can close this — it keeps running and the cards land here.</span>' : ''}</div>`;
-  if (st.state !== 'run') { clearInterval(RUN.poll); RUN.poll = 0; }
+    <div class="nxr-act">${st.state === 'done' ? '<button type="button" class="btn gold" id="nxr-see">See the cards</button>' : ''}${RUN.tag?'<button type="button" class="btn" id="nxr-refresh">Refresh status</button>':''}${st.run ? `<a class="btn" href="${esc(st.run)}" target="_blank" rel="noopener">Open on GitHub ↗</a>` : ''}${st.state === 'run' ? '<span class="nxr-hint">You can close this — it keeps running and the cards land here.</span>' : ''}</div>`;
+  if (b._nxMarkup !== html) { b._nxMarkup=html;b.innerHTML=html; }
+  if (['done','error'].includes(st.state)) { clearInterval(RUN.poll); RUN.poll = 0; }
   paintCon(st);
 }
 // the console: what this device did (asking GitHub) + what the robot reports, line by line
 function conNote(g, m) { RUN.local.push({ t: Date.now(), g, m }); if (RUN.local.length > 30) RUN.local.shift(); }
 function paintCon(st) {
   const box = document.getElementById('nxr-term'); if (!box) return;
-  const mine = RUN.live && (RUN.tag ? RUN.live.tag === RUN.tag : true) ? RUN.live : null;
+  const mine = runReport();
   const rob = mine && Array.isArray(mine.con) ? mine.con : [], first = rob.length ? +rob[0].t : Infinity;
   const lines = RUN.local.filter(l => l.t < first || !rob.length).concat(rob);
   const key = lines.length + ':' + (lines.length ? lines[lines.length - 1].t + lines[lines.length - 1].m : '') + st.state;
@@ -668,7 +726,7 @@ function paintCon(st) {
   const down = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
   const hh = t => { const d = new Date(+t); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':'); };
   box.innerHTML = (lines.length ? lines : [{ t: Date.now(), g: 'SYS', m: 'Waiting for the run…' }]).map(l => `<div class="nxl"><span class="nxts">${hh(l.t)}</span><span class="nxtg t-${esc(String(l.g || 'BOT').toLowerCase())}">${esc(l.g || 'BOT')}</span><span class="nxm">${esc(l.m)}</span></div>`).join('')
-    + (st.state === 'run' ? '<div class="nxl"><span class="nxts"></span><span class="nxcur">▌</span></div>' : `<div class="nxl"><span class="nxts">${hh(Date.now())}</span><span class="nxtg t-${st.state === 'done' ? 'save' : 'err'}">${st.state === 'done' ? 'EXIT' : 'EXIT'}</span><span class="nxm">${st.state === 'done' ? 'process finished · code 0' : 'process stopped · code 1'}</span></div>`);
+    + (st.state === 'run' ? '<div class="nxl"><span class="nxts"></span><span class="nxcur">▌</span></div>' : `<div class="nxl"><span class="nxts">${hh(Date.now())}</span><span class="nxtg t-${st.state === 'done' ? 'save' : st.state==='unconfirmed'?'sys':'err'}">${st.state==='unconfirmed'?'SYNC':'RESULT'}</span><span class="nxm">${st.state === 'done' ? st.n+' cards saved · result received' : st.state==='unconfirmed'?'GitHub finished · saved result not received on this device':'Run reported a problem · see details above'}</span></div>`);
   if (down) box.scrollTop = box.scrollHeight;
 }
 function keyWin(then) {
@@ -690,7 +748,7 @@ function keyWin(then) {
 }
 async function cloudStart(from, to) {
   if (!ghKey()) return keyWin(() => cloudStart(from, to));
-  RUN.view = 'run'; RUN.at = Date.now(); RUN.tag = 'ho' + RUN.at.toString(36) + Math.random().toString(36).slice(2, 6); RUN.gh = null; RUN.ghSt = '';
+  RUN.view = 'run'; RUN.at = Date.now(); RUN.tag = 'ho' + RUN.at.toString(36) + Math.random().toString(36).slice(2, 6); RUN.gh = null; RUN.saved = null; RUN.collection = null; RUN.hotelId = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : ''; RUN.ghSt = '';
   RUN.local = []; const cc = W.__hoNxCloud ? W.__hoNxCloud() : {};
   conNote('SYS', 'HotelOps ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') + ' · run ' + RUN.tag + ' · arrivals ' + from + ' → ' + to);
   conNote('SYS', 'Neorcha account: ' + (cc.account || 'main') + (cc.url ? ' · ' + cc.url.replace(/^https:\/\//, '').split('/')[0] : '') + (cc.hid ? ' · saves to this hotel' : ''));
@@ -701,10 +759,11 @@ async function cloudStart(from, to) {
   catch (e) { RUN.gh = { status: 'completed', conclusion: 'not started' }; paintRun(); toast(e.message, 'err'); if (/refused/.test(e.message)) { try { localStorage.removeItem(GH.key); } catch (_) {} } return; }
   clearInterval(RUN.poll);
   RUN.poll = setInterval(async () => {
-    try { const j = await gh('/runs?per_page=5&event=workflow_dispatch'); const r = (j.workflow_runs || []).find(x => String(x.display_title || '').split(/[^\w-]+/).includes(RUN.tag)); if (r) { RUN.gh = r; if (W.hoRuns?.update) W.hoRuns.update(RUN.tag,{url:r.html_url}); const k = r.status + (r.conclusion || ''); if (k !== RUN.ghSt) { RUN.ghSt = k; conNote('GH', 'run #' + r.run_number + ' · ' + r.status.replace('_', ' ') + (r.conclusion ? ' · ' + r.conclusion : r.status === 'queued' ? ' · waiting for a free computer' : ' · booting Ubuntu, installing Chromium')); } } paintRun(); } catch (_) {}
+    const tag=RUN.tag;
+    try { const j = await gh('/runs?per_page=5&event=workflow_dispatch');if(tag!==RUN.tag)return; const r = (j.workflow_runs || []).find(x => String(x.display_title || '').split(/[^\w-]+/).includes(tag)); if (r) { RUN.gh = r; if (W.hoRuns?.update) W.hoRuns.update(tag,{url:r.html_url}); const k = r.status + (r.conclusion || ''); if (k !== RUN.ghSt) { RUN.ghSt = k; conNote('GH', 'run #' + r.run_number + ' · ' + r.status.replace('_', ' ') + (r.conclusion ? ' · ' + r.conclusion : r.status === 'queued' ? ' · waiting for a free computer' : ' · booting Ubuntu, installing Chromium')); } if(r.status==='completed'){await refreshRunStatus();if(Date.now()-Date.parse(r.updated_at)>90000){clearInterval(RUN.poll);RUN.poll=0;}} } if(tag===RUN.tag)paintRun(); } catch (_) {}
   }, 5000);
 }
-W.hoNxRunOpen = () => { RUN.view = 'run'; runWin(); };   // the run dock (run-dock.js) opens it again
+W.hoNxRunOpen = () => { RUN.view = 'run'; runWin(); refreshRunStatus(); };   // the run dock (run-dock.js) opens it again
 function cloudUI() {
   const st = $('cl-st'), paintChip = () => {
     const v = RUN.live; if (!st) return;
@@ -715,7 +774,12 @@ function cloudUI() {
   $('cloud').onclick = () => { const f = $('from').value, t = $('to').value; if (!f || !t || f > t) { toast('Pick the arrival dates (from ≤ to)', 'err'); return; } cloudStart(f, t); };
   $('cl-show').onclick = () => { RUN.view = 'run'; if (!RUN.poll) RUN.at = RUN.at || 0; runWin(); };
   $('cl-forget').onclick = e => { e.preventDefault(); try { localStorage.removeItem(GH.key); } catch (_) {} toast('Start key removed from this device', 'ok'); };
-  document.addEventListener('click', e => { if (e.target.id === 'nxr-see') { const o = $('out'); if (o) o.scrollIntoView({ behavior: 'smooth' }); } });
+  document.addEventListener('click', async e => { if (e.target.id === 'nxr-see') {
+    const tag=RUN.tag;if(RUN.collection?.tag!==tag)await refreshRunStatus();if(RUN.tag!==tag)return;
+    const card=RUN.collection?.tag===tag?RUN.collection.card:null;
+    if(!card){toast('This run finished, but its matching collection could not be loaded. Refresh status or choose it from Saved collections.','info');return;}
+    if(fromCollector(card.rows,card.from,card.to,card.at,card.by,card.account)){draw();const modal=document.getElementById('nxRun');if(modal)modal.classList.remove('on');clearInterval(RUN.timer);if(typeof showPanel==='function')showPanel(PANEL);const o=$('out');if(o)o.scrollIntoView({behavior:'smooth'});}
+  } });
 }
 const RUN_CSS = `.nxr{position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center}.nxr.on{display:flex}
 .nxr-bg{position:absolute;inset:0;background:rgba(2,6,23,.55);backdrop-filter:blur(4px)}
@@ -725,7 +789,7 @@ const RUN_CSS = `.nxr{position:fixed;inset:0;z-index:9000;display:none;align-ite
 .nxr-t{flex:1;min-width:0}.nxr-t b{display:block;font-size:1.02rem}.nxr-t small{color:var(--text3,#94a3b8);font-size:.8rem;font-variant-numeric:tabular-nums}
 .nxr-x{border:0;background:transparent;color:var(--text3,#94a3b8);font-size:18px;cursor:pointer;padding:6px 8px;border-radius:10px}.nxr-x:hover{background:var(--bg2,#1e293b)}
 .nxr-b{padding:6px 18px 18px}.nxr-bar{height:8px;border-radius:99px;background:var(--bg2,#1e293b);overflow:hidden;margin:4px 0 16px}.nxr-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#38bdf8,#6366f1);transition:width .6s ease}
-.nxr-bar.done i{background:linear-gradient(90deg,#10b981,#22c55e)}.nxr-bar.error i{background:linear-gradient(90deg,#f43f5e,#ef4444)}
+.nxr-bar.unconfirmed i{background:var(--border2,#64748b)}.nxr-bar.done i{background:linear-gradient(90deg,#10b981,#22c55e)}.nxr-bar.error i{background:linear-gradient(90deg,#f43f5e,#ef4444)}
 .nxr-steps{list-style:none;margin:0;padding:0;display:grid;gap:4px}.nxr-steps li{display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:12px;color:var(--text3,#94a3b8);font-size:.92rem}
 .nxr-steps .d{width:28px;height:28px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:.85rem;background:var(--bg2,#1e293b);border:1px solid var(--border,#334155)}
 .nxr-steps li.ok{color:var(--text,#e2e8f0)}.nxr-steps li.ok .d{background:#10b981;border-color:#10b981;color:#fff;font-weight:700}
@@ -958,6 +1022,6 @@ function mount() {
   document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-panel="' + PANEL + '"]')) setTimeout(draw, 50); }, true);
   draw();
 }
-W.hoNeorcha = { readerFor, tweakCollect: TWEAK_COLLECT, migrateIbisLink, linkFor, acctOf, pipelineTsv, runState, _run: { RUN, paintRun }, rowsToAoa, collectorSrc, collectorCode, parseAoa, summary, linkPlan, purposeOf, isoOf, natName, NEVER };
+W.hoNeorcha = { readerFor, tweakCollect: TWEAK_COLLECT, migrateIbisLink, linkFor, acctOf, pipelineTsv, runState, _run: { RUN, paintRun, refreshRunStatus, runReport, collectionForRun }, rowsToAoa, collectorSrc, collectorCode, parseAoa, summary, linkPlan, purposeOf, isoOf, natName, NEVER };
 if (typeof document !== 'undefined' && document.addEventListener) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount(); }
 })();
