@@ -27,6 +27,9 @@ jobs:
       - name: Mobile chat lifecycle checks
         run: node tests/chat-mobile.test.js
 
+      - name: Phone dropdown menus and hotel choices
+        run: node tests/phone-menus.browser.test.js
+
       - name: BackTrack appearance and touch controls
         run: node tests/backtrack.browser.test.js
 
@@ -59,6 +62,8 @@ jobs:
         run: |
           node tests/ingauge-reconciliation.test.js
           node tests/ingauge-reconciliation.browser.test.js
+          node tests/ingauge-booking-choice.test.js
+          node tests/ingauge-booking-choice.browser.test.js
 
       - name: Accor enrollment country and result checks
         run: |

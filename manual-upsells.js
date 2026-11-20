@@ -109,7 +109,7 @@
   const noteText = j => [...new Set([j.REFERENCE, j.REMARK].map(clean).filter(Boolean))].join(' | ');
   function sellerOf(j, employees) {
     const note = noteText(j), names = [];
-    for (const m of note.matchAll(/\*\*\s*([A-Za-z][A-Za-z .'-]*?)(?=\s+-\s+\d|\*\*|\||$)/g)) if (!names.some(n => norm(n) === norm(m[1]))) names.push(m[1].trim().replace(/[ .-]+$/, ''));
+    for (const m of note.matchAll(/\*{1,2}\s*([A-Za-z][A-Za-z .'-]*?)(?=\s+-\s+\d|\*{1,2}|\||$)/g)) if (!names.some(n => norm(n) === norm(m[1]))) names.push(m[1].trim().replace(/[ .-]+$/, ''));
     const posted = clean(j.CASHIER_NAME) || clean(j.USER_NAME) || clean(j.INSERT_USER) || 'Unknown posting user';
     if (names.length > 1) return { name: names.join(' / '), basis: 'Conflicting notes', mapped: false, warning: 'The notes name different sellers. Confirm who made the sale.', explanation: `Notes name ${names.join(' and ')}; posted by ${posted}. Seller credit needs confirmation.`, employeeId: '' };
     if (names.length) {

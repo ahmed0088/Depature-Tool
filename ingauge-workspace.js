@@ -386,13 +386,18 @@
     }
   }
   function option(values,selected,label){return values.map(p=>`<option value="${E(p.id)}" ${p.id===selected?'selected':''}>${E(label(p))}</option>`).join('');}
-  function reviewMoneyDifference(caseKey,choice={},context){
+  function moneyCase(caseKey,context){
     if(!W.InGaugeReconciliation||!context)throw Error('Refresh the monthly comparison to load its evidence.');
     if(S.busy||S.switching||S.uploading||restoring||!S.snapshot?.complete||S.snapshot.invalidatedAt||Date.now()-S.snapshot.fetchedAt>21600000)throw Error('Wait for the current run and refresh the live records before reviewing corrections.');
     if(context.snapshot!==S.snapshot||context.result?.snapshotId!==S.snapshot.id||!C.sameBinding(context.result.binding,S.binding))throw Error('The hotel or snapshot changed. Refresh the monthly comparison.');
     const source=S.independent?S.reports.journal:W.ManualUpsells?.state.data.journal,reservations=S.independent?S.reports.reservations:W.ManualUpsells?.state.data.reservations;
     if(source?.rows!==context.journal||reservations?.rows!==context.reservations)throw Error('The source reports changed. Refresh the monthly comparison.');
     const fresh=W.InGaugeReconciliation.analyse(context),item=fresh.cases.find(c=>c.key===caseKey);if(!fresh.ready||!item)throw Error(fresh.reason||'This difference changed. Review the fresh comparison.');
+    return item;
+  }
+  function reviewMoneyDifference(caseKey,choice={},context){
+    let item=moneyCase(caseKey,context);
+    if(choice.sourceSignature!==undefined){const result=W.InGaugeReconciliation.resolveBooking(context,caseKey,choice);if(result.settled)return result;item=result.item;}
     const nextPeriod=context.period,mode=context.scope||'all';
     if(!C.withinPeriod(nextPeriod.from,activePeriod())||!C.withinPeriod(nextPeriod.to,activePeriod()))throw Error('This difference is outside the selected posting dates. Choose that audit period explicitly to review it.');
     if(S.scope!==mode&&S.selected.size)throw Error('Finish or unselect your saved changes before reviewing a different audit mode.');if(S.scope!==mode)setScope(mode);
@@ -402,6 +407,34 @@
       op={...op,contributorId:prior.contributorId,reason:prior.reason||op.reason,requireAssignment:prior.requireAssignment,assignmentReviewed:false,assignmentContributorId:'',sellerCredit:prior.sellerCredit||op.sellerCredit,evidence:op.evidence+' · Earlier saved edit: '+prior.evidence};
     }
     captureEditPosition(el('igMonthlyTally'));S.editing=op;applySellerPin(op);paintEditor();
+    return {opened:true};
+  }
+  let bookingSession=null;
+  function closeBooking(restore=true){const focus=bookingSession?.returnFocus,modal=el('igBookingReview');if(modal)modal.hidden=true;bookingSession=null;if(restore&&focus?.isConnected)focus.focus({preventScroll:true});}
+  function chooseMoneyBooking(caseKey,context){
+    if(!allowed())throw Error('Your role cannot prepare IN-Gauge corrections.');
+    const item=moneyCase(caseKey,context);if(!item.canChooseBooking)throw Error('This entry needs its existing billing review.');
+    closeBooking();const post=item.posts[0];bookingSession={caseKey,context,item,details:null,returnFocus:D.activeElement};
+    let modal=el('igBookingReview');if(!modal){modal=D.createElement('div');modal.id='igBookingReview';modal.className='iga-overlay';D.body.appendChild(modal);
+      modal.addEventListener('click',e=>{if(e.target===modal||e.target.closest('[data-ig-booking-close]'))closeBooking();else if(e.target.closest('[data-ig-booking-lookup]'))lookupMoneyBooking();else if(e.target.closest('[data-ig-booking-continue]'))continueMoneyBooking();});
+      modal.addEventListener('input',e=>{if(e.target.id==='igBookingConfirmation'){if(bookingSession)bookingSession.details=null;el('igBookingResult').innerHTML='';el('igBookingContinue').disabled=true;}else if(['igBookingArrival','igBookingDeparture'].includes(e.target.id)){const check=el('igBookingVerified');if(check)check.checked=false;}});
+      modal.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeBooking();}else if(e.key==='Enter'&&e.target.id==='igBookingConfirmation'){e.preventDefault();lookupMoneyBooking();}else if(e.key==='Tab'){const nodes=[...modal.querySelectorAll('button,input')].filter(n=>!n.disabled&&n.getClientRects().length),first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&D.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&D.activeElement===last){e.preventDefault();first?.focus();}}});
+    }
+    modal.innerHTML=`<section class="iga-editor iga-booking-editor" role="dialog" aria-modal="true" aria-labelledby="igBookingTitle"><header><div><span class="iga-eyebrow">${post.automatic?'Automatic package':'Manual sale · already posted in Opera'}</span><h2 id="igBookingTitle">Enter the booking confirmation</h2><p>${E(item.product)} · ${E(S.snapshot.settings.currency)} ${money(post.cents)} · Posted ${E(post.day)}</p></div><button type="button" data-ig-booking-close aria-label="Close booking check">×</button></header><div class="iga-editor-body"><div class="iga-before"><b>${E(post.guest)}</b><p>Room ${E(post.room)} · Opera #${E(post.id)} · Code ${E(post.code)}</p><p>${E(post.note)}</p></div><p class="iga-hint">The confirmation links this posting to the reservation. Its Opera posting date remains ${E(post.day)}; the stay dates can be different.</p><label class="iga-booking-number">Confirmation number<input id="igBookingConfirmation" type="text" inputmode="numeric" autocomplete="off" maxlength="24" placeholder="Enter the confirmation from Opera"></label><button type="button" class="btn" data-ig-booking-lookup>Check booking</button><div id="igBookingResult" aria-live="polite"></div><p id="igBookingError" class="iga-error" role="alert"></p><footer><button type="button" class="btn" data-ig-booking-close>Cancel</button><button type="button" class="btn gold" id="igBookingContinue" data-ig-booking-continue disabled>Review proposed fix</button></footer></div></section>`;
+    modal.hidden=false;el('igBookingConfirmation').focus({preventScroll:true});
+  }
+  function lookupMoneyBooking(){
+    const session=bookingSession;if(!session)return;
+    try{moneyCase(session.caseKey,session.context);const details=W.InGaugeReconciliation.bookingDetails(session.context,session.caseKey,el('igBookingConfirmation').value);session.details=details;el('igBookingError').textContent='';
+      el('igBookingResult').innerHTML=`<section class="iga-booking-result"><b>Confirmation ${E(details.confirmation)}</b><p>${E(details.source)}${details.arrival?' · '+E(details.arrival)+' → '+E(details.departure):''}</p>${details.warnings.map(w=>'<p class="iga-hint">'+E(w)+'</p>').join('')}${details.records.length?'<p><b>Already in IN-Gauge</b></p>'+details.records.map(r=>'<p>#'+E(r.id)+' · '+E(r.product)+' · '+E(r.status)+' · '+E(r.day)+' · '+E(r.seller||'Unassigned')+' · '+E(S.snapshot.settings.currency)+' '+money(r.cents)+'</p>').join(''):'<p>No existing IN-Gauge entries found for this confirmation in the loaded snapshot.</p>'}${details.needsStay?'<div class="iga-fields"><label>Actual arrival<input type="date" id="igBookingArrival"></label><label>Actual departure<input type="date" id="igBookingDeparture"></label></div>':''}<label class="iga-confirm"><input type="checkbox" id="igBookingVerified"><span>I checked in Opera that this posting belongs to confirmation ${E(details.confirmation)} for ${E(details.post.guest)}.</span></label></section>`;
+      el('igBookingContinue').disabled=false;
+    }catch(error){session.details=null;el('igBookingResult').innerHTML='';el('igBookingContinue').disabled=true;el('igBookingError').textContent=error.message;}
+  }
+  function continueMoneyBooking(){
+    const session=bookingSession;if(!session?.details)return;
+    try{const result=reviewMoneyDifference(session.caseKey,{confirmation:el('igBookingConfirmation').value,bookingVerified:!!el('igBookingVerified')?.checked,sourceSignature:session.details.sourceSignature,arrival:el('igBookingArrival')?.value||session.details.arrival,departure:el('igBookingDeparture')?.value||session.details.departure},session.context);
+      if(result?.settled){el('igBookingError').textContent='';el('igBookingResult').textContent=result.note;el('igBookingContinue').disabled=true;return;}closeBooking(false);
+    }catch(error){el('igBookingError').textContent=error.message;}
   }
   function editSelectedChange(key,source){if(!S.selected.has(key))throw Error('This change is no longer selected. Review its remaining case.');edit(key,source);}
   function unselectChange(key){if(S.busy||S.switching||S.uploading||restoring)throw Error('Wait for the current run or report upload before changing your selection.');if(!S.selected.delete(key))return;invalidate();renderProposals();renderControls();notify('Unselected · no change was sent to IN-Gauge','ok');}
@@ -734,6 +767,6 @@
   }
   function overviewError(message){S.error=message;renderControls();notify(message,'err');}
   async function fetchMonth(p){if(!preferences().monthly)throw Error('Monthly totals is turned off in IN-Gauge settings.');if(S.busy)throw Error('Wait for the current run.');if(S.selected.size)throw Error('Apply or unselect your saved changes before refreshing the monthly comparison.');choosePeriod(p);return fetchSnapshot();}
-  W.InGaugeWorkspace={showOverview,chooseOverviewMonth,refreshOverview,saveOverviewGoal,showOverviewPending,overviewError,auditStep,settingsLocked:()=>restoring||!S.independent&&!!W.ManualUpsells?.state.busy,preferences,updateSettings,updateJournalCodes,reviewMoneyDifference,editSelectedChange,unselectChange,showReviewSelection,activePeriod,choosePeriod,restorePeriod,openSettings,openHotelSettings,sameTarget,showMonthly,fetchMonth,state:S,setTask,findPackage,setScope,checkReports,reportRequirements,loadHistory,renderHistory,renderGuide,runSteps,liveConsole,open,openRun,closeRun,cancelRun,renderRun,fromAudit,upload,mount,tableRows,buildProposals,hydrate};
+  W.InGaugeWorkspace={showOverview,chooseOverviewMonth,refreshOverview,saveOverviewGoal,showOverviewPending,overviewError,auditStep,settingsLocked:()=>restoring||!S.independent&&!!W.ManualUpsells?.state.busy,preferences,updateSettings,updateJournalCodes,reviewMoneyDifference,chooseMoneyBooking,editSelectedChange,unselectChange,showReviewSelection,activePeriod,choosePeriod,restorePeriod,openSettings,openHotelSettings,sameTarget,showMonthly,fetchMonth,state:S,setTask,findPackage,setScope,checkReports,reportRequirements,loadHistory,renderHistory,renderGuide,runSteps,liveConsole,open,openRun,closeRun,cancelRun,renderRun,fromAudit,upload,mount,tableRows,buildProposals,hydrate};
   if(D.readyState==='loading')D.addEventListener('DOMContentLoaded',mount);else mount();
 })(window);

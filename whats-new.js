@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 599, items: [
+    'Phone dropdowns now open a searchable in-app menu, including saved enrolment hotels and Neorcha choices. Selecting a hotel updates its exact saved link without starting a job.',
+    'Enter a missing booking confirmation directly from a held money difference. Check the reservation, existing requests and Opera bill before reviewing the proposed correction.',
+    'Manual sales keep the journal posting date even when payment is collected outside the stay dates. Actual arrival and departure stay separate; seller, amount and approval reviews are still required.',
+    'Existing and Pending requests are checked before an addition is offered. Single-star seller notes are recognized, including manual fees such as Early Check-In Upsell * seller.'
+  ] },
   { v: 598, items: [
     'Neorcha no longer calls a successful GitHub run a failure when its live status is delayed. It reconnects to that run’s saved result, with a Refresh status button.',
     'Completed runs recover their saved card count and matching collection without starting another collection. Results from another run or hotel are not substituted.',

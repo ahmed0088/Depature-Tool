@@ -548,6 +548,7 @@ const CSS = `
 #panel-${PANEL} .nx-run input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit;font-size:.9rem}
 #panel-${PANEL} .nx-live{margin:10px 0 0;padding:10px 12px;border-radius:10px;font-size:.86rem;background:color-mix(in srgb,#6366f1 10%,var(--card));color:var(--text)}#panel-${PANEL} .nx-live.ok{background:color-mix(in srgb,#10b981 14%,var(--card))}#panel-${PANEL} .nx-live.err{background:color-mix(in srgb,#f43f5e 12%,var(--card))}
 #panel-${PANEL} .nx-hadd[hidden],#panel-${PANEL} .nx-hedit[hidden],#panel-${PANEL} .nx-live[hidden]{display:none!important}
+#panel-${PANEL} .nx-hotel-choice{display:none} @media(max-width:760px),(pointer:coarse){#panel-${PANEL} .nx-hotel-choice{display:grid;gap:8px;margin:14px 0;font-size:.8rem;color:var(--text2)}#panel-${PANEL} .nx-hotel-choice select{min-height:46px;width:100%;font-size:16px}#panel-${PANEL} .nx-hl button[data-hs]{display:none}}
 #panel-${PANEL} .nx-hl{display:flex;gap:8px;overflow-x:auto;padding:2px 0 4px;margin-top:12px;scrollbar-width:thin}
 #panel-${PANEL} .nx-hl button{flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:1px;position:relative;padding:8px 26px 8px 12px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text2);cursor:pointer;font:inherit;text-align:left}
 #panel-${PANEL} .nx-hl button b{font-size:.84rem;color:var(--text)}#panel-${PANEL} .nx-hl button small{font-size:.7rem;color:var(--text3);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
@@ -826,6 +827,7 @@ function mount() {
       <button type="button" class="btn rose" id="nx-clear">✕ Clear</button></div>
     <ol class="nx-steps" id="nx-steps"><li data-s="1"><b>1</b><span>Collect from Neorcha</span></li><li data-s="2"><b>2</b><span>See the month</span></li><li data-s="3"><b>3</b><span>Link to Purpose of Stay</span></li></ol>
     <div class="nx-col"><div class="nx-col-h"><span>🤖</span><div><b>Collect from Neorcha — automatic</b><small>Pick the dates and press Start. Neorcha opens, you log in, it reads every confirmation by itself and the cards land here.</small></div></div>
+      <label class="nx-hotel-choice"><span>Hotel to collect from</span><select id="nx-hotel-select" aria-label="Hotel to collect from"></select></label>
       <div class="nx-hl" id="nx-hl" role="tablist" aria-label="Neorcha hotels"></div>
       <div class="nx-hadd" id="nx-hadd" hidden><label>Brand<select id="nx-hb"></select></label><label class="nx-hn">Name<input id="nx-hname" maxlength="40" placeholder="e.g. Mercure Barsha"></label><label class="nx-url">Neorcha link<input type="url" id="nx-hurl" spellcheck="false"></label>
         <button type="button" class="btn gold" id="nx-hok">＋ Add</button><button type="button" class="btn" id="nx-hno">Cancel</button></div>
@@ -917,6 +919,8 @@ function mount() {
   const paintList = () => {
     const short = n => String(n || '').replace(/\s+(hotel|dubai|resort)\b.*$/i, '').slice(0, 26) || n;
     const items=[{key:'',name:short(hotelName()),account:'this hotel'},...LIST.map((h,i)=>({key:String(i),name:h.name,account:h.acct||acctOf(h.url)}))];
+    const picker=$('hotel-select'),signature=JSON.stringify(items.map(h=>[h.key,h.key===''?hotelName():h.name]));
+    if(picker){if(picker.dataset.options!==signature){picker.innerHTML=items.map(h=>`<option value="${esc(h.key)}">${esc(h.key===''?hotelName():h.name)}</option>`).join('');picker.dataset.options=signature;}picker.value=SEL;W.HotelOpsPhoneMenus?.refresh();}
     let buttons=Array.from($('hl').querySelectorAll('button[data-hs]'));
     if(buttons.length!==items.length||buttons.some((b,i)=>b.dataset.hs!==items[i].key)){
       $('hl').innerHTML=items.map(h=>`<button type="button" role="tab" data-hs="${h.key}"><b></b><small></small>${h.key!==''?`<span class="x" data-hdel="${h.key}">×</span>`:''}</button>`).join('')+'<button type="button" class="add" data-hadd="1">＋ Add hotel</button>';
@@ -934,6 +938,7 @@ function mount() {
     paintList();
   };
   const select = v => { SEL = v; put(SK(), SEL); loadInputs(); paintHotel(); };
+  $('hotel-select').onchange=()=>select($('hotel-select').value);
   loadInputs();
   $('url').onchange = () => { const v = $('url').value.trim(); if (v && !okUrl(v)) { toast('That is not a Neorcha link (it must be https://….myneorcha.com/…)', 'err'); return; }
     const h = cur(); if (h) { if (v) { if (!h.acct || h.acct === acctOf(h.url)) h.acct = acctOf(v); h.url = v; saveList(); } else $('url').value = h.url; }

@@ -1,5 +1,13 @@
 # Neorcha portal and property selection (v579)
 
+## Phone hotel menus (v599)
+
+On phones, **Hotel to collect from** opens a searchable list of the current hotel and saved Neorcha hotels. Switching between the current Ibis profile and Mercure preserves each profile's exact link and cloud account. It changes the next collection destination; it does not dispatch a job. The existing desktop hotel tabs remain available.
+
+Standard single-choice phone dropdowns, including main and quick enrolment hotel links, now use the same in-app choice sheet. The original select value and its input/change handlers remain authoritative. Disabled options stay disabled; detached or replaced options are rejected instead of choosing a different hotel. Cancel/Escape changes nothing. Desktop native controls retain their keyboard behavior. Existing IN-Gauge property, department, product and seller sheets continue using their scoped controls. The new script is included in the offline shell.
+
+`tests/phone-menus.browser.test.js` checks real taps, Ibis/Mercure destinations, search, empty/default values, disabled options, stale choices, closing and desktop restoration. The complete application was also checked on a phone across its themes, including More navigation, both enrolment contexts and IN-Gauge choices. Tests use synthetic destinations and block external actions.
+
 ## Cloud result recovery (v598)
 
 Run [112](https://github.com/ahmed0088/Depature-Tool/actions/runs/43918756753) collected and saved 39 registrations for 16 November 2026. The client incorrectly labelled the successful workflow as a failed process because its live report was missing on that device. GitHub success alone is now shown as an unconfirmed result, without a guessed secrets error or invented process exit code.

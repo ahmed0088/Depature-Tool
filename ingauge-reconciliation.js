@@ -39,9 +39,14 @@
    let candidates=unique(rows),basis=rooms.size>1?'Exact guest, routed billing room and stay':'Exact guest, room and stay';
    if(explicit)candidates=candidates.filter(r=>r.conf===explicit);
    if(candidates.length>1&&automatic&&['BB','ROOM','DIN','HB','FB'].includes(f)){const nights=unique(rows.filter(r=>day<r.departure));if(nights.length===1){candidates=nights;basis='Automatic night posting: exact guest/room and arrival ≤ posting date < departure';}}
+   const verified=input.reviewedBooking;
+   if(verified?.transaction===tx){
+    if(verified.schema!==1||verified.verified!==true||verified.snapshotId!==s.id||!C.sameBinding(verified.binding,s.binding)||C.stable(verified.period)!==C.stable(period)||verified.sourceSignature!==signature||!/^\d{1,24}$/.test(verified.confirmation)||!C.day(verified.arrival)||!C.day(verified.departure)||verified.arrival>verified.departure||explicit&&explicit!==verified.confirmation)throw Error('The booking evidence changed. Check the confirmation against the current Opera posting again.');
+    candidates=[{conf:verified.confirmation,arrival:verified.arrival,departure:verified.departure,room:room(j.ROOM),roomType:verified.roomType||''}];basis='Reviewer verified confirmation '+verified.confirmation+' against the Opera bill; posting date retained. Stay '+verified.arrival+' → '+verified.departure;
+   }
    const post={id:tx,code:text(j.TRX_CODE),day,family:f,cents:debit-credit,currency:text(j.CURRENCY1).toUpperCase(),automatic,note,room:text(j.ROOM),guest:text(j.GUEST_FULL_NAME),cashier:text(j.CASHIER_NAME),login:text(j.USER_NAME||j.INSERT_USER),sourceLine:j.line||'',candidates:candidates.map(r=>r.conf),basis};
    if(candidates.length!==1){unresolved.push(post);continue;}
-   post.conf=candidates[0].conf;const roomTypes=[...new Set(rows.filter(r=>r.conf===post.conf).map(r=>r.roomType).filter(Boolean))];if(roomTypes.length===1)post.roomType=roomTypes[0];const packageCode=note.match(/\[NA\s+Pkgs\.([^\]]+)/i)?.[1]||'';
+   post.conf=candidates[0].conf;const roomTypes=[...new Set((verified?.transaction===tx?candidates:rows.filter(r=>r.conf===post.conf)).map(r=>r.roomType).filter(Boolean))];if(roomTypes.length===1)post.roomType=roomTypes[0];const packageCode=note.match(/\[NA\s+Pkgs\.([^\]]+)/i)?.[1]||'';
    post.logEvidence=(input.events?.[post.conf]||[]).filter(e=>e.code===packageCode&&(!e.from||reportDate(e.from)&&reportDate(e.from)<=day)&&(!e.to||day<=reportDate(e.to))).slice().sort((a,b)=>Number(b.ts)-Number(a.ts)).slice(0,3).map(e=>({action:e.action,code:e.code,price:e.price,user:e.user,from:e.from,to:e.to}));const k=key(post.conf,f,day);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(post);
   }
   const cases=[],consumed=new Set(),onceGroups=new Map();
@@ -91,11 +96,37 @@
    if(possible.length===1){make('identity',[p],possible,'A charge with the same room, date and amount already exists, but the journal confirmation is not uniquely verified.','Check the reservation or routed bill. No addition or denial is proposed from this match alone.',{canReview:false,candidates:p.candidates});}
    else make('booking',[p],[],p.candidates.length?'More than one reservation matches this posting.':'Reservation Detail does not uniquely identify this posting.','Check the bill and choose the owning confirmation before reviewing a request.',{canReview:!p.automatic&&p.candidates.length>0&&p.cents>0&&p.currency===text(s.settings.currency).toUpperCase(),candidates:p.candidates});
   }
+  for(const item of cases)item.canChooseBooking=['booking','identity'].includes(item.kind)&&!item.confirmation&&item.posts.length===1&&item.posts[0].cents>0&&item.posts[0].currency===text(s.settings.currency).toUpperCase();
   cases.sort((a,b)=>(b.canReview-a.canReview)||Math.abs(b.gapCents)-Math.abs(a.gapCents)||a.from.localeCompare(b.from));
   return {ready:true,cases,period:{...period},snapshotId:s.id,binding:C.binding(s.binding),scope,excluded,stats:{amount:cases.filter(c=>['amount','date','unmapped','product'].includes(c.kind)).length,missing:cases.filter(c=>c.kind==='missing').length,pending:cases.filter(c=>['pending','pending-booking'].includes(c.kind)).length,review:cases.filter(c=>!c.canReview||['duplicate','booking','denied'].includes(c.kind)).length}};
  }
+ function bookingDetails(input,caseKey,confirmation){
+  const result=analyse(input),item=result.cases.find(c=>c.key===caseKey);if(!result.ready||!item?.canChooseBooking)throw Error(result.reason||'This case changed or needs a different billing review. Refresh the comparison.');
+  const conf=text(confirmation);if(!/^\d{1,24}$/.test(conf))throw Error('Enter the booking confirmation number using digits only.');
+  const p=item.posts[0],raw=input.journal.find(j=>text(j.TRX_NO)===p.id),explicit=text(raw.CONFIRMATION_NO||raw.CONFIRMATION_NUMBER);if(explicit&&explicit!==conf)throw Error('The journal already names confirmation '+explicit+'. Check the number against the Opera bill.');
+  const reservations=input.reservations||[],known=reservations.filter(r=>text(r.CONFIRMATION_NO)===conf),named=known.filter(r=>norm(p.guest)&&norm(r.FULL_NAME)===norm(p.guest));
+  if(known.some(r=>norm(r.FULL_NAME))&&!named.length)throw Error('That confirmation belongs to a different guest in Reservation Detail. Check the number or upload the corrected reservation report.');
+  const records=input.snapshot.records.filter(r=>r.confirmation===conf),stays=(named.length?named.map(r=>({arrival:reportDate(r.TRUNC_BEGIN),departure:reportDate(r.TRUNC_END),room:room(r.ROOM_NO||r.DISP_ROOM_NO),roomType:text(r.ROOM_CATEGORY_LABEL)})):records.map(r=>({arrival:C.day(r.arrival),departure:C.day(r.departure),room:room(r.room),roomType:''}))).filter(r=>r.arrival&&r.departure&&r.arrival<=r.departure);
+  const dates=[...new Map(stays.map(r=>[key(r.arrival,r.departure),r])).values()],stay=dates.length===1?dates[0]:null,warnings=[];
+  if(!known.length)warnings.push('Confirmation not found in Reservation Detail. Verify it against the Opera bill.');
+  if(stay&&stays.every(r=>r.room&&r.room!==room(p.room)))warnings.push('The reported room differs from the posting room. Check any room move or routed bill.');
+  if(stay&&(p.day<stay.arrival||p.day>stay.departure))warnings.push('The payment was posted outside the stay dates. The Opera posting date remains '+p.day+'.');
+  if(!stay)warnings.push('Enter the actual arrival and departure from the booking. The posting date is separate.');
+  return {item,post:p,confirmation:conf,arrival:stay?.arrival||'',departure:stay?.departure||'',roomType:stay?.roomType||'',source:named.length?'Reservation Detail':stay?'Existing IN-Gauge stay':'Opera bill required',needsStay:!stay,warnings,records:records.map(r=>({id:r.id,product:r.product,seller:r.seller,status:r.status,day:r.businessDate,cents:C.reportingRecord(r).totalCents})),sourceSignature:C.stable(raw)};
+ }
+ function resolveBooking(input,caseKey,choice={}){
+  const details=bookingDetails(input,caseKey,choice.confirmation);if(choice.bookingVerified!==true)throw Error('Confirm that you checked this confirmation against the Opera bill.');
+  if(choice.sourceSignature!==details.sourceSignature)throw Error('The Opera posting changed since the booking check. Check it again.');
+  const arrival=details.arrival||C.day(choice.arrival),departure=details.departure||C.day(choice.departure);if(!arrival||!departure||arrival>departure)throw Error('Enter the actual booking arrival and departure dates in the correct order.');
+  const p=details.post,proof={schema:1,verified:true,transaction:p.id,confirmation:details.confirmation,sourceSignature:details.sourceSignature,snapshotId:input.snapshot.id,binding:C.binding(input.snapshot.binding),period:{...input.period},day:p.day,arrival,departure,roomType:details.roomType,source:details.source,warnings:details.warnings};
+  const result=analyse({...input,reviewedBooking:proof}),found=result.cases.filter(c=>c.posts.some(post=>post.id===p.id));
+  if(!result.ready)throw Error(result.reason);if(!found.length)return {settled:true,details,proof,note:'This confirmation already has a matching approved or reviewed sale. No addition is needed.'};
+  if(found.length!==1)throw Error('Several billing cases need checking. Review the source postings before selecting a change.');
+  const item={...found[0],key:caseKey,bookingReview:proof};item.reason+=' Confirmation '+proof.confirmation+' was entered and checked by the reviewer; Opera posting '+p.id+' stays dated '+p.day+'.';
+  return {item,details,proof,settled:false};
+ }
  function seller(post,s,aliases=[]){
-  const note=post.note||'';for(const re of [/\*\*\s*(.+?)(?=\s+-\s+\d|\*\*|\||$)/gi,/(?:upsold|upsell|sold)\s*(?:by\s+)?([A-Za-z][A-Za-z .'-]+)\s*$/gi,/(?:breakfast|pax)\s+([A-Za-z][A-Za-z .'-]+)\s*$/gi]){for(const m of note.matchAll(re)){const who=C.resolveSeller(m[1].trim(),s.contributors,aliases);if(who.state==='matched')return {person:who.person,basis:'Opera note',named:m[1].trim(),reason:'The note names '+m[1].trim()+'. Posted by '+(post.cashier||post.login)+'. Confirm credit before saving.'};}}
+  const note=post.note||'';for(const re of [/\*{1,2}\s*([A-Za-z][A-Za-z .'-]*?)(?=\s+-\s+\d|\*{1,2}|\||$)/gi,/(?:upsold|upsell|sold)\s*(?:by\s+)?([A-Za-z][A-Za-z .'-]+)\s*$/gi,/(?:breakfast|pax)\s+([A-Za-z][A-Za-z .'-]+)\s*$/gi]){for(const m of note.matchAll(re)){const who=C.resolveSeller(m[1].trim(),s.contributors,aliases);if(who.state==='matched')return {person:who.person,basis:'Opera note',named:m[1].trim(),reason:'The note names '+m[1].trim()+'. Posted by '+(post.cashier||post.login)+'. Confirm credit before saving.'};}}
   const who=C.resolveSeller(post.login||post.cashier,s.contributors,aliases),fallback=who.state==='matched'?who:C.resolveSeller(post.cashier,s.contributors,aliases);
   return {person:fallback.person,basis:'Posting user fallback',named:post.cashier||post.login,reason:'No uniquely confirmed seller is named in the note. Posted by '+(post.cashier||post.login)+'. The posting user may differ from the seller; confirm credit.'};
  }
@@ -113,10 +144,11 @@
   if(['add','edit'].includes(action)){values.unitCents=item.journalCents;values.totalCents=product?C.amountTotal(values,product,s.settings):item.journalCents;if(['date','duplicate'].includes(item.kind))values.businessDate=p.day;}
   const credit=row?null:seller(p,s,aliases),person=row?s.contributors.find(r=>r.id===row.contributorId):credit.person;
   const op={key:row?'r-'+row.id:'t-'+p.id,action,source:'Monthly reconciliation',journalFamily:item.family,journalCodes:[...new Set(item.posts.map(p=>p.code).filter(Boolean))],confirmation:conf,productId:product?.id||'',contributorId:person?.id||'',values,statusAfter:action==='approve'?'APPROVED':row?.status==='DENIED'?'':row?.status||'PENDING',reason:'',evidence:item.reason+' · '+item.how+' · Guest: '+p.guest+' · Room '+p.room+' · Opera transaction '+item.posts.map(p=>p.id).join(', ')+' · '+p.note+(p.logEvidence?.length?' · Changes Log: '+p.logEvidence.map(e=>e.action+' '+e.code+' · '+e.price+' · '+e.user).join(' / '):''),reconciliation:{schema:1,key:item.key,kind:item.kind,family:item.family,codes:[...new Set(item.posts.map(p=>p.code).filter(Boolean))],role:item.kind==='duplicate'?(action==='deny'?'extra':'keep'):'',snapshotId:s.id,period:{...period},journalIds:item.posts.map(p=>p.id),recordIds:item.records.map(r=>r.id),journalCents:item.journalCents,currency:s.settings.currency,why:item.reason,how:item.how,reviewed:false}};
+  if(item.bookingReview){op.reconciliation.booking=item.bookingReview;if(!row){op.values.arrival=item.bookingReview.arrival;op.values.departure=item.bookingReview.departure;}}
   if(row){op.recordId=row.id;op.expected=C.fingerprint(row);if(!person&&['add','edit'].includes(action)){op.requireAssignment=true;op.assignmentReviewed=false;op.assignmentContributorId='';}}
   else{const previous=[...new Set(s.records.filter(r=>r.confirmation===conf&&C.kind(r.product)===item.family&&C.isRevenueStatus(r.status)).map(r=>r.seller))].filter(Boolean);if(previous.length)credit.reason+=' Other dates on this package credit '+previous.join(' / ')+'. Confirm the seller of this extra manual charge separately.';op.transaction=p.id;op.requireAssignment=true;op.assignmentReviewed=false;op.assignmentContributorId='';op.sellerCredit={named:credit.named,recommendedContributorId:credit.basis==='Opera note'?person?.id||'':'',basis:credit.basis,warning:credit.basis==='Opera note'?'':'Posting identity is a suggestion requiring confirmation.',postedBy:p.cashier||p.login,postingLogin:p.login,explanation:credit.reason};}
   return op;
  }
  function approvedDelta(op,s){const before=s.records.find(r=>r.id===String(op.recordId||'')),old=C.isRevenueStatus(before?.status)?before.totalCents:0,nextStatus=op.action==='approve'?'APPROVED':['deny','delete'].includes(op.action)?'':op.statusAfter,next=C.isRevenueStatus(nextStatus)?(op.action==='approve'?before?.totalCents:op.values?.totalCents):0;return Number.isSafeInteger(next)?next-old:0;}
- return {analyse,proposal,seller,approvedDelta};
+ return {analyse,proposal,seller,approvedDelta,bookingDetails,resolveBooking};
 });
