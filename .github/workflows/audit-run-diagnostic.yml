@@ -1,0 +1,23 @@
+name: Package audit saved-run diagnosis
+on:
+  push:
+    branches: ['diagnose/audit-status-20261120']
+    paths: ['scripts/audit-run-diagnostic.cjs', '.github/workflows/audit-run-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-audit --no-fund graphql@16.11.0
+      - name: Read private saved run outcomes without changes
+        run: node scripts/audit-run-diagnostic.cjs
+        env:
+          HOTELOPS_HOTEL: ibis_dubai
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
