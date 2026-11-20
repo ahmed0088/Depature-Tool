@@ -343,6 +343,7 @@ function parseDepReport(raw) {
       room:            parseInt(room),
       roomStr:         room,
       name:            parseName(p[idx['GUEST_NAME']] || ''),
+      conf:            (p[idx['CONFIRMATION_NO'] ?? idx['CONFIRMATION_NUMBER'] ?? idx['CONFIRMATION']] || '').trim(),
       arrival:         (p[idx['ARRIVAL']]         || '').trim(),
       departure:       (p[idx['DEPARTURE']]       || '').trim(),
       nights:          parseInt(p[idx['NIGHTS']]  || 0) || 0,
@@ -483,13 +484,14 @@ function processDepReload() {
 
   freshRooms.forEach(fresh => {
     const old = existing[fresh.room];
-    if (old) {
+    if (old && !(old.conf && fresh.conf && old.conf !== fresh.conf)) {
       // fresh Opera data (name, balance, dates) over everything tracked on the board (extension rate and
       // reason, DND time, acknowledged late check-out…), then the live tracking itself
       const tracked = {}; Object.keys(old).forEach(k => { if (!(k in fresh)) tracked[k] = old[k]; });
       merged.push({
         ...tracked,
         ...fresh,
+        conf:            fresh.conf || old.conf || '',
         status:          old.status,       // keep all live tracking
         lateTime:        old.lateTime,
         extensionNights: old.extensionNights,
@@ -505,7 +507,7 @@ function processDepReload() {
       // New room from Opera — check if it was previously extended/out/late
       // and got dropped from the report. Restore its tracked state from the log.
       const logged = logByRoom[fresh.roomStr || fresh.room];
-      if (logged && (logged.action === 'extended' || logged.action === 'out' || logged.action === 'late' || logged.action === 'na')) {
+      if (!old && logged && (logged.action === 'extended' || logged.action === 'out' || logged.action === 'late' || logged.action === 'na')) {
         merged.push({
           ...fresh,
           status:          logged.action,

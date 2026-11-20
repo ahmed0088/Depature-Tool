@@ -111,6 +111,11 @@ function sameGuest(a, b) {
   const bs = new Set(B.split(' ').filter(w => w.length >= 3));
   return A.split(' ').some(w => w.length >= 3 && bs.has(w));
 }
+/** A departure action must belong to this reservation, not just a shared name in the same room. */
+function departureMatch(b,r){
+  const bc=normConf(b?.conf),rc=normConf(r?.conf);if(bc&&rc)return bc===rc;
+  const a=nameKey(b?.name),c=nameKey(r?.name);return !!a&&a===c&&a.split(' ').length>=2;
+}
 const OTA = /(^|@|\.)(guest\.)?(trip\.com|booking\.com|expedia(partnercentral)?\.com|airbnb\.com|hotels\.com|agoda\.com|agoda-messaging\.com)$/i;
 const isOtaEmail = e => { const at = String(e || '').split('@')[1]; return !!at && OTA.test('@' + at.toLowerCase()); };
 const goodEmail = e => /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(e || '')) && !/^no@email\.com$/i.test(e) && !isOtaEmail(e);
@@ -238,11 +243,11 @@ function plan(inp) {
   // checked out, then checked in again (a new reservation from today, same guest): staff extend that way too — it is an extension, not a departure.
   // Same room + same guest, or the exact full name in another room. Looks in this screen's rows and in today's Arrivals list.
   const plusDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
-  const againOf = (name, room) => {
+  const againOf = (name, room, originalConf) => {
     const full = nameKey(name).split(' ').length >= 2;
     // stricter than sameGuest: one shared first name (a family member, a common name) is not the same guest
     const twoWords = (a, b) => { const B = new Set(nameKey(b).split(' ').filter(w => w.length >= 3)); return nameKey(a) === nameKey(b) || nameKey(a).split(' ').filter(w => w.length >= 3 && B.has(w)).length >= 2; };
-    const hit = x => x && x.name && (realRoom(x.room) && roomKey(x.room) === roomKey(room) ? twoWords(x.name, name) : full && nameKey(x.name) === nameKey(name));
+    const hit = x => x && (!originalConf || (x.conf && normConf(x.conf)!==normConf(originalConf))) && x.name && (realRoom(x.room) && roomKey(x.room) === roomKey(room) ? twoWords(x.name, name) : full && nameKey(x.name) === nameKey(name));
     const o = rows.find(x => x.arrival === t && x.departure > t && x.status !== 'checked_out' && hit(x));
     if (o) return { nights: dayDiff(t, o.departure), to: o.departure };
     const a = (inp.arr || []).find(x => !x._noShow && hit(x));
@@ -255,13 +260,14 @@ function plan(inp) {
       const b = findB(r);
       if (!b) { P.dep.add.push({ row: r, out: r.status === 'checked_out' }); return; }
       P.dep.matched++;
-      if (!sameGuest(b.name, r.name)) { P.notes.push(`Room ${b.roomStr}: Opera shows ${r.name || 'another guest'}, the board ${b.name} — not changed`); return; }
-      if (r.status === 'checked_out' && b.status !== 'out' && b.status !== 'extended') {
-        const again = againOf(r.name || b.name, b.roomStr);
+      if (!departureMatch(b, r)) { P.notes.push(`Room ${b.roomStr}: Opera shows ${r.name || 'another guest'}, the board ${b.name} — not changed`); return; }
+      if (r.status === 'checked_out' && b.status !== 'out') {
+        const again = againOf(r.name || b.name, b.roomStr, r.conf||b.conf);
         if (again) P.dep.ext.push({ room: b.roomStr, nights: again.nights, to: again.to, row: r, again: true });
         else P.dep.out.push({ room: b.roomStr, row: r });
       }
       const set = {};
+      if (r.conf && !b.conf) set.conf = r.conf;
       if (r.balance != null && r.balance !== b.balance) set.balance = r.balance;
       if (r.nights && r.nights !== b.nights) set.nights = r.nights;
       if (r.rateCode && !b.rateCode) set.rateCode = r.rateCode;
@@ -275,14 +281,14 @@ function plan(inp) {
     if (!arrOnly) rows.forEach(r => {
       if (!realRoom(r.room) || !r.departure || r.departure <= t || r.status === 'checked_out' || (r.arrival && r.arrival > t)) return;
       const b = findB(r);
-      if (!b || !sameGuest(b.name, r.name) || !['due', 'late', 'na', 'dnd'].includes(b.status)) return;
+      if (!b || !departureMatch(b, r) || !['due', 'late', 'na', 'dnd'].includes(b.status)) return;
       if (P.dep.ext.some(e => e.room === b.roomStr)) return;
       P.dep.ext.push({ room: b.roomStr, nights: dayDiff(t, r.departure), to: r.departure, row: r });
     });
     // already marked checked out here, and now Opera (or Arrivals) shows the same guest checked in again from today → extended
     if (!arrOnly) B.forEach(b => {
       if (b.status !== 'out' || !b.name || P.dep.ext.some(e => e.room === b.roomStr)) return;
-      const again = againOf(b.name, b.roomStr);
+      const again = againOf(b.name, b.roomStr, b.conf);
       if (again) P.dep.ext.push({ room: b.roomStr, nights: again.nights, to: again.to, again: true });
     });
   } else if (B.length && bday > t && depRows.length) P.notes.push('the Departures board is for a later day — not changed');
@@ -445,18 +451,35 @@ function depRecon(I) {
   const bk = b => roomKey(b.roomStr != null ? b.roomStr : b.room), keep = I.keep || {};
   const opBy = new Map();
   D.rows.forEach(r => { if (realRoom(r.room) && !isPm(r.room) && !BAD.has(r.status) && (!r.departure || r.departure === t) && !opBy.has(roomKey(r.room))) opBy.set(roomKey(r.room), r); });
+  const others = [];
+  Object.keys(I.reads || {}).forEach(k => { const L = I.reads[k]; if (k !== 'departures' && L && Array.isArray(L.rows) && (!L.date || L.date === t || k === 'inhouse' || k === 'details' || k === 'search' || k === 'list')) L.rows.forEach(r => { if (r && typeof r === 'object') others.push(Object.assign({}, r, { _k: k, _at: +L.at || 0, _date: L.date || '' })); }); });
+  const freshBy = new Map();
+  B.forEach(b => {
+    const k = bk(b), latest = !keep[k] && others.filter(r => ['details', 'inhouse'].includes(r._k) && r._date === t && r._at > (+D.at || 0)
+      && realRoom(r.room) && roomKey(r.room) === k && departureMatch(b, r))
+      .sort((a, c) => c._at - a._at)[0];
+    const fresh = latest && (latest.status === 'checked_out' || (latest.departure > t && !BAD.has(latest.status) && latest.status !== 'due_in' && (!latest.arrival || latest.arrival <= t))) ? latest : null;
+    if (fresh) { freshBy.set(k, fresh); if (opBy.has(k) && departureMatch(b, opBy.get(k))) opBy.delete(k); }
+  });
   // Opera's Departures list usually holds only the guests still due out; a guest who already left drops off it.
   // Then the rooms already out on the board are not compared (they are not "missing" — they left).
   const opAll = D.rows.some(r => r.status === 'checked_out');
   const bdAll = B.filter(b => !isPm(b.roomStr != null ? b.roomStr : b.room)), outN = opAll ? 0 : bdAll.filter(b => b.status === 'out').length;
   const bd = opAll ? bdAll : bdAll.filter(b => b.status !== 'out'), bdBy = new Map();
   bd.forEach(b => bdBy.set(bk(b), b));
-  const others = [];
-  Object.keys(I.reads || {}).forEach(k => { const L = I.reads[k]; if (k !== 'departures' && L && Array.isArray(L.rows) && (!L.date || L.date === t || k === 'inhouse' || k === 'details' || k === 'search' || k === 'list')) L.rows.forEach(r => { if (r && typeof r === 'object') others.push(Object.assign({ _k: k }, r)); }); });
   const fmt = d => { const x = new Date(d + 'T00:00:00Z'); return isNaN(x) ? d : x.getUTCDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][x.getUTCMonth()]; };
   const SRC = { inhouse: 'in house', details: 'its reservation', search: 'a reservation search', list: 'a reservation list', arrivals: 'Arrivals', queue: 'the Queue' };
   const diffs = [];
   bdBy.forEach((b, k) => {
+    // A completed action can arrive while the old Departures grid is still cached.
+    // Do not undo that saved date/status from an older list. A newer list remains authoritative.
+    const fresh = freshBy.get(k);
+    if (fresh) {
+      if (fresh.status === 'checked_out') {
+        if (b.status !== 'out') diffs.push({ type: 'status', room: b.roomStr, name: b.name, why: 'out', sure: true, acts: ['out', 'keep'], reason: 'A newer Opera reservation read confirms checkout.' });
+      } else if (DEP_ACTIVE.includes(b.status)) diffs.push({ type: 'missing', room: b.roomStr, name: b.name, why: 'extended', nights: dayDiff(t, fresh.departure), to: fresh.departure, sure: true, acts: ['ext', 'keep'], reason: `A newer Opera reservation read confirms departure on ${fmt(fresh.departure)}.` });
+      return;
+    }
     if (b.status === 'extended' && !keep[k]) {
       const r0 = opBy.get(k);
       // Opera decides: still leaving today in Opera → not extended yet (the guest may pay later); back to ⏳ extending until Opera shows it
@@ -466,11 +489,11 @@ function depRecon(I) {
     if (keep[k] || b.status === 'extended') return;
     const r = opBy.get(k);
     if (r) {
-      if (r.name && b.name && !sameGuest(b.name, r.name)) diffs.push({ type: 'guest', room: b.roomStr, name: b.name, opName: r.name, reason: `Opera has ${r.name} in this room — room move?`, why: 'move', acts: ['fixname', 'keep'] });
+      if (!departureMatch(b,r)) diffs.push({ type: 'guest', room: b.roomStr, name: b.name, opName: r.name, reason: `Opera has ${r.name} in this room — room move?`, why: 'move', acts: ['fixname', 'keep'] });
       else if (r.status === 'checked_out' && DEP_ACTIVE.includes(b.status)) diffs.push({ type: 'status', room: b.roomStr, name: b.name, reason: 'checked out in Opera, still due here', why: 'out', sure: true, acts: ['out', 'keep'] });
       return;
     }
-    const conf = normConf(b.conf), mine = x => (conf && x.conf ? normConf(x.conf) === conf : !!x.name && !!b.name && sameGuest(b.name, x.name));
+    const conf = normConf(b.conf), mine = x => departureMatch(b, x);
     const same = others.filter(mine), here = same.filter(x => realRoom(x.room) && roomKey(x.room) === k);
     const later = here.find(x => x.departure && x.departure > t && !BAD.has(x.status) && x.status !== 'checked_out');
     // another room: only on the same confirmation, or the exact full name (2+ words) no other board room has — a shared word like a common first name is not enough
@@ -485,8 +508,7 @@ function depRecon(I) {
     else if (canc) Object.assign(d, { why: 'cancelled', reason: 'cancelled / no-show in Opera', acts: ['remove', 'keep'] });
     else if (early) Object.assign(d, { why: 'early', reason: `checked out on ${fmt(early.departure)} in Opera → left earlier`, acts: ['remove', 'keep'] });
     else if (other) Object.assign(d, { why: 'date', reason: `its stay in Opera ends ${fmt(other.departure)} → stay date changed`, nights: other.departure > t ? dayDiff(t, other.departure) : 0, to: other.departure });
-    else if ((b.intent === 'extending' || b.intent === 'maybe_extend') && b.status !== 'out') Object.assign(d, { why: 'extended', nights: b.extensionNights > 0 ? b.extensionNights : 1, sure: true,
-      reason: 'was ' + (b.intent === 'extending' ? '⏳ extending' : '🤔 may extend') + ' and Opera no longer has it leaving today → extension confirmed in Opera' + (b.extensionNights > 0 ? '' : ' (1 night — check the nights)') });   // cleared from Opera = confirmed
+    else if ((b.intent === 'extending' || b.intent === 'maybe_extend') && b.status !== 'out') Object.assign(d, { why: 'waiting', nights: 0, sure: false, reason: 'Waiting for Opera’s saved departure date. Disappearing from this list does not confirm an extension or its nights.', acts: ['keep'] });
     else if (!opAll) Object.assign(d, { why: 'gone', reason: 'not in Opera\'s list of guests still to leave → probably checked out in Opera already', acts: ['out', 'ext', 'remove', 'keep'] });
     else Object.assign(d, { why: '', reason: 'not in Opera\'s departures today: extended, moved, checked out earlier or cancelled? Open it in Opera to see' });
     diffs.push(d);
@@ -809,14 +831,14 @@ function operaThoughts(I) {
   const hr = new Date(I.now).getHours();
   if (newest && I.now - newest > 2 * 3600e3 && hr >= 7 && hr < 23 && new Date(newest).toDateString() === new Date(I.now).toDateString()) T.push({ id: 'ops:stale:' + day + ':' + Math.floor(I.now / (2 * 3600e3)), type: 'opStale', icon: '📡', tone: 'idle',
     text: `Opera hasn't been read for ${Math.floor((I.now - newest) / 3600e3)} h — open Opera?`, why: 'The lists follow Opera only while it is open with the reader.', opts: [['Open Opera', 'open']] });
-  // 3) not sure if a guest checked out or stayed on: ask (a pop-up), and offer to let Opera settle it — open Departures, then Arrivals / In House
+  // 3) Unresolved departures wait quietly for a confirmed status/date from Opera.
   if (I.recon && I.recon.state === 'ok') {
-    const unsure = (I.recon.diffs || []).filter(d => (d.type === 'missing' && !d.sure && ['', 'gone', 'date', 'extended'].includes(d.why || '')) || d.type === 'notext').slice(0, 3);
+    const unsure = (I.recon.diffs || []).filter(d => (d.type === 'missing' && !d.sure && ['', 'gone', 'date', 'extended', 'waiting'].includes(d.why || '')) || d.type === 'notext').slice(0, 3);
     unsure.forEach(d => {
       const who = d.name ? ` (${d.name})` : '';
-      T.push({ id: 'ops:ask:' + day + ':' + roomKey(d.room) + ':' + (d.type === 'notext' ? 'notext' : d.why || 'none'), type: 'opAsk', icon: '❓', tone: 'warn', loud: true, room: d.room,
-        text: d.type === 'notext' ? `Room ${d.room}${who} is extended here, but Opera still has them leaving today — extended or leaving?` : `Room ${d.room}${who}: checked out or extended? I'm not sure — ${d.reason || 'Opera does not show it clearly'}.`,
-        why: 'Tap the answer — or open Departures, then Arrivals and In House in Opera: the reader looks again and settles it by itself.',
+      T.push({ id: 'ops:ask:' + day + ':' + roomKey(d.room) + ':' + (d.type === 'notext' ? 'notext' : d.why || 'none'), type: 'opAsk', icon: '📡', tone: 'idle', loud: false, room: d.room,
+        text: d.type === 'notext' ? `Room ${d.room}${who}: waiting for a saved extension in Opera. Its departure still shows today.` : `Waiting for Opera to confirm room ${d.room}${who}. ${d.reason || 'Its final status has not been read yet.'}`,
+        why: 'The reader follows confirmed checkout status and saved departure dates automatically. An absent row alone is not a status decision.',
         opts: [[d.nights > 0 ? `↪ Extended (+${d.nights})` : '↪ Extended', 'rc:ext:' + d.room], ['🚪 Checked out', 'rc:out:' + d.room], ['🔎 Let Opera show me', 'look']] });
     });
   }
@@ -889,7 +911,7 @@ function guardThrottle(T, e, now, what) {
   return { T, send: [], wait: OG_GAP - (now - T.sentAt) };
 }
 
-W.hoOperaPure = { propBlock, shouldReopen, pinHash, pinVerify, guardThrottle, guardFlush, ogLine, OG_GAP, OG_VISIT, depRecon, reconAuto, reconHead, reconPlan, teachKey, teachChoices, operaThoughts, operaEntry, shapeOf, reportText, reportLeaks, stuckText, stuckLeaks, stuckClean, operaHome, openState, maskCards, secretLabel, cleanFolio, cleanLabel, learnClean, learnModel, learnRecent, learnNext, learnSummary, sessionsOf, toIso, operaDay, roomKey, nameKey, sameGuest, isOtaEmail, goodEmail, natName, firstLast, sanitize, plan, summaryText, worthAlert, depReport, hashOf, isPm };
+W.hoOperaPure = { propBlock, shouldReopen, pinHash, pinVerify, guardThrottle, guardFlush, ogLine, OG_GAP, OG_VISIT, depRecon, reconAuto, reconHead, reconPlan, teachKey, teachChoices, operaThoughts, operaEntry, shapeOf, reportText, reportLeaks, stuckText, stuckLeaks, stuckClean, operaHome, openState, maskCards, secretLabel, cleanFolio, cleanLabel, learnClean, learnModel, learnRecent, learnNext, learnSummary, sessionsOf, toIso, operaDay, roomKey, nameKey, sameGuest, isOtaEmail, goodEmail, natName, firstLast, sanitize, plan, departureMatch, summaryText, worthAlert, depReport, hashOf, isPm };
 if (!doc) return;
 
 // ══ State ═══════════════════════════════════════════════════
@@ -1135,7 +1157,7 @@ function thoughtsNow() {
 // ── the reader asks too: the open "checked out or extended?" questions ride on every answer to the reader, its box in the Opera tab
 //    shows them with the same buttons, and a tap there comes back here as {answer:{id, act}} ──
 const LOOKING = {};   // question id → when "let Opera show me" was tapped in the reader (it waits 15 min for the screens)
-const asksOff = () => { try { return localStorage.getItem('ho_op_ask_off') === '1'; } catch (_) { return false; } };   // ⚙️ on the Opera page
+const asksOff = () => { try { return localStorage.getItem('ho_op_ask_off') !== '0'; } catch (_) { return true; } };   // ⚙️ on the Opera page
 function readerAsks() {
   if (!signedIn() || asksOff()) return [];
   return safe(() => thoughtsNow().filter(t => t.type === 'opAsk' && !(LOOKING[t.id] > Date.now() - 15 * 60e3)).slice(0, 3)
@@ -1405,7 +1427,8 @@ function receive(raw, h, reply) {
     return SEEN.get(h);
   }
   const n = snap.rows.length || (snap.folio ? snap.folio.postings.length : 0) || (snap.traces || []).length || (snap.tables || []).reduce((a, tb) => a + tb.rows.length, 0);
-  LAST[snap.kind] = { kind: snap.kind, date: snap.date, title: snap.title, total: snap.total, n, at: Date.now(), h, rows: snap.rows.slice(0, 600) };
+  const readAt = Math.max(Date.now(), ...Object.values(LAST).map(x => (+(x && x.at) || 0) + 1));
+  LAST[snap.kind] = { kind: snap.kind, date: snap.date, title: snap.title, total: snap.total, n, at: readAt, h, rows: snap.rows.slice(0, 600) };
   ['folio', 'traces', 'tables', 'audit'].forEach(k => { if (snap[k]) LAST[snap.kind][k] = snap[k]; });
   saveLast();
   safe(() => remember(snap));
@@ -1602,7 +1625,7 @@ W.addEventListener('message', e => {
   if (Array.isArray(d.learn)) { const hint = safe(() => learnAdd(d.learn), ''); reply({ source: 'ho-op-ack', hint: hint || '', learn: learnOn() }); return; }
   if (d.gone && typeof d.gone === 'object') { safe(() => operaGone(String(d.gone.why || ''))); return; }
   if (d.prop && /^[A-Z0-9]{3,8}$/.test(String(d.prop))) LINK.prop = String(d.prop);
-  if (d.answer && typeof d.answer === 'object') { const text = safe(() => readerAnswer(d.answer), 'Not changed'); toast('📡 ' + text, 'ok'); reply({ source: 'ho-op-ack', answered: String(d.answer.id || '').slice(0, 80), text, ask: readerAsks() }); safe(paint); return; }
+  if (d.answer && typeof d.answer === 'object') { const text = safe(() => readerAnswer(d.answer), 'Not changed'); toast('📡 ' + text, 'ok'); reply({ source: 'ho-op-ack', answered: String(d.answer.id || '').slice(0, 80), text, ask: readerAsks(), allowQuestions: !asksOff() }); safe(paint); return; }
   if (d.ping) {
     // A reopened app also needs the operating date when the guest list has not
     // changed, or the header is the only readable item in this Opera frame.
@@ -1611,12 +1634,12 @@ W.addEventListener('message', e => {
       if (dated?.businessDate && !propCheck(dated.prop)) safe(() => W.PurposeBusinessDate.observe(dated.businessDate, {source:'opera',at:Date.now()}));
     }
     // answered at once, signed in or not (only applying waits): the reader shows "linked" as soon as this tab has loaded
-    reply({ source: 'ho-op-ack', pong: 1, frame: String(d.frame || ''), again: !!(d.h && !SEEN.has(String(d.h))), auto: CFG.auto, learn: learnOn(), app: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', teach: teachNow(), guard: ogKnown() ? ogMsg() : null, ask: readerAsks() });
+    reply({ source: 'ho-op-ack', pong: 1, frame: String(d.frame || ''), again: !!(d.h && !SEEN.has(String(d.h))), auto: CFG.auto, learn: learnOn(), app: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', teach: teachNow(), guard: ogKnown() ? ogMsg() : null, ask: readerAsks(), allowQuestions: !asksOff() });
     if (d.home) safe(() => rememberHome(d.home));
     if (!was) paint();
     return;
   }
-  if (d.snap) { const res = receive(d.snap, d.h, reply); reply({ source: 'ho-op-ack', h: String(d.h || ''), text: res, ask: readerAsks() }); }
+  if (d.snap) { const res = receive(d.snap, d.h, reply); reply({ source: 'ho-op-ack', h: String(d.h || ''), text: res, ask: readerAsks(), allowQuestions: !asksOff() }); }
 });
 if (/opera-reader/.test(location.hash)) safe(() => history.replaceState(null, '', location.pathname + location.search));   // opened by the console reader
 

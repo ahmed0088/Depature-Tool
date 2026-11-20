@@ -65,7 +65,7 @@
   'use strict';
   var APP_URL = '__HO_APP_URL__';
   var VERSION = '1';
-  var READER_REV = 3;   // report layout revision; screen classification fixes use the app release version
+  var READER_REV = 4;   // report layout revision; screen classification fixes use the app release version
 
   // ── pure helpers (tested in Node) ────────────────────────
   var sp = function (s) { return String(s == null ? '' : s).replace(/[   ]/g, ' ').replace(/[​-‏⁦-⁩﻿]/g, ''); };
@@ -443,6 +443,37 @@
     });
     return out;
   }
+  /** Identity is a confirmation when available; a shared first name never proves a checkout. */
+  function sameReservation(a, b) {
+    if (!a || !b || !a.room || !b.room || roomKey(a.room) !== roomKey(b.room)) return false;
+    if (a.conf && b.conf) return a.conf === b.conf;
+    var an = nameKey(a.name), bn = nameKey(b.name); return !!an && an === bn && an.split(' ').length >= 2;
+  }
+  function actionOf(label) {
+    var s = sp(label).replace(/[.…]+$/g, '').replace(/\s+/g, ' ').trim();
+    if (/^(?:(?:early|confirm|complete)\s+)?check[ -]?out(?:\s+(?:guest|reservation))?(?:\s*(?:&|and)\s*print)?$/i.test(s)) return 'checkout';
+    if (/^(?:extend(?: stay| reservation)?|extension)$/i.test(s)) return 'extend';
+    if (/^(?:save(?: changes| and close| & close)?|update(?: reservation)?|apply)$/i.test(s)) return 'save';
+    if (/^(?:cancel|close|back)$/i.test(s)) return 'cancel';
+    return '';
+  }
+  function successOf(kind, message) {
+    var s = sp(message).replace(/\s+/g, ' ').trim();
+    if (!s || s.length > 600 || /\b(?:error|failed|failure|unable|unsuccessful|cannot|cancelled|canceled|are you sure|please confirm|not)\b/i.test(s)) return false;
+    if (kind === 'checkout' && /\b(?:has been|was|is now) checked[ -]?out\b|^(?:guest |reservation |1 reservation )?checked[ -]?out[.!]?$/i.test(s)) return true;
+    return kind === 'checkout' ? /(?:check[ -]?out|checked out).{0,100}(?:success(?:ful|fully)?|complet(?:e|ed))|(?:success(?:ful|fully)?|complet(?:e|ed)).{0,100}(?:check[ -]?out|checked out)/i.test(s)
+      : /(?:sav(?:e|ed)|updat(?:e|ed)|extend(?:ed)?|extension|changes).{0,100}(?:success(?:ful|fully)?|complet(?:e|ed))|(?:success(?:ful|fully)?|complet(?:e|ed)).{0,100}(?:sav(?:e|ed)|updat(?:e|ed)|extend(?:ed)?|extension)|^(?:changes |reservation )?(?:saved|updated)\.?$/i.test(s);
+  }
+  function countEvidence(value) {
+    var s = sp(value).replace(/\s+/g, ' ').trim(), m;
+    if ((m = s.match(/^(?:results?\s*:?\s*(\d+)|(\d+)\s+(?:results?|records?|reservations?))(?:\s|$)/i))) return { known: true, total: +(m[1] || m[2]) };
+    if (/^(?:no (?:results?|records?|reservations?)(?: found)?|nothing found)\.?$/i.test(s)) return { known: true, total: 0 };
+    if ((m = s.match(/^(?:showing )?\d+\s*[-–]\s*\d+\s+(?:of|\/)\s*(\d+)$/i))) return { known: true, total: +m[1] };
+    return { known: false, total: 0 };
+  }
+  function liveRows(previous, current, kind, count) {
+    var live = mergeRows([], current); return kind === 'departures' && count && count.known && live.length >= count.total ? live : mergeRows(previous, current);
+  }
   /** label → value pairs of a reservation's details → one guest line (or null when it isn't a reservation).
    *  loose: a profile or a folio — a name, a room or a conf. and one more thing is enough */
   function pairsToRow(pairs, order, loose) {
@@ -459,7 +490,8 @@
   // what a screen is, from its title, headings and address (most specific first)
   var KINDS = [
     ['billing', /\bbilling\b|\bfolios?\b|post(?:ing)?\s*charges?|\bsettlement\b|\bsettle\b|\bcashier(?:ing)?\b|advance\s*(?:bill|folio)|\binvoices?\b/],
-    ['rooms', /room\s*(?:management|status|diary|maintenance|conditions?|rack|plan)|\bhousekeeping\b|\bhk\s*board\b|\bdiscrepanc(?:y|ies)\b|out\s*of\s*order|\btask\s*sheets?\b/],
+    ['rooms', /room\s*(?:management|status|diary|maintenance|conditions?|rack|plan)|\bhousekeeping\b|\bhk\s*board\b|\bdiscrepanc(?:y|ies)\b|out\s*of\s*(?:order|service)|\btask\s*sheets?\b/],
+    ['other', /changes?\s*log|user\s*activity\s*log/],
     ['audit', /end\s*of\s*day|night\s*audit|\beod\b|end-of-day|\bclose\s*(?:the\s*)?day\b/],
     ['inhouse', /\bin[\s\-]?house\b|\bstay\s*overs?\b/],
     ['departures', /\bdepartures?\b|\bdue\s*outs?\b|\bcheck[\s\-]?outs?\b/],
@@ -1097,7 +1129,7 @@
   /** Opera's report screens (Report Parameters, report list): settings for a report, not guests → never "unknown". */
   function isReportForm(c) {
     return (c.pairs || []).some(function (p) { return /^(?:report name|report group|file format|sort order|from date|to date|include internal notes|primary only)$/i.test(String(p[0] || '').replace(/\s+/g, ' ').trim()); })
-      || (c.heads || []).some(function (h) { return /report\s+parameters|^\s*reports?\s*$/i.test(h); });
+      || (c.heads || []).some(function (h) { return /report\s+parameters|changes?\s*log|user\s*activity\s*log|^\s*reports?\s*$/i.test(h); });
   }
   var H = { pinHash: pinHash, pinVerify: pinVerify, pinStep: pinStep, guardTake: guardTake, PIN_RE: PIN_RE, LOCK_TRIES: LOCK_TRIES, LOCK_MS: LOCK_MS,
     setTaught: setTaught, screenKey: screenKey, shapeOf: shapeOf, headText: headText, structText: structText, pathShape: pathShape, classShape: classShape, mapName: mapName, reportLeaks: reportLeaks, makeReport: makeReport, reportText: reportText, linkDiag: linkDiag,
@@ -1105,7 +1137,7 @@
     postingsFrom: postingsFrom, folioFrom: folioFrom, tracesFrom: tracesFrom, tableFrom: tableFrom, pairsExtra: pairsExtra, auditState: auditState, cleanLabel: cleanLabel, safeTitle: safeTitle,
     isRoomStatusSummary: isRoomStatusSummary, normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, businessDateFromText: businessDateFromText, normStatus: normStatus, money: money,
     roomOf: roomOf, roomKey: roomKey, nameKey: nameKey, confOf: confOf, emailOf: emailOf, rowFrom: rowFrom, finishRows: finishRows, rowKey: rowKey, mergeRows: mergeRows, pairsToRow: pairsToRow,
-    kindOfText: kindOfText, pageKind: pageKind, sigKind: sigKind, formLabel: formLabel, dataLook: dataLook, isReportForm: isReportForm, KNOWN_HEAD: KNOWN_HEAD, hash: hash, summary: summary, totalOf: totalOf, totalLine: totalLine, FIELDS: FIELDS, VERSION: VERSION, READER_REV: READER_REV };
+    sameReservation: sameReservation, actionOf: actionOf, successOf: successOf, countEvidence: countEvidence, liveRows: liveRows, kindOfText: kindOfText, pageKind: pageKind, sigKind: sigKind, formLabel: formLabel, dataLook: dataLook, isReportForm: isReportForm, KNOWN_HEAD: KNOWN_HEAD, hash: hash, summary: summary, totalOf: totalOf, totalLine: totalLine, FIELDS: FIELDS, VERSION: VERSION, READER_REV: READER_REV };
   if (typeof module !== 'undefined' && module.exports) { module.exports = H; return; }
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
@@ -1227,7 +1259,7 @@
     });
     // headers split the same way (one header table per part, side by side): joined in order
     if (joined && hs.length >= 2 && hs.every(function (x, i) { return !i || x.t !== hs[i - 1].t; })) head = hs.reduce(function (a, x) { return a.concat(x.line); }, []);
-    return { el: g, head: head, rows: rows, r0: first };
+    return { el: g, head: head, rows: rows, r0: first, byKey: byKey };
   }
   function depthTo(a, b) { var n = 0; for (var e = a; e && n < 8; e = e.parentElement, n++) if (e.contains(b)) return n; return 99; }
   /** every grid on screen → guest lines (header-only grids are paired with the body grid next to them: split headers).
@@ -1236,7 +1268,7 @@
   function readGrids(doc, hint) {
     CLS = new Map();
     var gs = [], maybe = [], skipped = 0;
-    doc.querySelectorAll(GRID_SEL).forEach(function (e) { var c = clsOf(e); if (c === 'grid') gs.push(readGrid(e)); else if (c === 'maybe') maybe.push(e); else if (c === 'skip' && !mine(e)) skipped++; });
+    doc.querySelectorAll(GRID_SEL).forEach(function (e) { if (mine(e) || !visibleOpera(e)) return; var c = clsOf(e); if (c === 'grid') gs.push(readGrid(e)); else if (c === 'maybe') maybe.push(e); else if (c === 'skip' && !mine(e)) skipped++; });
     // a one-line table without a header or a digit: layout too
     gs = gs.filter(function (g) { if (g.head) return true; if (!g.rows.length) return false; if (g.rows.length === 1 && !/\d/.test(g.rows[0].join(''))) { skipped++; return false; } return true; });
     var kindOfHead = function (h) {
@@ -1251,6 +1283,7 @@
       // a room list (Opera's assign-room panel, room status): a room and its statuses, no guest → kept as a plain table, never "nothing useful"
       if (mg.map.room !== undefined && mg.map.name === undefined && mg.map.conf === undefined && mg.map.last === undefined && mg.map.first === undefined
         && (mg.map.foStatus !== undefined || mg.map.roomStatus !== undefined || mg.map.hkStatus !== undefined)) return hint === 'rooms' ? 'guest' : 'known';
+      if (hint === 'rooms' && /REASON CODE/.test(hs) && /RETURN STATUS|THROUGH DATE/.test(hs)) return 'known';
       if (usable(mg)) return 'guest';
       if (usablePost(mapHeaders(h, postFieldOf))) return 'post';
       if (usableTrace(mt)) return 'trace';
@@ -1262,7 +1295,7 @@
       var rs = ownRows(e), w = 0; for (var i = 0; i < rs.length && i < 8; i++) w = Math.max(w, rs[i].cells.length);
       var ok = w >= 2 && heads.some(function (h) { return (h.el.compareDocumentPosition(e) & 4) && Math.abs(h.head.length - w) <= 1 && depthTo(h.el, e) <= 6; });
       if (!ok) { skipped++; return; }
-      var g = readGrid(e); if (g.rows.length) gs.push(g);
+      if (!visibleOpera(e)) return; var g = readGrid(e); if (g.rows.length) gs.push(g);
     });
     var out = [], total = 0, post = [], trace = [], other = [], seen = [];
     gs.forEach(function (g) {
@@ -1300,7 +1333,16 @@
         while (!total && (tn = tw.nextNode()) && ++c < 400) { var v = tn.nodeValue; if (v && v.length < 40 && /\d/.test(v) && !g.el.contains(tn) && !inData(tn.parentElement || g.el)) total = totalLine(v); }
       }
     });
-    return { raw: out, total: total, post: post, trace: trace, other: other, seen: seen, skipped: skipped };
+    var count = { known: total > 0, total: total }, counts = new Set();
+    gs.filter(function (g) { return g.head && usable(mapHeaders(g.head)); }).forEach(function (g) {
+      var box = g.el.parentElement, local = new Set();
+      for (var z = 0; box && z < 3 && !local.size; z++, box = box.parentElement) box.querySelectorAll('[role="status"], [class*="count" i], [class*="total" i], [class*="pag" i]').forEach(function (e) {
+        if (mine(e) || !visibleOpera(e) || inData(e)) return; var c = countEvidence(txt(e)); if (c.known) local.add(c.total);
+      });
+      local.forEach(function (n) { counts.add(n); });
+    });
+    if (counts.size) count = counts.size === 1 ? { known: true, total: Array.from(counts)[0] } : { known: false, total: total };
+    return { raw: out, count: count, total: count.known ? count.total : total, post: post, trace: trace, other: other, seen: seen, skipped: skipped };
   }
   // ── Oracle ADF forms (a reservation, a profile): a short text that names a field, and the value shown next to it ──
   var LABEL_TAGS = { SPAN: 1, LABEL: 1, DIV: 1, TD: 1, TH: 1, DT: 1 };
@@ -1488,6 +1530,77 @@
   var SPECIAL = { billing: 1, rooms: 1, audit: 1, traces: 1, profile: 1, rates: 1, group: 1, checkin: 1, queue: 1 };
   var REPLACE = { details: 1, billing: 1, profile: 1, traces: 1, checkin: 1 };   // one thing on screen: the newest read replaces the last one
   var LOOSE = { billing: 1, profile: 1, traces: 1, checkin: 1, details: 1 };   // a name, a room or a conf. and one more thing is a guest there
+  function visibleOpera(e) {
+    if (!e || mine(e) || e.closest('[hidden], [aria-hidden="true"]')) return false;
+    try { return !!e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden'; } catch (_) { return true; }
+  }
+  var MESSAGE_SEL = '[role="alert"], [role="status"], [aria-live="polite"], [aria-live="assertive"], [class*="af_messages"], [class*="af_message"], [id$="::msgDlg"]';
+  var noticeVersions = new WeakMap(), rowContext = null, draftContext = null, pendingAction = null, stableRows = [], stableKind = '', stableProperty = '', confirmedQueue = [];
+  function notices() {
+    var out = []; document.querySelectorAll(MESSAGE_SEL).forEach(function (e) { if (!visibleOpera(e) || mine(e) || inData(e)) return; var value = txt(e); if (value && value.length <= 600) out.push({ node: e, text: value, revision: noticeVersions.get(e) || 0 }); }); return out;
+  }
+  function stampNotices(records) {
+    records.forEach(function (r) { var e = r.target.nodeType === 1 ? r.target : r.target.parentElement, n = e && e.closest ? e.closest(MESSAGE_SEL) : null; if (n && !mine(n)) noticeVersions.set(n, (noticeVersions.get(n) || 0) + 1); });
+  }
+  function rowAt(node) {
+    var row = node && node.closest ? node.closest('tr[_afrrk], tr[role="row"], [role="row"]') : null; if (!row || mine(row)) return null;
+    var grid = ownerOf(row); if (!grid) return null; var data = readGrid(grid), cells = cellsOf(row); if (!data.head || !cells.length) return null;
+    var key = row.getAttribute('_afrrk'), values = key && data.byKey && data.byKey[key] ? data.byKey[key].line : [];
+    if (!values.length) cells.forEach(function (c, i) { values[colOf(c, i)] = txt(c); }); var r = finishRows([rowFrom(values, mapHeaders(data.head).map)], (navigator.language || '').toLowerCase() === 'en-us' ? 'mdy' : '')[0];
+    return r && r.room && (r.conf || r.name) ? r : null;
+  }
+  function formRow() { return finishRows([pairsToRow(readPairs(document), '', true) || {}], '')[0] || null; }
+  function targetNow(node) {
+    var direct = rowAt(node); if (direct) return direct;
+    var selected = []; document.querySelectorAll('tr[aria-selected="true"], [role="row"][aria-selected="true"], tr[_afrrk].p_AFSelected, [role="row"].p_AFSelected, tr[_afrrk]:has(input[type="checkbox"]:checked)').forEach(function (e) { if (!visibleOpera(e)) return; var r = rowAt(e); if (r && !selected.some(function (x) { return rowKey(x) === rowKey(r); })) selected.push(r); });
+    if (selected.length > 1) return null; if (selected.length === 1) return selected[0];
+    if (REPLACE[stableKind]) { var det = formRow(); if (det && det.room && (det.conf || det.name)) return det; if (stableRows.length === 1) return stableRows[0]; }
+    return rowContext && Date.now() - rowContext.at < 60000 ? rowContext.row : null;
+  }
+  function detectDraft(rows, kind) {
+    if (draftContext || !REPLACE[kind] || !REPLACE[stableKind] || rows.length !== 1 || stableRows.length !== 1) return;
+    var before = stableRows[0], now = rows[0];
+    if (sameReservation(before, now) && before.departure && now.departure && before.departure !== now.departure) draftContext = { row: Object.assign({}, before), at: Date.now() };
+  }
+  function captureOperaClick(e) {
+    if (!e.isTrusted || stopped || mine(e.target)) return;
+    var row = rowAt(e.target); if (row) { rowContext = { row: row, at: Date.now() }; if (pendingAction && !sameReservation(pendingAction.row, row)) pendingAction = null; }
+    var button = e.target.closest && e.target.closest('button, a, [role="button"], [role="menuitem"], input[type="submit"]'); if (!button || mine(button)) return;
+    var labels = [button.getAttribute('aria-label') || '', button.getAttribute('title') || '', txt(button)], label = labels.find(function (s) { return actionOf(s); }) || labels.find(Boolean) || '', action = actionOf(label);
+    if (action === 'cancel') { pendingAction = null; draftContext = null; return; }
+    if (/^(?:search|reset|clear|new reservation)$/i.test(label.trim())) { pendingAction = null; rowContext = null; return; }
+    var target = targetNow(button); if (!target) return;
+    if (action === 'checkout') pendingAction = { type: 'checkout', row: target, at: Date.now(), property: readProp(), messages: notices() };
+    else if (action === 'save' || action === 'extend') {
+      var current = formRow(); if (current) detectDraft([current], stableKind);
+      if (draftContext && current && sameReservation(draftContext.row, current) && current.departure && current.departure !== draftContext.row.departure) pendingAction = { type: 'extend', row: draftContext.row, desired: current.departure, at: Date.now(), property: readProp(), messages: notices() };
+    }
+    if (action) laterScan(400);
+  }
+  function captureDraft(e) {
+    if (!e.isTrusted || stopped || mine(e.target) || !REPLACE[stableKind] || !e.target.matches('input,textarea,select')) return;
+    if (!draftContext && stableRows.length === 1) draftContext = { row: Object.assign({}, stableRows[0]), at: Date.now() };
+  }
+  function observeAction(rows, kind, day, property) {
+    if (!pendingAction) return null; var p = pendingAction;
+    if (Date.now() - p.at > 120000 || p.property && property && p.property !== property) { pendingAction = null; return null; }
+    var same = rows.filter(function (r) { return sameReservation(p.row, r); });
+    var messages = notices().filter(function (m) { return !p.messages.some(function (old) { return old.node === m.node && old.text === m.text && old.revision === m.revision; }); });
+    var success = messages.some(function (m) {
+      var room = m.text.match(/\broom\s*(?:number|no\.?|#)?\s*:?\s*([A-Z]?\d{1,5}[A-Z]?)\b/i), conf = m.text.match(/\bconfirmation\s*(?:number|no\.?|#)?\s*:?\s*(\d+)\b/i);
+      return (!room || roomKey(room[1]) === roomKey(p.row.room)) && (!conf || !p.row.conf || conf[1] === p.row.conf) && successOf(p.type, m.text);
+    });
+    if (p.type === 'checkout') {
+      if (!same.some(function (r) { return r.status === 'checked_out'; }) && (!success || kind === 'departures' && same.some(function (r) { return r.status !== 'checked_out'; }))) return null;
+      pendingAction = null; draftContext = null; return Object.assign({}, p.row, { status: 'checked_out', departure: day || p.row.departure });
+    }
+    if (!success || !p.desired || day && p.desired <= day) return null;
+    if (same.length && same.some(function (r) { return r.departure && r.departure !== p.desired; })) return null;
+    pendingAction = null; draftContext = null; return Object.assign({}, p.row, same[0] || {}, { departure: p.desired, status: 'in_house' });
+  }
+  window.addEventListener('click', captureOperaClick, { capture: true, passive: true });
+  window.addEventListener('input', captureDraft, { capture: true, passive: true });
+  window.addEventListener('change', captureDraft, { capture: true, passive: true });
   function scan() {
     if (stopped) return;
     var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
@@ -1529,18 +1642,30 @@
       if (kind === 'rooms') rows.forEach(function (r) { if (!r.rs && r.statusText) { var x = normRoomStatus(r.statusText); if (x) { r.rs = x; r.roomStatus = r.statusText; delete r.status; } } });
       g.other.forEach(function (o) { var tb = tableFrom(o.head, o.rows, heads[0] || document.title); if (tb) tables.push(tb); });
       if (kind === 'audit') { var tx = heads.slice(); tables.forEach(function (tb) { tb.rows.forEach(function (r) { tx.push(r.join(' ')); }); }); pairs.forEach(function (p) { tx.push(p[0] + ' ' + p[1]); }); audit = { state: auditState(tx) }; }
-      var date = screenDate(document, order), operatingDate = businessDate(document, order);
+      var date = screenDate(document, order), operatingDate = businessDate(document, order), property = readProp();
+      if (stableProperty && property && stableProperty !== property) { pendingAction = null; draftContext = null; rowContext = null; }
+      if (pendingAction && REPLACE[kind] && rows.length === 1 && rows[0].conf && pendingAction.row.conf && rows[0].conf !== pendingAction.row.conf) pendingAction = null;
+      if (draftContext && REPLACE[kind] && rows.length === 1 && rows[0].conf && draftContext.row.conf && rows[0].conf !== draftContext.row.conf) { draftContext = null; pendingAction = null; }
+      var busy = Array.prototype.some.call(document.querySelectorAll('[role="grid"][aria-busy="true"], [role="table"][aria-busy="true"]'), visibleOpera); if (busy) { CLS = null; return; }
+      detectDraft(rows, kind);
+      var confirmed = observeAction(rows, kind, operatingDate || date, property);
+      if (draftContext && REPLACE[kind]) rows = rows.map(function (r) { if (!sameReservation(draftContext.row, r)) return r; var copy = Object.assign({}, r); if (draftContext.row.departure) copy.departure = draftContext.row.departure; else delete copy.departure; if (draftContext.row.status) copy.status = draftContext.row.status; else delete copy.status; return copy; });
+      if (!REPLACE[kind]) draftContext = null;
       if (!kind && operatingDate) kind = 'other';
-      var key = kind + '|' + date + '|' + (heads[0] || document.title || '').replace(/\d+/g, '#').slice(0, 60);   // "Arrivals (42)" while it loads is the same screen
+      var key = kind + '|' + property + '|' + date + '|' + (heads[0] || document.title || '').replace(/\d+/g, '#').slice(0, 60);   // "Arrivals (42)" while it loads is the same screen
       if (key !== view.key) { view = { key: key, kind: kind, date: date, rows: [], title: (heads[0] || document.title || '').slice(0, 90), total: 0 }; noteScreen(kind, view.title); if (kind) tl('📺', (KLABEL[kind] || 'A screen') + ' on screen'); }
-      view.rows = REPLACE[kind] ? rows : mergeRows(view.rows, rows);
+      view.rows = REPLACE[kind] ? rows : liveRows(view.rows, rows, kind, g.count);
+      if (confirmed && kind === 'departures' && confirmed.status === 'checked_out' && !rows.some(function (r) { return sameReservation(confirmed, r); })) view.rows = view.rows.filter(function (r) { return !sameReservation(confirmed, r); });
+      stableRows = rows.map(function (r) { return Object.assign({}, r); }); stableKind = kind; stableProperty = property;
       if (view.rows.length > 1500) view.rows = view.rows.slice(-1500);
-      if (g.total) view.total = g.total;
+      if (g.count && g.count.known) view.total = g.count.total; else if (g.total) view.total = g.total;
       else if (rows.length && !REPLACE[kind]) { var hn = (heads[0] || '').match(/\((\d{1,5})\)\s*$/); if (hn) view.total = +hn[1]; }   // "Departures (15)"
-      view.businessDate = operatingDate; view.folio = folio; view.traces = traces; view.tables = tables; view.audit = audit;
+      view.countKnown = !!(g.count && g.count.known); view.businessDate = operatingDate; view.folio = folio; view.traces = traces; view.tables = tables; view.audit = audit;
       lastCtx = { kind: kind, hint: hint, heads: heads, date: date, g: g, pairs: readP ? pairs : null, rowsN: rows.length, tables: tables.length };
       checkStuck(lastCtx);
       send();
+      if (confirmed) { var eventSnap = { kind: 'details', date: operatingDate || date, businessDate: operatingDate || '', title: 'Opera confirmed ' + (confirmed.status === 'checked_out' ? 'checkout' : 'stay update'), prop: property, frame: FRAME, rows: [confirmed], url: location.hostname + location.pathname }; confirmedQueue = confirmedQueue.filter(function (x) { return x.snap.prop !== property || !sameReservation(x.snap.rows[0], confirmed); }); confirmedQueue.push({ snap: scrub(eventSnap), h: hash(eventSnap), at: Date.now(), sent: 0 }); if (confirmedQueue.length > 100) confirmedQueue.shift(); tl('✓', 'Opera confirmed ' + (confirmed.status === 'checked_out' ? 'checkout' : 'new departure') + ' · room ' + confirmed.room); }
+      flushConfirmed();
       render();
     } catch (e) { lastErr = String(e && e.message || e).slice(0, 120); lastErrAt = Date.now(); stuckErr(lastErr); render(); }
     CLS = null;
@@ -1590,7 +1715,7 @@
       why.push({ c: 'unknown-screen', t: 'the screen kind is ' + (c.kind ? 'only "' + c.kind + '"' : 'unknown') + ': its title and headings name no screen it knows, yet it shows ' + (dataN ? dataN + ' data list' + (dataN === 1 ? '' : 's') : pn + ' label/value pairs') });
     }
     var filters = (c.pairs || []).some(function (p) { return /^(?:arrival|departure)\s+(?:from|to)$/i.test(sp(p[0]).trim()); });   // "Arrival From / To": a search form, not a reservation
-    if ((c.kind === 'details' || c.kind === 'profile') && !c.rowsN && c.pairs && !filters) why.push({ c: 'unread-form', t: 'a ' + (c.kind === 'profile' ? 'profile' : 'reservation') + ' screen, but its fields could not be read (' + pn + ' label/value pair' + (pn === 1 ? '' : 's') + ' found)' });
+    if ((c.kind === 'details' || c.kind === 'profile') && !c.rowsN && c.pairs && !filters && !(c.kind === 'profile' && (c.pairs || []).some(function (p) { return /company name/i.test(p[0]) || /^profile type$/i.test(p[0]) && /company|travel agent|source|group/i.test(p[1]); }))) why.push({ c: 'unread-form', t: 'a ' + (c.kind === 'profile' ? 'profile' : 'reservation') + ' screen, but its fields could not be read (' + pn + ' label/value pair' + (pn === 1 ? '' : 's') + ' found)' });
     if ((c.kind === 'arrivals' || c.kind === 'departures') && !c.date && (c.rowsN || g.seen.length)) why.push({ c: 'no-date', t: 'a ' + c.kind + ' screen, but no date found on it (it needs one to know the day)' });
     return why.slice(0, 6);
   }
@@ -1725,16 +1850,22 @@
     } catch (_) {}
     return false;
   }
+  // A brief HotelOps disconnect must not lose a completed native action. Only a
+  // read acknowledgement clears it; retries send observations, never Opera commands.
+  function flushConfirmed() {
+    confirmedQueue = confirmedQueue.filter(function (x) { return Date.now() - x.at < 12 * 3600e3 && (!view.businessDate || !x.snap.businessDate || view.businessDate === x.snap.businessDate); });
+    confirmedQueue.forEach(function (x) { if (Date.now() - x.sent >= 3500 && post({ source: 'ho-op', v: VERSION, h: x.h, snap: x.snap, at: x.at })) x.sent = Date.now(); });
+  }
   function send(force) {
     var more = view.folio || (view.traces && view.traces.length) || (view.tables && view.tables.length);
-    if ((!view.rows.length && !more && !view.businessDate) || !view.kind) return;
-    var snap = { id: view.key, kind: view.kind, date: view.date, title: view.title, total: view.total || 0, rows: view.rows, frame: FRAME, url: location.hostname + location.pathname, prop: readProp() };
+    if ((!view.rows.length && !more && !view.businessDate && !(view.kind === 'departures' && view.countKnown)) || !view.kind) return;
+    var snap = { countKnown: !!view.countKnown, id: view.key, kind: view.kind, date: view.date, title: view.title, total: view.total || 0, rows: view.rows, frame: FRAME, url: location.hostname + location.pathname, prop: readProp() };
     if (view.businessDate) snap.businessDate = view.businessDate;
     if (view.folio) snap.folio = view.folio;
     if (view.traces && view.traces.length) snap.traces = view.traces;
     if (view.tables && view.tables.length) snap.tables = view.tables;
     if (view.audit) snap.audit = view.audit;
-    var h = more ? hash([snap.kind, snap.date, snap.businessDate || '', snap.rows, snap.folio || 0, snap.traces || 0, snap.tables || 0, snap.audit || 0]) : hash([snap.kind, snap.date, snap.businessDate || '', snap.rows]);
+    var h = more ? hash([snap.kind, snap.prop, snap.date, snap.countKnown, snap.total, snap.businessDate || '', snap.rows, snap.folio || 0, snap.traces || 0, snap.tables || 0, snap.audit || 0]) : hash([snap.kind, snap.prop, snap.date, snap.countKnown, snap.total, snap.businessDate || '', snap.rows]);
     if (!force && h === sentHash) return;
     if (!force && Date.now() - sentAt < 2500) { laterScan(2600); return; }   // a list still loading: at most one snapshot every few seconds
     if (post({ source: 'ho-op', v: VERSION, h: h, snap: scrub(snap), at: Date.now() })) {
@@ -1757,11 +1888,11 @@
     linked = Date.now();
     if (d.app) appV = String(d.app).slice(0, 12);
     if (d.teach && typeof d.teach === 'object') { var th = hash(d.teach); if (th !== taughtH) { taughtH = th; setTaught(d.teach); LS.set('ho_op_teach', d.teach); stuckLast = ''; lastCtx = null; laterScan(300); } }   // what the hotel taught: read the screen again with it
-    if (d.h && d.text) { var nt = String(d.text).slice(0, 140); if (!lastAck || lastAck.text !== nt || Date.now() - lastAck.at > 60000) tl('✓', 'HotelOps: ' + nt); lastAck = { text: nt, at: Date.now() }; }
+    if (d.h && d.text) { var nt = String(d.text).slice(0, 140); if (!lastAck || lastAck.text !== nt || Date.now() - lastAck.at > 60000) tl('✓', 'HotelOps: ' + nt); lastAck = { text: nt, at: Date.now() }; if (/^up to date$|\brooms? (?:checked out|extended)\b/.test(nt)) confirmedQueue = confirmedQueue.filter(function (x) { return x.h !== d.h; }); }
     if (typeof d.learn === 'boolean' && d.learn !== LEARN) { LEARN = d.learn; LS.set('ho_op_learn', LEARN); if (!LEARN) steps = []; }   // "Learn from me in Opera" (HotelOps → Settings)
     if (typeof d.hint === 'string') hintNow = d.hint ? { text: d.hint.slice(0, 60), at: Date.now() } : null;
     if (Array.isArray(d.ask)) {
-      var A = d.ask.slice(0, 3).filter(function (q) { return q && typeof q.id === 'string' && typeof q.text === 'string' && Array.isArray(q.opts); })
+      var A = (d.allowQuestions === true ? d.ask : []).slice(0, 3).filter(function (q) { return q && typeof q.id === 'string' && typeof q.text === 'string' && Array.isArray(q.opts); })
         .map(function (q) { return { id: q.id.slice(0, 80), text: q.text.slice(0, 220), opts: q.opts.slice(0, 3).filter(function (o) { return Array.isArray(o) && typeof o[0] === 'string' && typeof o[1] === 'string'; }).map(function (o) { return [o[0].slice(0, 30), o[1].slice(0, 60)]; }) }; });
       var ah = JSON.stringify(A);
       if (ah !== askH) {
@@ -1773,6 +1904,7 @@
     }
     if (d.answered) { delete askSent[d.answered]; if (d.text) { var at2 = String(d.text).slice(0, 140); lastAck = { text: at2, at: Date.now() }; tl('✓', 'HotelOps: ' + at2); } }
     if (d.again && (!d.frame || d.frame === FRAME)) { sentHash = ''; send(true); }   // HotelOps (re)opened and hasn't got what is on screen
+    if (d.pong) flushConfirmed();
     render();
   }
   if (EXT && typeof EXT.on === 'function') EXT.on(onMsg);
@@ -2066,7 +2198,7 @@
       el('div', 'margin-top:6px;color:' + COL.txt3 + ';font-size:11.5px', 'Or open Departures, then Arrivals and In House: the reader looks again and settles it by itself.', c);
     });
     E.scr.textContent = kind ? (KLABEL[kind] || cap(kind)) : 'Watching Opera';
-    E.scr2.textContent = n ? cap(summary(kind, n, total)) + (view.title && view.title.toLowerCase().indexOf(String(KLABEL[kind] || kind).toLowerCase()) < 0 ? ' · ' + view.title : '') : kind ? 'Nothing to read on it yet' : 'Open a screen in Opera: it reads it by itself';
+    E.scr2.textContent = pendingAction ? 'Watching Opera for confirmation · room ' + pendingAction.row.room : n ? cap(summary(kind, n, total)) + (view.title && view.title.toLowerCase().indexOf(String(KLABEL[kind] || kind).toLowerCase()) < 0 ? ' · ' + view.title : '') : kind ? 'Nothing to read on it yet' : 'Open a screen in Opera: it reads it by itself';
     E.did.textContent = did ? did.text + ' · ' + hhmm(did.at) : L.code === 'linked' ? 'Nothing to change yet' : 'Waiting for HotelOps';
     E.undo.style.display = did && !/^(?:up to date|nothing|read ·|waiting)/i.test(did.text) ? 'block' : 'none';
     E.next.style.display = hint ? 'block' : 'none'; E.next.textContent = '🧠 ' + hint;
@@ -2105,6 +2237,7 @@
     clearInterval(iv); clearInterval(uiIv); clearTimeout(deb);
     window.removeEventListener('message', onWinMsg);
     window.removeEventListener('click', onClickLearn, { capture: true });
+    window.removeEventListener('click', captureOperaClick, { capture: true }); window.removeEventListener('input', captureDraft, { capture: true }); window.removeEventListener('change', captureDraft, { capture: true });
     clearTimeout(flushT);
     try { if (pillHost) pillHost.remove(); } catch (_) {}
     window.__hoOp = null;
@@ -2115,17 +2248,18 @@
   build();
   LOCK.ask();   // the helper's relay may know you're away (HotelOps closed): this tab locks at once
   obs = new MutationObserver(function (recs) {
+    stampNotices(recs);
     if (deb) return;   // a read is already planned: nothing to do
     for (var i = 0; i < recs.length; i++) { var t = recs[i].target; if (t && !mine(t.nodeType === 1 ? t : t.parentElement)) { laterScan(800); return; } }
   });
-  obs.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+  obs.observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['aria-busy', 'aria-selected', 'hidden'] });
   window.addEventListener('scroll', function () { if (!deb) laterScan(700); }, { capture: true, passive: true });
   window.addEventListener('hashchange', function () { laterScan(300); });
   iv = setInterval(tick, 15000);
   var uiIv = setInterval(function () { if (Date.now() - linked > 40000 || lastErr) render(); }, 2500);   // the linking checklist after 10 s (render returns at once when nothing changed)
   window.__hoOp = { guard: { idle: LOCK.idle, state: LOCK.state },
     stop: stop, scan: scan, connect: connect, min: setMin, tab: function (k) { setTab(k); }, report: manualReport, v: VERSION,
-    state: function () { return { kind: view.kind, date: view.date, businessDate: view.businessDate || '', title: view.title, total: view.total, rows: view.rows.slice(), folio: view.folio || null, traces: (view.traces || []).slice(), tables: (view.tables || []).slice(), audit: view.audit || null,
+    state: function () { return { pendingAction: pendingAction ? { type: pendingAction.type, room: pendingAction.row.room, conf: pendingAction.row.conf } : null, unacknowledged: confirmedQueue.length, draft: !!draftContext, kind: view.kind, date: view.date, businessDate: view.businessDate || '', title: view.title, total: view.total, rows: view.rows.slice(), folio: view.folio || null, traces: (view.traces || []).slice(), tables: (view.tables || []).slice(), audit: view.audit || null,
       sent: sentN, sentAt: sentAt, linked: Date.now() - linked < 45000, ack: lastAck, err: lastErr, ext: !!EXT, frame: FRAME, learn: LEARN, steps: steps.length, hint: hintNow, cost: Math.round(cost * 10) / 10,
       link: linkNow(), relay: relay, stuckSent: doneToday().slice(), stuckQ: stuckQ.length, timeline: TL.slice() }; } };
   if (TOP && !EXT) try { console.log('%c 📡 HotelOps Opera reader is running ✓ %c Press "Connect" in the HotelOps window (bottom right). It only reads; it never changes anything in Opera.', 'background:#111827;color:#fbbf24;font:700 13px system-ui;padding:4px 8px;border-radius:6px', 'color:#9aa3b2;font:12px system-ui'); } catch (_) {}

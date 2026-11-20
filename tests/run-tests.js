@@ -3523,9 +3523,9 @@ console.log('\nOpera reader');
       routines: [{ steps: ['Departures', 'Billing'], toks: ['s:departures', 's:billing'], n: 6, hours: '10:00–12:00' }], seen: {} });
     const T2 = O.operaThoughts({ stuck: [], asked: {}, taught: { h: {}, s: {} }, cfg: { auto: true }, board: { rooms: [] }, last: {}, now: new Date(2026, 9, 28, 10, 30).getTime(), today: T,
       routines: [{ steps: ['Departures', 'Billing'], toks: ['s:departures', 's:billing'], n: 6, hours: '10:00–12:00' }], seen: { departures: new Date(2026, 9, 28, 9, 0).getTime() } });
-    check('Brain: an unsure check-out / extension is asked out loud with Extended / Checked out / let Opera show me; a sure one is not; a learned routine due now (not done today) is offered once',
+    check('Brain: an unsure check-out / extension waits quietly with optional manual actions; a sure one needs no question; a learned routine due now (not done today) is offered once',
       [TT.filter(t => t.type === 'opAsk').map(t => t.room + ' ' + t.loud + ' ' + t.opts.map(o => o[1]).join(',')), TT.filter(t => t.type === 'opHabit').length, T2.filter(t => t.type === 'opHabit').length],
-      [['0412 true rc:ext:0412,rc:out:0412,look'], 1, 0]); }
+      [['0412 false rc:ext:0412,rc:out:0412,look'], 1, 0]); }
   check('reader: "Rooms" (how many rooms) is never the room number; a stay with no nights is read the way that gives a sane stay (03-11 → 07-11 is 4 nights, not 122)',
     [R.fieldOf('Rooms'), R.fieldOf('Room'), R.dateOrder(['03-11-2026', '07-11-2026'], [['03-11-2026', '07-11-2026', '']]), R.dateOrder(['11-03-2026', '11-07-2026'], [['11-03-2026', '11-07-2026', '']])], ['', 'room', 'dmy', 'mdy']);
   check('bridge departures: checked out in Opera → out; already out not again; another guest in the room not touched; cancelled ignored',
@@ -3761,8 +3761,8 @@ console.log('\nOpera reader');
     pairs: [], form: [{ l: 'Arrival', f: 'arrival', how: 'parent-next', path: 'span < td < tr < table[role=presentation] · value span < td', v: '28-Oct-2026' }, { l: 'Testperson', f: '', how: 'next-sibling', path: 'label', v: 'Alpha Testperson' }] });
   const frTxt = R.reportText(frep);
   check('adf report: reader revision, header cells and the first line\'s attribute names, the form\'s label → value layout (a label that is a guest\'s word dropped)',
-    [frep.rr, /reader v438 r3/.test(frTxt), /header cells: th\[role=columnheader\]\[aria-colindex=1\]/.test(frTxt), /first data row: tr\[role=row\] \{_afrrk,class\}/.test(frTxt), /"Arrival" → arrival = 99-Aaa-9999 · parent-next · span < td < tr < table\[role=presentation\]/.test(frTxt), /Testperson|Alpha|0412/.test(frTxt.replace(/^.*headers → fields.*$/m, ''))],
-    [3, true, true, true, true, false]);
+    [frep.rr, /reader v438 r4/.test(frTxt), /header cells: th\[role=columnheader\]\[aria-colindex=1\]/.test(frTxt), /first data row: tr\[role=row\] \{_afrrk,class\}/.test(frTxt), /"Arrival" → arrival = 99-Aaa-9999 · parent-next · span < td < tr < table\[role=presentation\]/.test(frTxt), /Testperson|Alpha|0412/.test(frTxt.replace(/^.*headers → fields.*$/m, ''))],
+    [4, true, true, true, true, false]);
   check('adf report: the app keeps the new parts and writes the same text', O.stuckText(O.stuckClean(J(frep))) === frTxt, true);
   // ── the app side: Queue feeds Arrivals only, a check-in dialog changes nothing ──
   const qSnap = { kind: 'queue', date: T, rows: [{ room: '0412', name: 'Testperson, Alpha', conf: '100001', arrival: T, departure: '2026-10-30', status: 'checked_out' }, { room: '0413', name: 'Testperson, Bravo', conf: '100002', arrival: T, departure: T, status: 'due_in' }] };
@@ -3802,12 +3802,12 @@ console.log('\nOpera reader');
       [hand('hand'), hand('WhatsApp chat'), hand(undefined)], [[true, false], [true, true], [true, true]]); }
   const bIng = { day: T, rooms: b16.rooms.map(b => b.roomStr === '0412' ? Object.assign({}, b, { intent: 'extending' }) : b) };
   const RG2 = O.depRecon({ dep: op15, board: bIng, today: T, reads: {} }), G2 = RG2.diffs.find(d => d.room === '0412');
-  check('Opera decides: a room ⏳ extending that Opera no longer has leaving today → extended by itself (cleared in Opera = confirmed)',
-    [G2 && G2.why, G2 && G2.nights, O.reconAuto(RG2).some(d => d.room === '0412')], ['extended', 1, true]);
+  check('Opera decides: a missing room marked extending waits for a saved date; no guessed night or automatic extension',
+    [G2 && G2.why, G2 && G2.nights, O.reconAuto(RG2).some(d => d.room === '0412')], ['waiting', 0, false]);
   { const bMay = { day: T, rooms: b16.rooms.map(b => b.roomStr === '0412' ? Object.assign({}, b, { intent: 'maybe_extend' }) : b) };
     const RM = O.depRecon({ dep: op15, board: bMay, today: T, reads: {} }), M2 = RM.diffs.find(d => d.room === '0412');
-    check('Opera decides: a room 🤔 may extend that Opera no longer has leaving today → extended by itself too (the board matches Opera\'s count)',
-      [M2 && M2.why, O.reconAuto(RM).some(d => d.room === '0412'), /may extend/.test(M2 && M2.reason)], ['extended', true, true]); }
+    check('Opera decides: a missing room marked may extend also waits for a saved departure date',
+      [M2 && M2.why, O.reconAuto(RM).some(d => d.room === '0412'), M2 && M2.nights], ['waiting', false, 0]); }
   { const bX = { day: T, rooms: b16.rooms.concat([{ room: 208, roomStr: '0208', name: 'TEST WALKER', status: 'due', intent: 'extending', manual: true, departure: '' }]) };
     const RS = O.depRecon({ dep: op15, board: bX, today: T, reads: { search: { date: T, rows: [{ room: '0208', name: 'Walker, Test', departure: '2026-10-31', status: 'in_house' }] } } }), S8 = RS.diffs.find(d => d.room === '0208');
     check('Opera decides: a room added by hand as ⏳ extending (WhatsApp), not in Opera\'s departures, a later stay seen on any Opera screen → extended by itself',

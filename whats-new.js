@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 603, items: [
+    'The Opera reader follows the selected reservation when you check out. It waits for Opera’s completed status or fresh success message, then updates the matching room and confirmation automatically.',
+    'Stay extensions use Opera’s saved departure date and actual nights. Unsaved edits, failed saves and a room disappearing from Departures no longer confirm an extension.',
+    'Complete Departures reads remove stale cached rows; partial lists keep the pages already read. A newer confirmed reservation update wins over an older cached list.',
+    'Repeated checkout-or-extension questions are quiet by default. Changes Log, Out of Service and company-profile screens are recognized more accurately. Refresh HotelOps and reload your Opera tab once to load this reader.'
+  ] },
   { v: 602, items: [
     'Monthly audit now has one visible worklist: To review, Needs details, Selected and Verified history. Search a confirmation, guest or room; review the next difference without digging through charts.',
     'Previously verified bill links can be recovered from history only when the same Opera posting and current settled IN-Gauge record still match. Changed sellers, notes, amounts, dates or hotels require a new review.',
