@@ -457,9 +457,9 @@ async function rentLoadFile(n, file) {
   const nm = document.getElementById('rentFileName' + n);
   try {
     if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
-      const P = parseRoomTypeLines(await rentReadPdf(file));
+      const lines = await rentReadPdf(file), P = parseRoomTypeLines(lines);
       if (!P) { showToast('No room-type lines found in that PDF (Statistics - Room Type)', 'err'); return; }
-      window._rentPdf = Object.assign(P, { name: file.name });
+      window._rentPdf = Object.assign(P, { name: file.name, lines });
       if (nm) nm.textContent = `✓ ${file.name} · PDF · ${P.days} days`;
       document.getElementById('rentDrop' + n)?.classList.add('done');
     } else {
@@ -475,8 +475,18 @@ async function rentLoadFile(n, file) {
 function processRent() {
   const r1=document.getElementById('rentInput1').value.trim(), r2=document.getElementById('rentInput2').value.trim();
   const errBox=document.getElementById('rentError'); errBox.classList.remove('show');
+  document.getElementById('rentResults').style.display = 'none'; rentCopyText = '';
   const showErr=msg=>{document.getElementById('rentErrorMsg').textContent=msg;errBox.classList.add('show');};
   const PDF = window._rentPdf || null;
+  if (window.RentedBeds) {
+    try {
+      const dates = [];
+      [r1, r2].filter(Boolean).forEach(t => { try { dates.push(...RentedBeds.parseText(t).records.map(r => r.date)); } catch (_) {} });
+      if (PDF?.lines) dates.push(...RentedBeds.parsePdfLines(PDF.lines, PDF.name).records.map(r => r.date));
+      if (new Set(dates.map(d => d.slice(0, 7))).size > 1) return showErr('These reports cover more than one month. Use Year / custom report to keep every date separate.');
+    } catch (_) { /* Existing monthly parser supplies format errors below. */ }
+  }
+
   if(!r1&&!r2&&!PDF)return showErr('Add the files first (📂 Browse or paste).');
   const isHF=t=>t.includes('NO_ROOMS')&&t.includes('CONSIDERED_DATE');
   const isSRT=t=>t.includes('STAY_ROOMS')&&t.includes('BUSINESS_DATE');
@@ -519,7 +529,7 @@ function processRent() {
   document.getElementById('rentResults').style.display='block';
 }
 function copyRent()  { if(!rentCopyText)return; copyToClipboard(rentCopyText,document.getElementById('rentCopyBtn'),'Copy All Rows'); }
-function clearRent() { document.getElementById('rentInput1').value=''; document.getElementById('rentInput2').value=''; document.getElementById('rentResults').style.display='none'; document.getElementById('rentError').classList.remove('show'); rentCopyText=''; }
+function clearRent() { window._rentPdf = null; window._rentRT = null; [1,2].forEach(n => { const nm = document.getElementById('rentFileName' + n); if (nm) nm.textContent = ''; document.getElementById('rentDrop' + n)?.classList.remove('done'); }); document.getElementById('rentInput1').value=''; document.getElementById('rentInput2').value=''; document.getElementById('rentResults').style.display='none'; document.getElementById('rentError').classList.remove('show'); rentCopyText=''; }
 
 // ── NIGHT AUDIT PM ROOMS ──────────────────────────────────
 function parseOperaPM(raw) {

@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v599"/>
+<meta name="ho-version" content="v600"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -1227,9 +1227,26 @@
 <div class="panel" id="panel-rent">
   <div style="max-width:1200px;">
     <div class="page-hd">
-      <div class="page-hd-left"><h1>Rented Rooms & Beds</h1><p>Rooms and beds sold per day · needs two Opera reports: <b>history_forecast</b> and <b>statroomtype</b> (Delimited Data)</p></div>
-      <div class="page-hd-actions"><button class="btn rose" onclick="clearRent()">✕ Clear</button></div>
+      <div class="page-hd-left"><h1>Rented Rooms & Beds</h1><p>Daily counts, monthly worksheets and full-year reports · export organized Excel totals</p></div>
+      <div class="page-hd-actions"><button class="btn rose" onclick="document.getElementById('rentPeriodReport').hidden ? clearRent() : document.getElementById('rbClear').click()">✕ Clear</button></div>
     </div>
+    <div class="rb-tabs" role="tablist" aria-label="Rented beds reports"><button type="button" class="active" role="tab" aria-selected="true" data-rent-view="period">Year / custom report</button><button type="button" role="tab" aria-selected="false" data-rent-view="month">Monthly worksheet</button></div>
+    <section id="rentPeriodReport" class="rb-report" aria-label="Rented beds date-range report">
+      <div class="rb-intro"><span class="rb-eyebrow">RENTED BEDS · PERIOD REPORT</span><h2>A month, a year, or your own dates.</h2><p>Add one full-year Opera export or several monthly files. We count each date once and keep your monthly worksheet separate.</p></div>
+      <div class="card rb-drop" id="rbDrop"><div><b>1 · Add Opera reports</b><p>Room Type Statistics (<code>statroomtype</code>) with every room type. History Forecast is optional for a cross-check. TXT, TSV, CSV, Excel or Room Type PDF.</p></div><button type="button" class="btn gold" id="rbBrowse">Add reports</button><input type="file" id="rbUpload" multiple hidden accept=".txt,.tsv,.csv,.xlsx,.xls,.pdf"><div id="rbFiles" class="rb-files"></div></div>
+      <div class="card"><div class="rb-section-title"><b>2 · Choose the dates</b><span>All dates are Opera business dates</span></div><div class="rb-controls"><label>Report hotel name<input type="text" id="rbHotel" placeholder="Hotel name for the workbook"></label><label id="rbPropertyWrap" hidden>Opera property<select id="rbProperty"></select></label><label>From<input type="date" id="rbFrom"></label><label>Through<input type="date" id="rbTo"></label></div><div class="rb-shortcuts"><label>Year<input type="number" id="rbYear" min="1900" max="2199" step="1"></label><button type="button" class="btn" id="rbFullYear">Full year</button><button type="button" class="btn" id="rbAllDates">Use all uploaded dates</button><button type="button" class="btn" id="rbClear">Clear reports</button></div><label class="rb-checkbox"><input type="checkbox" id="rbAllTypes" checked> Room Type Statistics includes every room type</label><p class="rb-note">If the file includes only twin / selected types, uncheck this and add History Forecast. Other types are then assumed to have one bed per room. Unknown-property files stay separate from files with a property code.</p></div>
+      <p id="rbMessage" class="rb-message" role="status" hidden></p>
+      <div id="rbResults" hidden>
+        <div class="rb-result-heading"><div><b id="rbStatus"></b><p id="rbPeriodText"></p></div><button type="button" class="btn gold" id="rbExport" disabled>Download Excel report</button></div>
+        <div class="rb-kpis"><div><span>Rented rooms</span><strong id="rbRooms">—</strong><small>Room-nights in counted dates</small></div><div><span>Rented beds</span><strong id="rbBeds">—</strong><small>Bed-nights · not unique beds or guests</small></div><div><span>Days counted for beds</span><strong id="rbCoverage">—</strong><small>Missing days are excluded, never zero</small></div></div>
+        <div class="card rb-month-card"><div class="rb-section-title"><b>Monthly breakdown</b><span>Totals update with your date range and room setup</span></div><div class="rb-table-wrap"><table class="rb-table"><thead><tr><th>Month</th><th>Rooms</th><th>Beds</th><th>Days counted</th></tr></thead><tbody id="rbMonths"></tbody></table></div></div>
+        <details class="card rb-details" open><summary>Room setup · beds in each room type</summary><p class="rb-note">Confirm new room types or change the number of beds. Saved for this hotel and Opera property.</p><div id="rbSetup" class="rb-setup"></div></details>
+        <details class="card rb-details"><summary id="rbCheckSummary">Checks and missing dates</summary><ul id="rbChecks" class="rb-checks"></ul></details>
+        <details class="card rb-details"><summary>Daily details</summary><div class="rb-table-wrap rb-daily"><table class="rb-table"><thead><tr><th>Business date</th><th>Rooms</th><th>Beds</th><th>Status</th></tr></thead><tbody id="rbDaily"></tbody></table></div></details>
+        <p class="rb-note">Excel includes Summary, Monthly totals, Daily totals, Room setup, Source records and Checks. Missing or conflicting dates stay blank and are marked in the workbook.</p>
+      </div>
+    </section>
+    <section id="rentMonthlyReport" hidden>
     <details class="howto"><summary>❔ How to use this</summary><ol><li>In Opera, export <code>history_forecast</code> and <code>statroomtype</code> as <b>Delimited Data</b></li><li>Put one file in each box</li><li>Press <b>⚡ Process</b> to see rooms and beds sold per day</li></ol></details>
     <div class="card">
       <div class="rent-drops">
@@ -1263,7 +1280,7 @@
           <div style="height:400px;overflow-y:auto;" id="rentPreview"></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:11px;">
-          <div class="card"><div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;">📋 Copy</div><button class="btn gold" id="rentCopyBtn" onclick="copyRent()" style="width:100%;justify-content:center;margin-bottom:9px;">Copy All Rows</button></div>
+          <div class="card"><div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;">📋 Copy</div><button type="button" class="btn gold" id="rentMonthExcel" style="width:100%;justify-content:center;margin-bottom:9px;">Download Excel</button><button class="btn gold" id="rentCopyBtn" onclick="copyRent()" style="width:100%;justify-content:center;margin-bottom:9px;">Copy All Rows</button></div>
           <div class="card">
             <div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;">📈 Month</div>
             <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.73rem;border-bottom:1px solid rgba(255,255,255,0.025);"><span style="color:var(--text3);">Rooms</span><span id="rs-rooms" style="font-family:var(--mono);color:var(--sky);">—</span></div>
@@ -1273,6 +1290,7 @@
         </div>
       </div>
     </div>
+    </section>
   </div>
 </div>
 
@@ -4122,6 +4140,7 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
 <script src="monthly-reports.js"></script>
 <script src="checklist.js"></script>
 <script src="reports.js"></script>
+<script src="rented-beds.js"></script>
 <script src="arr-dep-xref.js"></script>
 <script src="tourism-tax.js"></script>
 <script src="arrivals-proc.js"></script>

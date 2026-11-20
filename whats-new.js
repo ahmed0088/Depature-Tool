@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 600, items: [
+    'Rented Rooms & Beds now has a separate Year / custom report. Upload a full year or several monthly Opera reports, select any date range, and see daily, monthly and grand totals.',
+    'Download a styled Excel workbook with Summary, Monthly totals, Daily totals, Room setup, Source records and Checks. Numeric counts, filters, frozen headings and print layouts are included.',
+    'Full business dates keep different months separate. Identical overlapping rows are counted once; missing dates and conflicting files are flagged rather than turned into zero.',
+    'Your monthly worksheet is still available, with its own Excel download. Beds-per-room settings can be confirmed for each hotel and Opera property.'
+  ] },
   { v: 599, items: [
     'Phone dropdowns now open a searchable in-app menu, including saved enrolment hotels and Neorcha choices. Selecting a hotel updates its exact saved link without starting a job.',
     'Enter a missing booking confirmation directly from a held money difference. Check the reservation, existing requests and Opera bill before reviewing the proposed correction.',

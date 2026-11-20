@@ -668,7 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v599';
+const APP_VERSION = 'v600';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;
@@ -780,7 +780,7 @@ function _zipStore(files) {
 // styles: array of { bold, color, fill, align } — index 0 is the default.
 function _stylesXml(styles) {
   const fonts = styles.map(s =>
-    `<font><sz val="10"/><name val="Arial"/>${s.bold ? '<b/>' : ''}${s.color ? `<color rgb="FF${s.color}"/>` : ''}</font>`);
+    `<font><sz val="${s.size || 10}"/><name val="Arial"/>${s.bold ? '<b/>' : ''}${s.color ? `<color rgb="FF${s.color}"/>` : ''}</font>`);
   // fills 0 and 1 are reserved by the format and must be none/gray125
   const fills = ['<fill><patternFill patternType="none"/></fill>',
                  '<fill><patternFill patternType="gray125"/></fill>']
@@ -788,8 +788,8 @@ function _stylesXml(styles) {
       ? `<fill><patternFill patternType="solid"><fgColor rgb="FF${s.fill}"/><bgColor indexed="64"/></patternFill></fill>`
       : '<fill><patternFill patternType="none"/></fill>'));
   const xfs = styles.map((s, i) =>
-    `<xf numFmtId="0" fontId="${i}" fillId="${i + 2}" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"${
-      s.align ? ` applyAlignment="1"><alignment horizontal="${s.align}"/></xf>` : '/>'}`);
+    `<xf numFmtId="${s.numFmtId || 0}" fontId="${i}" fillId="${i + 2}" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"${
+      (s.align || s.wrap) ? ` applyAlignment="1"><alignment${s.align ? ` horizontal="${s.align}"` : ''}${s.wrap ? ' wrapText="1"' : ''} vertical="center"/></xf>` : '/>'}`);
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <fonts count="${fonts.length}">${fonts.join('')}</fonts>
@@ -936,3 +936,39 @@ window.addEventListener('keydown', e => {
   e.stopImmediatePropagation(); e.preventDefault();
   escClose(top);
 }, true);
+
+/** Styled multi-sheet reporting workbook. Values stay numeric; text is always literal (never a formula). */
+function buildStyledWorkbook(sheets, styles) {
+  if (!Array.isArray(sheets) || !sheets.length) throw new Error('No report sheets to export.');
+  const enc = s => new TextEncoder().encode(s), xml = body => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' + body;
+  const ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main', rel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const used = new Set(), names = sheets.map((s, i) => {
+    const base = String(s.name || 'Sheet ' + (i + 1)).replace(/[\\/\[\]*?:]/g, ' ').replace(/^'+|'+$/g, '').slice(0, 31) || 'Sheet';
+    let name = base, n = 2; while (used.has(name.toLowerCase())) { const tail = ' (' + n++ + ')'; name = base.slice(0, 31 - tail.length) + tail; } used.add(name.toLowerCase()); return name;
+  });
+  const files = [];
+  sheets.forEach((s, i) => {
+    const rows = s.rows.map((row, r) => '<row r="' + (r + 1) + '"' + (r === 0 ? ' ht="32" customHeight="1"' : r === 3 || r === 5 ? ' ht="30" customHeight="1"' : '') + '>' + row.map((v, c) => {
+      const ref = _colName(c) + (r + 1), style = s.styleAt ? s.styleAt(r, c) || 0 : 0, tag = '<c r="' + ref + '" s="' + style + '"';
+      if (v == null || v === '') return tag + '/>';
+      if (typeof v === 'number') { if (!Number.isFinite(v)) throw new Error('Invalid number in export.'); return tag + '><v>' + v + '</v></c>'; }
+      return tag + ' t="inlineStr"><is><t xml:space="preserve">' + _xmlEsc(v) + '</t></is></c>';
+    }).join('') + '</row>').join('');
+    const columns = s.cols || [], last = _colName(s.rows.reduce((n, row) => Math.max(n, row.length), Math.max(1, columns.length)) - 1), freeze = s.freezeRows || 0;
+    const pane = freeze ? '<pane ySplit="' + freeze + '" topLeftCell="A' + (freeze + 1) + '" activePane="bottomLeft" state="frozen"/>' : '';
+    const filter = s.filterRow && s.filterEnd >= s.filterRow ? '<autoFilter ref="A' + s.filterRow + ':' + last + s.filterEnd + '"/>' : '';
+    const merges = s.merges?.length ? '<mergeCells count="' + s.merges.length + '">' + s.merges.map(m => '<mergeCell ref="' + _xmlEsc(m) + '"/>').join('') + '</mergeCells>' : '';
+    const body = '<worksheet xmlns="' + ns + '"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:' + last + Math.max(1, s.rows.length) + '"/><sheetViews><sheetView showGridLines="0" workbookViewId="0">' + pane + '</sheetView></sheetViews><sheetFormatPr defaultRowHeight="20"/>' + (columns.length ? '<cols>' + columns.map((w, c) => '<col min="' + (c + 1) + '" max="' + (c + 1) + '" width="' + w + '" customWidth="1"/>').join('') + '</cols>' : '') + '<sheetData>' + rows + '</sheetData>' + filter + merges + '<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.45" bottom="0.45" header="0.2" footer="0.2"/><pageSetup orientation="landscape" paperSize="9" fitToWidth="1" fitToHeight="0"/><headerFooter><oddFooter>&amp;LHotelOps · ' + _xmlEsc(names[i]) + '&amp;RPage &amp;P of &amp;N</oddFooter></headerFooter></worksheet>';
+    files.push({ name: 'xl/worksheets/sheet' + (i + 1) + '.xml', data: enc(xml(body)) });
+  });
+  files.push({ name: '[Content_Types].xml', data: enc(xml('<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' + sheets.map((_, i) => '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('') + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>')) });
+  files.push({ name: '_rels/.rels', data: enc(xml('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="' + rel + '/officeDocument" Target="xl/workbook.xml"/></Relationships>')) });
+  files.push({ name: 'xl/workbook.xml', data: enc(xml('<workbook xmlns="' + ns + '" xmlns:r="' + rel + '"><bookViews><workbookView/></bookViews><sheets>' + names.map((n, i) => '<sheet name="' + _xmlEsc(n) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>').join('') + '</sheets><definedNames>' + names.map((n, i) => '<definedName name="_xlnm.Print_Titles" localSheetId="' + i + '">' + _xmlEsc("'" + n.replace(/'/g, "''") + "'!$1:$6") + '</definedName>').join('') + '</definedNames></workbook>')) });
+  files.push({ name: 'xl/_rels/workbook.xml.rels', data: enc(xml('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + sheets.map((_, i) => '<Relationship Id="rId' + (i + 1) + '" Type="' + rel + '/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>').join('') + '<Relationship Id="rId' + (sheets.length + 1) + '" Type="' + rel + '/styles" Target="styles.xml"/></Relationships>')) });
+  files.push({ name: 'xl/styles.xml', data: enc(_stylesXml(styles || [{}])) });
+  return _zipStore(files);
+}
+function downloadStyledWorkbook(filename, sheets, styles) {
+  const blob = buildStyledWorkbook(sheets, styles), url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
