@@ -1,0 +1,23 @@
+name: Opera reported-bug diagnosis
+on:
+  push:
+    branches: ['diagnose/opera-reader-20261120']
+    paths: ['scripts/opera-diagnostic.cjs', '.github/workflows/opera-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-audit --no-fund graphql@16.11.0
+      - name: Read saved Opera reports without changes
+        run: node scripts/opera-diagnostic.cjs
+        env:
+          HOTELOPS_HOTEL: ibis_dubai
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
