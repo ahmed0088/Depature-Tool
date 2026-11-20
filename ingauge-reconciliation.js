@@ -1,5 +1,5 @@
 // Read-only Opera/IN-Gauge reconciliation. Proposals require an explicit review before a financial run.
-(function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./ingauge-audit-core.js'):root.InGaugeAuditCore);if(typeof module==='object'&&module.exports)module.exports=api;else root.InGaugeReconciliation=api;})(typeof window!=='undefined'?window:globalThis,function(C){
+(function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./ingauge-audit-core.js'):root.InGaugeAuditCore,typeof module==='object'&&module.exports?require('./ingauge-monthly-assistant.js'):root.InGaugeMonthlyAssistant);if(typeof module==='object'&&module.exports)module.exports=api;else root.InGaugeReconciliation=api;})(typeof window!=='undefined'?window:globalThis,function(C,A){
  'use strict';
  const labels={EC:'Early check-in',LC:'Late checkout',BB:'Breakfast',ROOM:'Room upselling',DIN:'Dinner',HB:'Half board',FB:'Full board'},active=new Set(['CKIN','CKOT','DUEIN','DUEOUT','DUOT']);
  const text=v=>String(v??'').trim(),room=v=>text(v).replace(/^0+(?=\d)/,''),norm=v=>text(v).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\b(MR|MRS|MS|MISS|DR|MSTR|MASTER|PROF)\b/g,' ').match(/[A-Z]+/g)?.sort().join(' ')||'';
@@ -39,6 +39,8 @@
    let candidates=unique(rows),basis=rooms.size>1?'Exact guest, routed billing room and stay':'Exact guest, room and stay';
    if(explicit)candidates=candidates.filter(r=>r.conf===explicit);
    if(candidates.length>1&&automatic&&['BB','ROOM','DIN','HB','FB'].includes(f)){const nights=unique(rows.filter(r=>day<r.departure));if(nights.length===1){candidates=nights;basis='Automatic night posting: exact guest/room and arrival ≤ posting date < departure';}}
+   const historical=A?.booking(input.historyBookings,j,s,reportDate);
+   if(historical&&(!explicit||explicit===historical.confirmation)){const live=s.records.find(r=>r.id===historical.recordId),product=s.products.find(p=>p.id===live.productId);if((C.kind(live.product)||C.kind(product?.name)||C.kind(product?.code))===f){candidates=[{conf:historical.confirmation,arrival:historical.arrival,departure:historical.departure,room:room(j.ROOM),roomType:''}];basis='Previously verified bill link; current IN-Gauge record still matches the saved review';}}
    const verified=input.reviewedBooking;
    if(verified?.transaction===tx){
     if(verified.schema!==1||verified.verified!==true||verified.snapshotId!==s.id||!C.sameBinding(verified.binding,s.binding)||C.stable(verified.period)!==C.stable(period)||verified.sourceSignature!==signature||!/^\d{1,24}$/.test(verified.confirmation)||!C.day(verified.arrival)||!C.day(verified.departure)||verified.arrival>verified.departure||explicit&&explicit!==verified.confirmation)throw Error('The booking evidence changed. Check the confirmation against the current Opera posting again.');

@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 602, items: [
+    'Monthly audit now has one visible worklist: To review, Needs details, Selected and Verified history. Search a confirmation, guest or room; review the next difference without digging through charts.',
+    'Previously verified bill links can be recovered from history only when the same Opera posting and current settled IN-Gauge record still match. Changed sellers, notes, amounts, dates or hotels require a new review.',
+    'Applied runs refresh the monthly records in the same cloud browser and return the new comparison. Completed fixes leave the remaining list without a separate refresh job.',
+    'Confirmation copy buttons are available in monthly cases, history and run results. Both Opera upload inputs are visible, and an older report no longer silently changes your selected month.'
+  ] },
   { v: 601, items: [
     'Fixed package runs stopping after IN-Gauge changed its automatic memo from REVIEWED to APPROVED. That exact status-note rewrite is recognized only for the same reviewed record; financial values, hotel, booking, seller and real notes still have to match.',
     'A fresh matching IN-Gauge read can verify older uncertain changes in History. The current result shows Verified after refresh, with the original run message retained separately.',

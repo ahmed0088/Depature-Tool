@@ -22,6 +22,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
  await page.screenshot({path:process.env.MONTHLY_SCREENSHOT||'/tmp/hotelops-monthly-tally.png',fullPage:true});
  await page.evaluate(()=>{S.snapshot.complete=false;MonthlyTally.render(S,document.querySelector('#chart'));});assert((await page.locator('.mt-state').innerText()).includes('Provisional'));
  await page.locator('[data-mt-month]').fill('2026-09');assert((await page.locator('.mt-state').innerText()).includes('Provisional'));
+ await page.locator('[data-mt-month]').fill('2026-11');
  // On the first day, month-to-date has exactly one plotted day. All positions
  // must stay finite, and excluded products must not leave a false review warning.
  await page.clock.install({time:new Date('2026-11-01T08:00:00Z')});

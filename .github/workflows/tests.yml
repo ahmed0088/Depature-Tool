@@ -119,6 +119,9 @@ jobs:
           node tests/monthly-tally.browser.test.js
           node tests/monthly-difference.test.js
           node tests/monthly-difference.browser.test.js
+          node --test tests/ingauge-monthly-assistant.test.js
+          node --test tests/ingauge-after-apply.test.js
+          node tests/ingauge-monthly-assistant.browser.test.js
 
       - name: Provider amount precision and exact financial-source guards
         run: |

@@ -67,6 +67,15 @@ function completionNote(outcome,test,total){
   const parts=[...changes,...(counts.tested?[counts.tested+' readiness checks passed']:[]),...(counts.unchanged?[counts.unchanged+' already correct']:[]),...(counts.held?[counts.held+' held; not sent']:[]),...(counts.uncertain?[counts.uncertain+' need verification']:[]),...(total>rows.length?[total-rows.length+' not attempted']:[])];
   return (outcome.stopped?'Stopped: ':'Finished: ')+(parts.join(' · ')||'no changes')+'. '+(outcome.uncertain?'Check the returned values before retrying.':test?'No financial changes sent.':'Successful changes were reread and verified in IN-Gauge.');
 }
+async function refreshAfterApply({db,portal,plan,snapshot,results,tag,stop=async()=>false,progress=async()=>{}}){
+  if(!results.some(r=>['applied','uncertain'].includes(r.state))||await stop())return null;
+  const id='igverify'+sha(tag).slice(0,40),period=plan.period||{from:snapshot.from,to:snapshot.to};
+  await progress('refresh','Refreshing the monthly records to verify the remaining differences');
+  const fresh=await portal.snapshot(plan.binding,period.from,period.to,plan.hotelId,id);
+  if(await stop())return null;
+  if(!fresh?.complete||fresh.invalidatedAt||fresh.hotelId!==plan.hotelId||!C.sameBinding(fresh.binding,plan.binding)||fresh.id!==id||fresh.from!==period.from||fresh.to!==period.to||!Array.isArray(fresh.records)||fresh.records.some(r=>r.propertyId!==plan.binding.propertyId||r.departmentId!==plan.binding.departmentId)||!fresh.pagination?.verified||fresh.pagination.read!==fresh.records?.length||fresh.pagination.total!==fresh.records.length||!Number.isFinite(fresh.fetchedAt)||fresh.fetchedAt>Date.now()+60000||fresh.fetchedAt<=Math.max(...results.map(r=>r.at||0)))throw Error('The new monthly read did not verify the selected hotel and dates.');
+  await db.put('ingauge/snapshots/'+id,fresh);const active=await db.get('ingauge/binding');if(C.sameBinding(active,plan.binding))await db.put('ingauge/latestSnapshot',id);return fresh;
+}
 async function main(){
   const E=process.env,tag=String(E.TAG||''),hash=String(E.PLAN_HASH||''),test=E.TEST!=='0';
   if(!/^ig[a-z0-9-]{6,70}$/.test(tag)||!/^([a-f0-9]{64})$/.test(hash))throw Error('A valid private job and plan digest are required.');
@@ -126,9 +135,11 @@ async function main(){
     await invalidateSnapshot(outcome.results);
     const ready=test&&!outcome.stopped&&outcome.results.every(r=>['tested','unchanged'].includes(r.state));
     if(test)await db.put('ingauge/tests/'+hash,{ready,at:Date.now(),tag});
-    await publish(outcome.results,outcome.uncertain?'error':outcome.stopped?'stopped':'done',completionNote(outcome,test,plan.operations.length));
+    let verifiedSnapshotId='',refreshWarning='';
+    if(!test)try{const fresh=await refreshAfterApply({db,portal,plan,snapshot,results:outcome.results,tag,stop:async()=>!!(await db.get(node))?.stopRequested,progress});if(fresh)verifiedSnapshotId=fresh.id;}catch(error){refreshWarning=error.cancelled?'':'Changes are saved; refresh IN-Gauge to update monthly totals.';}
+    await publish(outcome.results,outcome.uncertain?'error':outcome.stopped?'stopped':'done',completionNote(outcome,test,plan.operations.length)+(verifiedSnapshotId?' Monthly records refreshed.':refreshWarning?' '+refreshWarning:''),{verifiedSnapshotId,refreshWarning});
   }catch(error){const current=await db.get(node).catch(()=>null);await invalidateSnapshot(current?.results||publishedResults).catch(()=>{});await publish(current?.results||publishedResults,error.cancelled?'stopped':'error',error.cancelled?'Cancelled. Completed changes are saved in history; no further operation was started.':portalError(error));if(!error.cancelled){console.error('::error::IN-Gauge stopped. Open the private HotelOps run report for details.');process.exitCode=1;}}
   finally{if(heartbeat)clearInterval(heartbeat);if(browser)await browser.close().catch(()=>{});}
 }
 if(require.main===module)main().catch(()=>{console.error('::error::IN-Gauge could not validate the queued job or cloud account.');process.exitCode=1;});
-module.exports={overviewPath,invalidateOverviewReads,execute,targetKey,completionNote,sellerPinGuard};
+module.exports={overviewPath,invalidateOverviewReads,execute,targetKey,completionNote,sellerPinGuard,refreshAfterApply};

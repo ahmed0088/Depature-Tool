@@ -167,3 +167,40 @@ body:has(>#igSettingsOverlay:not([hidden])){overflow:hidden;overscroll-behavior:
 
 /* Entered booking confirmations use the same phone-safe review sheet. */
 #igBookingReview .iga-booking-number{display:grid;gap:8px;margin:16px 0 10px;font-size:.82rem;color:var(--text2)}#igBookingConfirmation{width:100%;box-sizing:border-box;min-width:0;min-height:48px;font:inherit;font-size:18px;padding:12px;border:1px solid var(--border2);border-radius:12px;background:var(--bg2);color:var(--text)}.iga-booking-result{margin-top:16px;padding:14px;border:1px solid var(--border2);border-radius:14px;overflow-wrap:anywhere}.iga-booking-result p{line-height:1.6;margin:8px 0}.iga-booking-result .iga-confirm{grid-column:1/-1}#igBookingReview .iga-fields input{min-width:0;width:100%;min-height:48px;font-size:16px}#igBookingReview .iga-editor-body>footer{position:sticky;bottom:0;background:var(--card);padding:12px 0 max(12px,env(safe-area-inset-bottom));z-index:2}#igBookingReview button{min-height:44px}.iga-booking-editor .iga-editor-body{overscroll-behavior:contain}@media(max-width:600px){#igBookingReview .iga-fields{grid-template-columns:minmax(0,1fr)}#igBookingReview .iga-editor{max-height:calc(100dvh - 20px)}}
+
+/* Monthly closing assistant: one worklist; evidence remains available on demand. */
+.mt-assistant { margin: 18px 0; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); }
+.mt-assistant > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.mt-assistant h4 { margin: 5px 0; font-size: 1.1rem; letter-spacing: -.02em; }
+.mt-assistant > header p, .mt-assistant-guide { color: var(--text2); font-size: .82rem; line-height: 1.6; }
+.mt-repair-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 16px 0 12px; }
+.mt-repair-tools input { min-width: 0; flex: 1 1 220px; min-height: 44px; padding: 11px 12px; background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 9px; font-size: 16px; }
+.mt-repair-tabs { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 18px; }
+.mt-repair-tabs button { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg2); color: var(--text2); font-size: .79rem; cursor: pointer; }
+.mt-repair-tabs button[aria-pressed=true] { background: var(--accent-bg); color: var(--text); border-color: var(--accent); font-weight: 700; }
+.mt-repair-tabs b { padding: 2px 6px; background: var(--card); border-radius: 5px; font-variant-numeric: tabular-nums; }
+.mt-assistant .mt-money-card { margin: 12px 0; padding: 16px; }
+.mt-assistant .mt-money-card header { align-items: flex-start; }
+.mt-assistant .mt-money-card h4 { font-size: .97rem; overflow-wrap: anywhere; }
+.mt-assistant .mt-money-actions .btn, .mt-assistant > header .btn { min-height: 44px; }
+.mt-assistant .mt-money-card > p { font-size: .81rem; line-height: 1.65; }
+.mt-assistant .mt-copy { min-height: 38px; margin: 7px 0 4px; padding: 6px 10px; font-size: .74rem; }
+.mt-assistant .mt-money-values { gap: 12px; }
+.mt-assistant-footnote { margin: 14px 0 0; color: var(--text2); font-size: .73rem; line-height: 1.7; }
+.mt-credit-check { margin-top: 12px; }
+.mt-history-match { margin: 10px 0; padding: 16px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg2); }
+.mt-history-match header { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.mt-history-match header b { font-size: .86rem; overflow-wrap: anywhere; flex: 1 1 180px; }
+.mt-history-match header strong { font-size: .9rem; font-variant-numeric: tabular-nums; }
+.mt-history-match p { font-size: .8rem; color: var(--text2); line-height: 1.6; }
+.mt-history-match small { color: var(--text2); font-size: .73rem; line-height: 1.6; }
+.mt-history-match details { margin-top: 10px; font-size: .76rem; }
+.mt-history-note { border-left: 3px solid var(--accent); background: var(--bg2); padding: 10px 12px; border-radius: 0 8px 8px 0; font-size: .79rem; line-height: 1.6; }
+@media(max-width:600px) {
+ .mt-assistant { padding: 14px; } .mt-assistant > header .btn { width: 100%; justify-content: center; }
+ .mt-repair-tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+ .mt-repair-tabs button { justify-content: space-between; font-size: .75rem; padding: 9px; }
+ .mt-assistant .mt-money-card { padding: 13px; } .mt-assistant .mt-money-card header > strong { margin-top: 8px; }
+ .mt-assistant .mt-money-card header { flex-wrap: wrap; } .mt-assistant .mt-money-selected-row { flex-wrap: wrap; }
+ .mt-repair-tools > .btn { width: 100%; justify-content: center; } .mt-history-match header .btn { min-height: 40px; }
+}
