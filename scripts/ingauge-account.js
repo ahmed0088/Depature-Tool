@@ -230,7 +230,7 @@ class InGaugeAccount {
     if(!recordId)throw new PortalError('IN-Gauge did not return the new record identifier. Check the outcome before retrying.',true);
     let after;try{after=await this.readRecord(recordId);}catch(_){throw new PortalError('The change was sent but its final record could not be verified.',true);}
     if(after.propertyId!==snapshot.binding.propertyId||after.departmentId!==snapshot.binding.departmentId||!C.matches(op,after)){const error=new PortalError('The request was sent, but final values differ: '+C.differences(op,after,snapshot.binding).map(d=>d.field).join(', ')+'. Check this saved record before retrying.',true);error.observed=after;error.recordId=recordId;error.differences=C.differences(op,after,snapshot.binding);throw error;}
-    return {recordId,after,systemNote:op.values?.memo===''&&after.memo==='APPROVED'?'IN-Gauge filled the blank memo with its APPROVED status note. All reviewed financial values match.':''};
+    return {recordId,after,systemNote:C.systemMemoNote(op,after)};
     }finally{this.finishingWrite=false;}
   }
 }

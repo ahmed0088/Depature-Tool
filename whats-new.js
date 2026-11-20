@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 601, items: [
+    'Fixed package runs stopping after IN-Gauge changed its automatic memo from REVIEWED to APPROVED. That exact status-note rewrite is recognized only for the same reviewed record; financial values, hotel, booking, seller and real notes still have to match.',
+    'A fresh matching IN-Gauge read can verify older uncertain changes in History. The current result shows Verified after refresh, with the original run message retained separately.',
+    'This update does not resubmit old changes. Missing, stale, foreign-hotel or financially different records keep their verification warning.'
+  ] },
   { v: 600, items: [
     'Rented Rooms & Beds now has a separate Year / custom report. Upload a full year or several monthly Opera reports, select any date range, and see daily, monthly and grand totals.',
     'Download a styled Excel workbook with Summary, Monthly totals, Daily totals, Room setup, Source records and Checks. Numeric counts, filters, frozen headings and print layouts are included.',

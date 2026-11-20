@@ -129,6 +129,7 @@ jobs:
         run: |
           node tests/ingauge-reviewed.test.js
           node tests/ingauge-reviewed.browser.test.js
+          node tests/ingauge-status-memo.browser.test.js
 
       - name: Daily team overview and guided package audit
         run: |

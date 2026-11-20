@@ -31,7 +31,7 @@ test('an absent total is never inferred from daily charge, nights or commissiona
  const pending=rec({auditStatus:'PENDING',totalUpsellAmount:null}),result=R.analyse({snapshot:snap([pending]),period,journal:[post()],reservations});assert.equal(result.ready,false);assert.equal(result.cases.length,0);assert.match(result.reason,/#100/);
 });
 test('month, team, daily and product totals use the same rounded fee and keep Pending separate',()=>{
- const rows=[rec(),rec({id:101,auditStatus:'REVIEWED',upsellCharge:10,totalUpsellAmount:10}),rec({id:102,auditStatus:'PENDING',upsellCharge:5,totalUpsellAmount:5})],s=snap(rows),before=C.stable(s),r=compare(s),o=O.summarize(s,binding,'2026-11',Date.parse('2026-11-16T08:00:00Z'));
+ const rows=[rec(),rec({id:101,auditStatus:'REVIEWED',upsellCharge:10,totalUpsellAmount:10}),rec({id:102,auditStatus:'PENDING',upsellCharge:5,totalUpsellAmount:5})],s={...snap(rows),fetchedAt:Date.parse('2026-11-16T08:00:00Z')},before=C.stable(s),r=compare(s),o=O.summarize(s,binding,'2026-11',Date.parse('2026-11-16T08:00:00Z'));
  assert.equal(r.approved,4687);assert.equal(r.pending,500);assert.equal(r.amountRounding.length,1);assert.equal(r.amountRounding[0].source,'36.865');assert.equal(o.approved,4687);assert.equal(o.pending,500);assert(o.verified);assert.equal(o.team[0].approved,4687);assert.equal(o.daily.reduce((n,x)=>n+x.approved,0),4687);assert.equal(o.products[0].approved,4687);assert.equal(C.stable(s),before);
 });
 test('existing valid cents and a genuine zero retain their prior reporting semantics',()=>{

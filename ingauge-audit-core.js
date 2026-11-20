@@ -257,14 +257,28 @@
     if(!source||!before||live.confirmation!==op.confirmation||live.propertyId!==snapshot.binding.propertyId||live.departmentId!==snapshot.binding.departmentId||live.productId!==before.productId||!withinPeriod(live.businessDate,proof.period))return false;
     return live.status==='DENIED'||live.status==='PURGED'||fingerprint(live)===fingerprint(source);
   }
+  // IN-Gauge uses bare audit-status words as automatic memos on some records.
+  // Match only observed, identity-bound rewrites; real notes remain exact.
+  function systemMemoChange(op,r){
+    if(!r||!op.values||!['add','edit','approve'].includes(op.action)||r.status!=='APPROVED'||r.memo!=='APPROVED')return null;
+    if(op.values.memo==='')return {from:'',to:'APPROVED',kind:'blank-status'};
+    if(op.action!=='edit'||op.statusAfter!=='APPROVED'||op.values.memo!=='REVIEWED')return null;
+    let before;try{before=JSON.parse(op.expected);}catch(_){return null;}
+    if(!before||before.status!=='REVIEWED'||before.memo!=='REVIEWED'||id(before.id)!==id(op.recordId)||id(r.id)!==id(op.recordId)||before.confirmation!==op.confirmation||r.confirmation!==op.confirmation||before.propertyId!==r.propertyId||before.departmentId!==r.departmentId)return null;
+    return {from:'REVIEWED',to:'APPROVED',kind:'reviewed-status'};
+  }
+  function systemMemoNote(op,r){
+    const change=systemMemoChange(op,r);if(!change)return '';
+    return change.kind==='blank-status'?'IN-Gauge filled the blank memo with its APPROVED status note. All reviewed financial values match.':'Saved and verified. IN-Gauge updated its automatic status memo from REVIEWED to APPROVED; all reviewed financial values and booking details match.';
+  }
   function differences(op,r,b){
     const expectedStatus=({approve:'APPROVED',deny:'DENIED',delete:'PURGED'})[op.action]||op.statusAfter;
     const expected={confirmation:op.confirmation,productId:id(op.productId),contributorId:id(op.contributorId),status:expectedStatus,...op.values,...(b?{propertyId:b.propertyId,departmentId:b.departmentId}:{})};
-    return Object.entries(expected).filter(([field,value])=>stable(value)!==stable(r[field])&&!(field==='memo'&&value===''&&r.memo==='APPROVED'&&r.status==='APPROVED'&&['add','edit','approve'].includes(op.action))).map(([field,value])=>({field,expected:value??null,actual:r[field]??null}));
+    return Object.entries(expected).filter(([field,value])=>stable(value)!==stable(r[field])&&!(field==='memo'&&systemMemoChange(op,r))).map(([field,value])=>({field,expected:value??null,actual:r[field]??null}));
   }
   function matches(op,r){
     return differences(op,r).length===0;
   }
-  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,matches,differences,terminal,saleCategory,operationCategory,scopeAllows,isRevenueStatus,reportingMessage,reportingCents,reportingRecord,recordAmountIssue};
+  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,matches,differences,systemMemoChange,systemMemoNote,terminal,saleCategory,operationCategory,scopeAllows,isRevenueStatus,reportingMessage,reportingCents,reportingRecord,recordAmountIssue};
   root.InGaugeAuditCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
