@@ -978,7 +978,7 @@ function findRoom(room) {
   const ih = W.hoInHouse && typeof W.hoInHouse.find === 'function' ? W.hoInHouse.find(room) : null;
   // checked out today on Departures (the board was loaded again since, without the room): not put back on the board
   if (ih && ih.status === 'out') return { src: 'in-house list', name: ih.name || '', out: true, checkoutAt: ih.checkedOutAt || '' };
-  if (ih && !(ih.departure && ih.departure < (typeof hoLocalISO === 'function' ? hoLocalISO() : isoDay(new Date())))) return { src: 'in-house list', name: ih.name || '' };
+  if (ih && !(ih.departure && ih.departure < (typeof hoLocalISO === 'function' ? hoLocalISO() : isoDay(new Date())))) return { src: 'in-house list', name: ih.name || '', departure: ih.departure || '' };
   const same = x => parseInt(String(x == null ? '' : x).replace(/\D/g, ''), 10) === n;
   const nm = g => String(g.name || g.guest || [g.last, g.first].filter(Boolean).join(' ') || '').trim();
   const lists = [['in-house list', typeof purposeGuests !== 'undefined' ? purposeGuests : []], ['arrivals', typeof arrGuests !== 'undefined' ? arrGuests : []]];
@@ -1098,6 +1098,9 @@ function applyOne0(a, who, board) {
     const f = findRoom(a.room);
     if (!f) return Object.assign(res, { st: 'notlist', text: `${a.room}: room not found — not on departures, arrivals or in-house` });
     if (f.out) return Object.assign(res, { st: 'skip', text: `✓ ${a.room} already checked out${f.checkoutAt ? ' at ' + f.checkoutAt : ''} — nothing to do` });
+    const source = W.HotelOpsDepartureSource;
+    const allowed = source ? source.canAddChat({ room:a.room,act:a.act,weak:a.weak,known:f,rows:rooms(),day:today() }) : a.act === 'co' && !a.weak || f.departure === today();
+    if (!allowed) return Object.assign(res, { st:'req',text:`${a.room}: message kept as a request. Being in-house or arriving is not proof of a departure today; the current Opera queue was not enlarged.` });
     if (typeof depAddManualRoom !== 'function' || !quiet(() => depAddManualRoom(a.room, f.name))) return Object.assign(res, { st: 'notlist', text: `${a.room}: could not add it to the board` });
     const out = applyOne(a, who, { ok: true });
     const added = rooms().find(q => q.roomStr === String(a.room).trim());
@@ -1112,6 +1115,8 @@ function applyOne0(a, who, board) {
   if (!board.ok) return Object.assign(res, { st: 'notlist', text: `${a.room}: not on today's list (${board.why})` });
   if (i < 0) return Object.assign(res, { st: 'notlist', text: `${a.room}: not on today's departures` });
   const r = rooms()[i], room = r.roomStr, st = r.status, before = pick(r);
+  if (W.HotelOpsDepartureSource?.pending(r,today()) && a.act !== 'note') return Object.assign(res, {st:'req',text:`${room}: not in the verified Opera Departures list. Message kept for checking; its old status was not restored.`});
+  if (W.HotelOpsDepartureSource?.olderChat(r,today(),a.timeKnown === false ? '' : a.t24) && a.act !== 'note') return Object.assign(res, {st:'req',text:`${room}: this message predates the latest verified Opera list or has no reliable time. Kept as context; the newer Opera state was preserved.`});
   // a message older than the last one acted on for this room (read late: scrolling up, searching) changes nothing
   if (a.t24 && r.waAt && a.t24 < r.waAt && a.act !== 'note') return Object.assign(res, { st: 'skip', text: `${room}: older message (${timeLabel(a.t24)}) — a newer one (${timeLabel(r.waAt)}) was already done` });
   let line, setStatus = null;
@@ -1408,7 +1413,7 @@ function handle(msg, via, opt) {
     : pvOnly ? [{ st: 'preview', text: 'Only the preview was seen · open the group in WhatsApp to read it in full' }]
     : !actions.length ? [P.ask ? { st: 'ask', room: P.ask.room, text: `What does "${P.ask.word}" mean? Answer at the top` } : { st: 'none', text: 'no room — just logged' }]
     : !acts ? [{ st: 'log', text: 'Log only' + (group ? ' · ' + group : '') + ' — rooms not changed' }]
-    : actions.map(a => Object.assign(applyOne(Object.assign({}, a, { t24 }), who, board), { k: actionKey(a) }));   // t24: when it was written (older never undoes newer)
+    : actions.map(a => Object.assign(applyOne(Object.assign({}, a, { t24, timeKnown:!!waTime24(msg.time) }), who, board), { k: actionKey(a) }));   // t24: when it was written (older never undoes newer)
   if (unEdit.length) res.unshift(...unEdit);
   if (P.ask && actions.length && acts && !pvOnly) res.push({ st: 'ask', room: P.ask.room, text: `What does "${P.ask.word}" mean? Answer at the top` });
   done[id] = (pvOnly ? (prev || '') : P.actions.map(actionKey).join('|')); done[ck] = ''; saveDone(done);

@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 610, items: [
+    'The current departure queue follows a complete, unfiltered Opera Departures read for the linked hotel and day. Reservations that disappear move to Check Opera; their original records, notes and actual completed statuses are retained.',
+    'Refreshing WhatsApp no longer adds unrelated in-house or arriving guests to today’s departures. The verified queue is shared across devices, and older chat messages cannot overwrite a newer Opera read.',
+    'Current departures, completed rooms and entries needing checking have separate counts. A later confirmed Opera checkout or saved departure date resolves a held room automatically. Excel exports show the same current status and preserve the original status.'
+  ] },
   { v: 609, items: [
     'Fixed the phone Departures toolbar: Sort stays horizontal and opens the searchable menu instead of squeezing Smart into a tall vertical strip.',
     'Compact and comfortable room views now keep Check out readable and show six labelled secondary actions in a phone-sized grid. Notes and Guest said menus keep their intended space and visibility.',

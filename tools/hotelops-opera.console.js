@@ -1534,6 +1534,15 @@
     if (!e || mine(e) || e.closest('[hidden], [aria-hidden="true"]')) return false;
     try { return !!e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden'; } catch (_) { return true; }
   }
+  function departuresFiltered() {
+    return Array.prototype.some.call(document.querySelectorAll('input,select'), function (e) {
+      if (mine(e) || inData(e) || !visibleOpera(e) || /^(?:checkbox|radio|hidden|submit|button)$/i.test(e.type || '')) return false;
+      var label = e.getAttribute('aria-label') || Array.prototype.map.call(e.labels || [], function (x) { return txt(x); }).join(' ');
+      if (!label && e.getAttribute('aria-labelledby')) label = e.getAttribute('aria-labelledby').split(/\s+/).map(function (id) { return txt(document.getElementById(id)); }).join(' ');
+      if (['room','conf','name','roomType','company','agent','rateCode','source','group'].indexOf(formLabel(label)) < 0) return false;
+      var value = String(e.value || '').trim();return !!value && !/^(?:all|any|select|choose)(?:\s|$)|^[-–—*]+$/i.test(value);
+    });
+  }
   var MESSAGE_SEL = '[role="alert"], [role="status"], [aria-live="polite"], [aria-live="assertive"], [class*="af_messages"], [class*="af_message"], [id$="::msgDlg"]';
   var noticeVersions = new WeakMap(), rowContext = null, draftContext = null, pendingAction = null, stableRows = [], stableKind = '', stableProperty = '', confirmedQueue = [];
   function notices() {
@@ -1660,7 +1669,7 @@
       if (view.rows.length > 1500) view.rows = view.rows.slice(-1500);
       if (g.count && g.count.known) view.total = g.count.total; else if (g.total) view.total = g.total;
       else if (rows.length && !REPLACE[kind]) { var hn = (heads[0] || '').match(/\((\d{1,5})\)\s*$/); if (hn) view.total = +hn[1]; }   // "Departures (15)"
-      view.countKnown = !!(g.count && g.count.known); view.businessDate = operatingDate; view.folio = folio; view.traces = traces; view.tables = tables; view.audit = audit;
+      view.countKnown = !!(g.count && g.count.known); view.filtered = kind === 'departures' && departuresFiltered(); view.businessDate = operatingDate; view.folio = folio; view.traces = traces; view.tables = tables; view.audit = audit;
       lastCtx = { kind: kind, hint: hint, heads: heads, date: date, g: g, pairs: readP ? pairs : null, rowsN: rows.length, tables: tables.length };
       checkStuck(lastCtx);
       send();
@@ -1865,13 +1874,13 @@
   function send(force) {
     var more = view.folio || (view.traces && view.traces.length) || (view.tables && view.tables.length);
     if ((!view.rows.length && !more && !view.businessDate && !(view.kind === 'departures' && view.countKnown)) || !view.kind) return;
-    var snap = { countKnown: !!view.countKnown, id: view.key, kind: view.kind, date: view.date, title: view.title, total: view.total || 0, rows: view.rows, frame: FRAME, url: location.hostname + location.pathname, prop: readProp() };
+    var snap = { countKnown: !!view.countKnown, filtered: !!view.filtered, id: view.key, kind: view.kind, date: view.date, title: view.title, total: view.total || 0, rows: view.rows, frame: FRAME, url: location.hostname + location.pathname, prop: readProp() };
     if (view.businessDate) snap.businessDate = view.businessDate;
     if (view.folio) snap.folio = view.folio;
     if (view.traces && view.traces.length) snap.traces = view.traces;
     if (view.tables && view.tables.length) snap.tables = view.tables;
     if (view.audit) snap.audit = view.audit;
-    var h = more ? hash([snap.kind, snap.prop, snap.date, snap.countKnown, snap.total, snap.businessDate || '', snap.rows, snap.folio || 0, snap.traces || 0, snap.tables || 0, snap.audit || 0]) : hash([snap.kind, snap.prop, snap.date, snap.countKnown, snap.total, snap.businessDate || '', snap.rows]);
+    var h = more ? hash([snap.kind, snap.prop, snap.date, snap.countKnown, snap.filtered, snap.total, snap.businessDate || '', snap.rows, snap.folio || 0, snap.traces || 0, snap.tables || 0, snap.audit || 0]) : hash([snap.kind, snap.prop, snap.date, snap.countKnown, snap.filtered, snap.total, snap.businessDate || '', snap.rows]);
     if (!force && h === sentHash) return;
     if (!force && Date.now() - sentAt < 2500) { laterScan(2600); return; }   // a list still loading: at most one snapshot every few seconds
     if (post({ source: 'ho-op', v: VERSION, h: h, snap: scrub(snap), at: Date.now() })) {

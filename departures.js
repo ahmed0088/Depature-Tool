@@ -574,14 +574,15 @@ function closeReloadModal() {
 /** a due room that is not leaving now: ⏳ extending, or 🧾 left and waiting for Finance / Reservations */
 function _depHeld(r) { return effectiveStatus(r) === 'due' && (r.intent === 'extending' || r.intent === 'finance_hold'); }
 /** "May extend" chip and filter: the same rooms (an extended or checked-out room is no longer a maybe) */
-function _depMayExt(r) { const es = effectiveStatus(r); return (r.intent === 'maybe_extend' || r.intent === 'extending') && es !== 'extended' && es !== 'out'; }
+function _depMayExt(r) { const es = effectiveStatus(r); return (r.intent === 'maybe_extend' || r.intent === 'extending') && es !== 'extended' && es !== 'out' && es !== 'sync_pending'; }
 function depCounts() {
   const due      = depRooms.filter(r => effectiveStatus(r) === 'due').length;
   const late     = depRooms.filter(r => effectiveStatus(r) === 'late').length;
   const extended = depRooms.filter(r => r.status === 'extended').length;
   const out      = depRooms.filter(r => r.status === 'out').length;
-  const na       = depRooms.filter(r => r.status === 'na').length;
-  const dnd      = depRooms.filter(r => r.status === 'dnd').length;
+  const na       = depRooms.filter(r => effectiveStatus(r) === 'na').length;
+  const dnd      = depRooms.filter(r => effectiveStatus(r) === 'dnd').length;
+  const awaiting = depRooms.filter(r => effectiveStatus(r) === 'sync_pending').length;
   return {
     all:          due + late + na + dnd + out + extended,
     due,
@@ -590,11 +591,12 @@ function depCounts() {
     out,
     na,
     dnd,
-    balance:      depRooms.filter(r => depOwes(r) && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
+    sync_pending: awaiting,
+    balance:      depRooms.filter(r => depOwes(r) && !['out','extended','sync_pending'].includes(effectiveStatus(r))).length,
     maybe_extend: depRooms.filter(_depMayExt).length,
     held:         depRooms.filter(_depHeld).length,   // in the due count, but the card says ⏳ EXTENDING / 🧾 LEFT, not DUE OUT
-    extending:    depRooms.filter(r => r.intent === 'extending' && effectiveStatus(r) !== 'extended' && effectiveStatus(r) !== 'out').length,
-    pending:      depRooms.filter(r => r.intent && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
+    extending:    depRooms.filter(r => r.intent === 'extending' && !['out','extended','sync_pending'].includes(effectiveStatus(r))).length,
+    pending:      depRooms.filter(r => r.intent && !['out','extended','sync_pending'].includes(effectiveStatus(r))).length,
   };
 }
 
@@ -628,6 +630,8 @@ function _depDayRel(r) {
 }
 
 function effectiveStatus(r) {
+  const source = typeof window !== 'undefined' && window.HotelOpsDepartureSource;
+  if (source && r.operaPresence?.state === 'missing' && !['out','extended'].includes(r.status)) { const boardDay = typeof _depBoardDate === 'function' ? _depBoardDate() : null;const day = boardDay ? _depIsoOf(boardDay) : typeof hoLocalISO === 'function' ? hoLocalISO() : _depIsoOf(new Date());if (source.pending(r,day)) return 'sync_pending'; }
   if (r.status === 'due' && r.depTime && !r.lcoAcknowledged && r.intent !== 'extending' && r.intent !== 'finance_hold' && _depDayRel(r) <= 0) {   // tomorrow's list: not late today   // ⏳ extending (stays on) or 🧾 left, waiting for Finance: never late
     const depMins = _depTimeMins(r);
     if (depMins !== null) {
@@ -859,7 +863,7 @@ function _depRestoreOpenState({ expanded, noteOpen, noteValues }) {
 // Display only: it never changes a room's saved status.
 function _depIsOverdue(r) {
   const es = effectiveStatus(r);
-  if (es === 'out' || es === 'extended') return false;
+  if (es === 'out' || es === 'extended' || es === 'sync_pending') return false;
   if (r.intent === 'finance_hold') return false;                  // left already; only finance is pending
   const day = _depDayRel(r);
   if (day > 0) return false;                                       // a list for a later day is not late yet
@@ -986,6 +990,7 @@ function depRender() {
     const a = document.getElementById('dfh-amt'); if (a && typeof hoHighBal === 'function') a.textContent = '≥' + hoHighBal(); }
   // 'To do' chip shows active rooms (due + late + na + dnd — the cards the To do list shows)
   const activeCount = sc.due + sc.late + sc.na + sc.dnd;
+  const pendingChip = document.querySelector('.dp-chips [data-f="sync_pending"]');if (pendingChip) pendingChip.hidden = !sc.sync_pending;
   const allChipCount = document.getElementById('dfc-all');
   if (allChipCount) allChipCount.textContent = activeCount;
   document.querySelectorAll('.dp-chips .fchip').forEach(c => {
@@ -996,7 +1001,7 @@ function depRender() {
 
   // Balance outstanding total
   const totalOwing = depRooms
-        .filter(r => depOwes(r) && r.status !== 'out' && r.status !== 'extended')
+        .filter(r => depOwes(r) && !['out','extended','sync_pending'].includes(effectiveStatus(r)))
     .reduce((s, r) => s + r.balance, 0);
   const balKpiVal = totalOwing > 0
     ? `${totalOwing.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
@@ -1013,14 +1018,18 @@ function depRender() {
     kick.classList.toggle('dp-kicker-warn', !!bd && !isToday);
   }
   const toGo = sc.all - done;
-  setTxt('depHeroSub', sc.all ? (toGo ? `${toGo} still to go · ${sc.all} rooms` : `All ${sc.all} rooms done 🎉`) : '');
+  setTxt('depHeroSub', sc.sync_pending ? `${activeCount} still to go · ${done} completed · ${sc.sync_pending} check Opera` : sc.all ? (toGo ? `${toGo} still to go · ${sc.all} rooms` : `All ${sc.all} rooms done 🎉`) : '');
   setTxt('depRingNum', done);
   setTxt('depRingOf', `of ${sc.all} done`);
   const ring = document.getElementById('depRingFill');
   if (ring) { const C = 2 * Math.PI * 52; ring.style.strokeDasharray = C.toFixed(1); ring.style.strokeDashoffset = (C * (1 - pct / 100)).toFixed(1); }
   const ringWrap = document.getElementById('depRing'); if (ringWrap) ringWrap.classList.toggle('dp-ring-done', !!sc.all && pct === 100);
   const lbl = document.getElementById('depDateLabel');
-  if (lbl && depRooms.length) lbl.textContent = `${sc.all} rooms departing${bd ? ' · ' + _depDateLabel(bd) : ''}`;
+  if (lbl && depRooms.length) lbl.textContent = sc.sync_pending ? `${activeCount} awaiting departure · ${done} completed · ${sc.sync_pending} check Opera` : `${sc.all} rooms departing${bd ? ' · ' + _depDateLabel(bd) : ''}`;
+  const source = typeof window !== 'undefined' && window.HotelOpsDepartureSource?.summary(depRooms, bd ? _depIsoOf(bd) : typeof hoLocalISO === 'function' ? hoLocalISO() : _depIsoOf(new Date()));
+  let sourceNote = document.getElementById('depOperaScope');
+  if (!sourceNote && document.getElementById('depToolbar')) { sourceNote = document.createElement('div');sourceNote.id = 'depOperaScope';sourceNote.className = 'dp-source-note';document.getElementById('depToolbar').before(sourceNote); }
+  if (sourceNote) { sourceNote.hidden = !source;sourceNote.innerHTML = source ? `<b>Opera: ${source.total} current departures</b><span>${sc.sync_pending ? sc.sync_pending + ' not listed · kept for checking; checkout or extension is not confirmed yet.' : 'Current queue follows the complete Opera list.'}</span>${sc.sync_pending ? '<button type="button" class="btn" onclick="depFilter(\'sync_pending\',this)">Check these rooms</button>' : ''}` : ''; }
 
   // ── KPI tiles (tap = filter) ──
   const tiles = [
@@ -1089,10 +1098,10 @@ function depRender() {
     let mf;
     switch (depFilter_) {
       case 'all':          mf = es === 'due' || es === 'late' || es === 'na' || es === 'dnd'; break; // extended excluded — done
-      case 'balance':      mf = depOwes(r) && es !== 'out' && es !== 'extended'; break;
+      case 'balance':      mf = depOwes(r) && !['out','extended','sync_pending'].includes(es); break;
       case 'hibal':        mf = _depHiBal(r); break;
       case 'ota':          mf = _depOtaBal(r); break;
-      case 'pending':      mf = !!r.intent && es !== 'out' && es !== 'extended'; break;
+      case 'pending':      mf = !!r.intent && !['out','extended','sync_pending'].includes(es); break;
       case 'maybe_extend': mf = _depMayExt(r); break;
       case 'overdue':      mf = _depIsOverdue(r); break;
       case 'due':          mf = es === 'due' && !_depHeld(r); break;
@@ -1272,7 +1281,7 @@ function renderDepQuickJump() {
       icon:  '💳',
       label: 'Balance Owing',
       cls:   'jump-bal',
-      rooms: depRooms.filter(r => depOwes(r) && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended'),
+      rooms: depRooms.filter(r => depOwes(r) && !['out','extended','sync_pending'].includes(effectiveStatus(r))),
     },
     {
       key:   'extended',
@@ -1386,13 +1395,15 @@ function depCardHTML(r) {
   const es         = effectiveStatus(r);
   const lcoOverdue  = isLcoOverdue(r);
   const overdue     = _depIsOverdue(r);
-  const active      = es !== 'out' && es !== 'extended';
+  const active      = es !== 'out' && es !== 'extended' && es !== 'sync_pending';
   const money = v => Math.abs(v).toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   // Status pill — driven by effective status
   const autoPromoted = r.status === 'due' && es === 'late';
   let badgeText;
-  if (es === 'due') {
+  if (es === 'sync_pending') {
+    badgeText = 'CHECK OPERA';
+  } else if (es === 'due') {
     badgeText = overdue ? `DUE · PAST ${_depHHMM(_depCoMin())}` : 'DUE OUT';
   } else if (es === 'late') {
     badgeText = autoPromoted
@@ -1576,7 +1587,9 @@ function depCardHTML(r) {
 
   // Action buttons — driven by effective status (same functions as before)
   let actHTML = '';
-  if (es === 'extended') {
+  if (es === 'sync_pending') {
+    actHTML = `<div class="dp-source-hold"><p>This reservation is absent from the latest complete Opera Departures list. Its earlier status and notes are preserved. Read the reservation in Opera to confirm checkout or its new departure date.</p><div><button type="button" class="btn" onclick="event.stopPropagation();hoOpera.reopen(true)">Open Opera</button>${r.conf ? `<button type="button" class="btn" onclick="event.stopPropagation();copyToClipboard(depRooms[${i}].conf,this,'Copied')">Copy confirmation</button>` : ''}</div></div>`;
+  } else if (es === 'extended') {
     actHTML = `<div class="dc-actions dp-acts g1">${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo extension')}</div>`;
   } else if (es === 'out') {
     actHTML = `<div class="dc-actions dp-acts g1">${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo check-out')}</div>`;
@@ -3173,15 +3186,16 @@ function clearDep() {
 function exportDepSummary() {
   if (!depRooms.length) return;
   const wb   = XLSX.utils.book_new();
-  const data = [['Room','Guest','Arrival','Departure','Nights','Balance AED','Source','Company','Status','Intent','Late Time','Ext Nights','Checkout At','Notes']];
+  const data = [['Room','Guest','Arrival','Departure','Nights','Balance AED','Source','Company','Status','Intent','Late Time','Ext Nights','Checkout At','Notes','Original status','Opera list']];
   depRooms.forEach(r => data.push([
     r.roomStr, r.name, r.arrival, r.departure, r.nights, r.balance,
-    r.source, r.company, r.status.toUpperCase(),
+    r.source, r.company, effectiveStatus(r) === 'sync_pending' ? 'CHECK OPERA' : effectiveStatus(r).toUpperCase(),
     r.intent ? INTENT_CONFIG[r.intent]?.label || r.intent : '',
-    r.lateTime, r.extensionNights || '', r.checkoutAt, r.note,
+    r.lateTime, r.extensionNights || '', r.checkoutAt, r.note, r.status.toUpperCase(),
+    r.operaPresence ? r.operaPresence.day + ': ' + (r.operaPresence.state === 'present' ? 'Listed' : 'Not listed · check') : 'Not checked',
   ]));
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [8,24,12,12,7,12,20,22,12,16,10,8,10,40].map(w => ({wch:w}));
+  ws['!cols'] = [8,24,12,12,7,12,20,22,16,16,10,8,10,40,16,28].map(w => ({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, 'Departures');
   XLSX.writeFile(wb, 'Departures_' + hoLocalISO() + '.xlsx');
 }

@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v609"/>
+<meta name="ho-version" content="v610"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -707,6 +707,7 @@
           <option value="balance">⇅ Balance</option>
         </select>
         <button class="fchip on" data-f="all"          onclick="depFilter('all',this)">To do <span id="dfc-all">0</span></button>
+        <button class="fchip" data-f="sync_pending" hidden onclick="depFilter('sync_pending',this)">Check Opera <span id="dfc-sync_pending">0</span></button>
         <button class="fchip"    data-f="due"          onclick="depFilter('due',this)">Due <span id="dfc-due">0</span></button>
         <button class="fchip"    data-f="overdue"      onclick="depFilter('overdue',this)">Overdue <span id="dfc-overdue">0</span></button>
         <button class="fchip"    data-f="late"         onclick="depFilter('late',this)">Late CO <span id="dfc-late">0</span></button>
@@ -4132,6 +4133,7 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
 <script src="utils.js"></script>
 <script src="phone-menus.js"></script>
 <script src="natguess.js"></script>
+<script src="departure-source.js"></script>
 <script src="departures.js"></script>
 <script src="purpose-business-date.js"></script>
 <script src="purpose-referral.js"></script>

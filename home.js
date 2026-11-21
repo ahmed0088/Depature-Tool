@@ -20,7 +20,7 @@ function homeTiles() {
     const c = typeof depCounts === 'function' ? depCounts() : {};
     const open = (c.due || 0) + (c.late || 0) + (c.na || 0) + (c.dnd || 0);   // = the To do chip on the board
     const out = depRooms.filter(r => r.status === 'out').length;
-    add({ panel: 'departures', icon: '🚪', title: 'Departures', big: open, sub: `${open ? 'still to check out' : 'all handled'} · ${out}/${depRooms.length} out${c.late ? ` · ${c.late} late` : ''}`, tone: c.late ? 'bad' : open ? 'warn' : 'ok' });
+    add({ panel: 'departures', icon: '🚪', title: 'Departures', big: open, sub: `${open ? 'still to check out' : c.sync_pending ? 'no current departures' : 'all handled'} · ${out}/${depRooms.length} out${c.sync_pending ? ` · ${c.sync_pending} check Opera` : ''}${c.late ? ` · ${c.late} late` : ''}`, tone: c.late ? 'bad' : open || c.sync_pending ? 'warn' : 'ok' });
   });
 
   // Arrivals

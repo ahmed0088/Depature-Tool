@@ -47,6 +47,8 @@ jobs:
       - name: Opera Departures checks
         run: |
           node tests/opera-departures.test.js
+          node --test tests/departure-source.test.js
+          node tests/departure-sync.browser.test.js
           node --test tests/opera-checkout.test.js
           node tests/opera-checkout.browser.test.js
       - name: Manual sales and seller requests

@@ -201,6 +201,7 @@ function sanitize(snap) {
   }).filter(Boolean);
   const prop = String(snap.prop || '').toUpperCase(); 
   const out = { kind, date: isIso(snap.date) ? snap.date : '', title: cut(snap.title, 90), total: Math.max(0, +snap.total || 0), frame: String(snap.frame || '').slice(0, 12), rows };
+  ['countKnown', 'filtered'].forEach(k => { if (typeof snap[k] === 'boolean') out[k] = snap[k]; });
   if (isIso(snap.businessDate) && Number.isFinite(Date.parse(snap.businessDate + 'T12:00:00Z')) && new Date(snap.businessDate + 'T12:00:00Z').toISOString().slice(0, 10) === snap.businessDate) out.businessDate = snap.businessDate;
   if (/^[A-Z0-9]{3,8}$/.test(prop)) out.prop = prop;   // which hotel this Opera tab is (clusters)
   const F = cleanFolio(snap.folio); if (F) out.folio = F;
@@ -293,6 +294,7 @@ function plan(inp) {
       if (!realRoom(r.room) || !r.departure || r.departure <= t || r.status === 'checked_out' || (r.arrival && r.arrival > t)) return;
       const b = findB(r);
       if (!b || !departureMatch(b, r) || !['due', 'late', 'na', 'dnd'].includes(b.status)) return;
+      if (W.HotelOpsDepartureSource && !W.HotelOpsDepartureSource.canInferExtension(b,t)) return;
       if (P.dep.ext.some(e => e.room === b.roomStr)) return;
       P.dep.ext.push({ room: b.roomStr, nights: dayDiff(t, r.departure), to: r.departure, row: r });
     });
@@ -472,7 +474,7 @@ function depRecon(I) {
     const k = bk(b), latest = !keep[k] && others.filter(r => (['details', 'inhouse'].includes(r._k) || ['search', 'list'].includes(r._k) && r.status === 'checked_out') && r._date === t && r._at > evidenceAt(D)
       && realRoom(r.room) && roomKey(r.room) === k && departureMatch(b, r))
       .sort((a, c) => c._at - a._at)[0];
-    const fresh = latest && (latest.status === 'checked_out' || (latest.departure > t && !BAD.has(latest.status) && latest.status !== 'due_in' && (!latest.arrival || latest.arrival <= t))) ? latest : null;
+    const fresh = latest && (latest.status === 'checked_out' || ((!W.HotelOpsDepartureSource || W.HotelOpsDepartureSource.canInferExtension(b,t)) && latest.departure > t && !BAD.has(latest.status) && latest.status !== 'due_in' && (!latest.arrival || latest.arrival <= t))) ? latest : null;
     if (fresh) { freshBy.set(k, fresh); if (opBy.has(k) && departureMatch(b, opBy.get(k))) opBy.delete(k); }
   });
   // Opera's Departures list usually holds only the guests still due out; a guest who already left drops off it.
@@ -524,7 +526,8 @@ function depRecon(I) {
     const canc = here.find(x => BAD.has(x.status)), early = here.find(x => x.status === 'checked_out' && x.departure && x.departure < t);
     const other = here.find(x => x.departure && x.departure !== t);
     const d = { type: 'missing', room: b.roomStr, name: b.name, acts: ['ext', 'remove', 'keep'] };
-    if (later) Object.assign(d, { why: 'extended', nights: dayDiff(t, later.departure), to: later.departure, reason: `${SRC[later._k] || later._k} in Opera until ${fmt(later.departure)} → extended`,
+    if (later && W.HotelOpsDepartureSource && !W.HotelOpsDepartureSource.canInferExtension(b,t)) Object.assign(d, { why:'date',sure:false,to:later.departure,reason:`Opera shows a stay until ${fmt(later.departure)}. This room was added without a verified departure today; a later stay alone does not prove an extension.`,acts:['remove','keep'] });
+    else if (later) Object.assign(d, { why: 'extended', nights: dayDiff(t, later.departure), to: later.departure, reason: `${SRC[later._k] || later._k} in Opera until ${fmt(later.departure)} → extended`,
       sure: ((later._k === 'inhouse' || later._k === 'details') && (!later.status || later.status === 'in_house' || later.status === 'due_out')) || b.intent === 'extending' || b.intent === 'maybe_extend' });   // said extending here + a later stay in Opera = confirmed
     else if (moved) Object.assign(d, { why: 'moved', reason: `in room ${moved.room} in Opera → moved to another room`, acts: ['remove', 'keep'] });
     else if (canc) Object.assign(d, { why: 'cancelled', reason: 'cancelled / no-show in Opera', acts: ['remove', 'keep'] });
@@ -541,7 +544,8 @@ function depRecon(I) {
   const ord = { missing: 0, extra: 1, guest: 2, status: 3, opdue: 4 };
   diffs.sort((a, b) => ord[a.type] - ord[b.type] || roomKey(a.room).localeCompare(roomKey(b.room), 'en', { numeric: true }));
   const extN = bd.filter(b => b.status === 'extended').length;
-  return { state: 'ok', read, total, opN: opBy.size, boardN: bd.length - extN, extN, outN, opAll, diffs };
+  const pendingN = bd.filter(b => W.HotelOpsDepartureSource?.pending(b,t)).length;
+  return { state: 'ok', read, total, opN: opBy.size, boardN: bd.length - extN - pendingN, extN, outN, opAll, diffs, ...(pendingN ? {pendingN} : {}) };
 }
 /** the differences HotelOps may fix by itself (auto on, review off): add a missing room, mark one checked out, mark one extended when
  *  Opera's in-house list or the reservation clearly shows a later departure. Never a removal. */
@@ -553,7 +557,7 @@ function reconHead(R) {
   if (R.state !== 'ok') return '';
   const n = R.diffs.length;
   const still = R.opAll === false && R.outN ? ' still to leave' : '';
-  return `📡 Opera: ${pl(R.opN, 'departure')}${still} · HotelOps: ${R.boardN}${still}${R.extN ? ` (+${R.extN} extended)` : ''} — ${n ? pl(n, 'difference') : 'all match ✓'}`;
+  return `📡 Opera: ${pl(R.opN, 'departure')}${still} · HotelOps: ${R.boardN}${still}${R.extN ? ` (+${R.extN} extended)` : ''}${R.pendingN ? ` · ${R.pendingN} kept for checking` : ''} — ${n ? pl(n, 'difference') : 'all match ✓'}`;
 }
 /** the differences chosen → a plan apply() understands (removals in dep.rm) */
 function reconPlan(items, t) {
@@ -1365,7 +1369,7 @@ function apply0(snap, how, P0) {
     if (typeof fbSet === 'function') { fbSet('inhouse/' + t, snapIh).then(() => fbSet('inhouseMeta/latest', { date: t, at: snapIh.at, by: snapIh.by || 'Opera reader', rooms: S.rooms, guests: S.guests })).catch(() => {}); }
     if (W.hoInHouse.render) W.hoInHouse.render();
   });
-  const text = summaryText(P);
+  const text = P.sourceText || summaryText(P);
   const after = { dep: J(typeof depRooms !== 'undefined' ? depRooms : []), arr: J(typeof arrGuests !== 'undefined' ? arrGuests : []), pur: J(typeof purposeGuests !== 'undefined' ? purposeGuests : []), ih: J(ihNow()) };
   // Undo: everything back as it was, when nobody changed those lists since
   const undo = () => {
@@ -1448,6 +1452,7 @@ function receive(raw, h, reply) {
   h = String(h || hashOf([snap.kind, snap.date, snap.rows]));
   if (SEEN.has(h) && SEEN.get(h) !== WAITING && LAST[snap.kind] && LAST[snap.kind].h === h) {   // the same screen again: nothing new to read (a folio back to an earlier state is read again)
     if (LAST[snap.kind].contentAt == null) LAST[snap.kind].contentAt = LAST[snap.kind].at;
+    ['countKnown','filtered','businessDate','prop'].forEach(k => { if (snap[k] !== undefined) LAST[snap.kind][k] = snap[k]; });
     LAST[snap.kind].at = Date.now(); saveLast();   // …but Opera still shows it: the read is still fresh
     if (snap.kind === 'departures') safe(reconAutoRun);   // the board may have changed since (WhatsApp, a tap): compare again
     return SEEN.get(h);
@@ -1455,7 +1460,7 @@ function receive(raw, h, reply) {
   const n = snap.rows.length || (snap.folio ? snap.folio.postings.length : 0) || (snap.traces || []).length || (snap.tables || []).reduce((a, tb) => a + tb.rows.length, 0);
   const readAt = Math.max(Date.now(), ...Object.values(LAST).map(x => (+(x && x.at) || 0) + 1));
   LAST[snap.kind] = { kind: snap.kind, date: snap.date, title: snap.title, total: snap.total, n, at: readAt, contentAt: nextEvidenceAt(LAST[snap.kind], h, readAt), h, rows: snap.rows.slice(0, 600) };
-  ['folio', 'traces', 'tables', 'audit'].forEach(k => { if (snap[k]) LAST[snap.kind][k] = snap[k]; });
+  ['folio', 'traces', 'tables', 'audit', 'countKnown', 'filtered', 'businessDate', 'prop'].forEach(k => { if (snap[k] !== undefined) LAST[snap.kind][k] = snap[k]; });
   saveLast();
   safe(() => remember(snap));
   safe(paintDepChips);
@@ -1476,6 +1481,15 @@ function reconNow() {
 /** auto on, review off, this tab holds the lock: the safe differences fixed by themselves (with the usual Undo and log) */
 function reconAutoRun() {
   if (!ready() || !canWrite() || !CFG.auto || CFG.review || !haveLock()) return;
+  const D = LAST.departures;
+  if (D && OPPROP && D.prop !== OPPROP) return;
+  const membership = D && W.HotelOpsDepartureSource ? W.HotelOpsDepartureSource.updates(D, boardNow().rooms, today()) : [];
+  if (membership.length) {
+    const P = reconPlan([], today());P.dep.fill = membership;P.n = membership.length;
+    const pending = membership.filter(x => x.set.operaPresence.state === 'missing' && DEP_ACTIVE.includes(boardNow().rooms.find(r => r.roomStr === x.room)?.status)).length;
+    P.sourceText = `${D.total} current Opera departures · ${pending} kept for checking`;
+    safe(() => apply(null, 'auto · verified Opera list', P));
+  }
   const items = reconAuto(reconNow()).map(d => ({ d, act: d.type === 'missing' ? 'ext' : d.type === 'extra' ? 'add' : d.type === 'notext' ? 'unext' : 'out' }));
   if (!items.length) return;
   const P = reconPlan(items, today());
@@ -1662,6 +1676,7 @@ W.addEventListener('message', e => {
     // answered at once, signed in or not (only applying waits): the reader shows "linked" as soon as this tab has loaded
     reply({ source: 'ho-op-ack', pong: 1, frame: String(d.frame || ''), again: !!(d.h && !SEEN.has(String(d.h))), auto: CFG.auto, learn: learnOn(), app: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', teach: teachNow(), guard: ogKnown() ? ogMsg() : null, ask: readerAsks(), allowQuestions: !asksOff() });
     if (d.home) safe(() => rememberHome(d.home));
+    safe(reconAutoRun);
     if (!was) paint();
     return;
   }
