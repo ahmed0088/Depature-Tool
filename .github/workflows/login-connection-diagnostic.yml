@@ -1,0 +1,22 @@
+name: Login database connection diagnosis
+on:
+  push:
+    branches: ['diagnose/login-connection-20261121']
+    paths: ['scripts/login-connection-diagnostic.cjs', '.github/workflows/login-connection-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Read account mapping and database access without changes
+        run: node scripts/login-connection-diagnostic.cjs
+        env:
+          HOTELOPS_HOTEL: ibis_dubai
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
