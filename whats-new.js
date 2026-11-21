@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 614, items: [
+    'Fixed the HTTPS database fallback using the actual Firebase connection API and allowed its connection frames. Signed-in sessions that remain offline now retry automatically, including after reopening the app with cached data.',
+    'Background saves wait for a verified sign-in, avoiding a false database refusal from chat presence on the login page. A cached account read no longer claims the connection has recovered while the database is still offline.',
+    'The update prompt appears above the sign-in screen, so Update now remains tappable when a database problem blocks entry.'
+  ] },
   { v: 613, items: [
     'A slow hotel database connection keeps your signed-in session and retries automatically. The login screen explains the connection problem and offers Retry connection or Use another account.',
     'Protected background reads wait until your hotel profile is ready. Connection errors stay visible until the affected operation recovers, with a phone-friendly retry button and an HTTPS connection fallback for networks that block WebSockets.'

@@ -16,6 +16,8 @@ let _dbError = '';
 const _dbFaults = new Map();
 let _dbRetry = null;
 let _dbLongPolling = false;
+let _dbReconnectTimer = null;
+let _dbLastRetryAt = 0;
 
 // Read-only accessor used by other modules (shifts.js, etc.)
 function isOnline() { return _online; }
@@ -78,6 +80,12 @@ function dbInit() {
     console.log('✅ Firebase DB ready — hotel:', HOTEL_ID);
     _db.ref('.info/connected').on('value', snap => {
       _online = !!snap.val();
+      clearTimeout(_dbReconnectTimer);
+      if (_online) {
+        if (_dbFaults.has('connection') && !_dbRetry) _dbCheckAccess().then(() => {
+          if (_online) _dbClearError('connection');
+        }).catch(e => _dbNoteError('connection', e));
+      } else _dbScheduleReconnect();
       updateConnectionUI(_online);
     });
   } catch (e) {
@@ -93,7 +101,9 @@ function updateConnectionUI(online) {
   if (!_fbSignedIn()) {
     dot.style.background = 'var(--amber)';
     dot.style.boxShadow = 'none';
-    lbl.textContent = 'Firebase · Connecting';
+    let signedIn = false;
+    try { signedIn = !!firebase.auth().currentUser; } catch (_) {}
+    lbl.textContent = signedIn ? 'Firebase · Connecting' : 'Firebase · Sign in';
   } else if (_dbError) {
     dot.style.background = 'var(--rose)';
     dot.style.boxShadow  = '0 0 6px var(--rose)';
@@ -119,12 +129,39 @@ function dbReadWithTimeout(ref, ms) {
 
 /** Some desk/phone networks block WebSockets; Firebase also supports HTTPS polling. */
 function dbUseLongPolling() {
-  if (_dbLongPolling) return;
-  if (firebase.database.INTERNAL && typeof firebase.database.INTERNAL.forceLongPolling === 'function') {
-    firebase.database.INTERNAL.forceLongPolling();
+  if (_dbLongPolling) return true;
+  // Firebase 9 compat exposes transport controls on the database INSTANCE.
+  // The namespace's INTERNAL object only exposes initStandalone.
+  const database = _db || firebase.database();
+  if (database.INTERNAL && typeof database.INTERNAL.forceLongPolling === 'function') {
+    database.INTERNAL.forceLongPolling();
     _dbLongPolling = true;
     try { sessionStorage.setItem('ho_db_long_poll_v1', '1'); } catch (_) {}
+    return true;
   }
+  return false;
+}
+
+/** A cached profile can open the app without a working database socket.
+ * Recover that state too, even if the person never taps or changes tabs. */
+function _dbScheduleReconnect() {
+  clearTimeout(_dbReconnectTimer);
+  if (!_db) return;
+  _dbReconnectTimer = setTimeout(async () => {
+    _dbReconnectTimer = null;
+    let user = null;
+    try { user = firebase.auth().currentUser; } catch (_) {}
+    if (_online || !user || navigator.onLine === false) return;
+    await fbRetryConnection();
+    if (!_online) _dbScheduleReconnect();
+  }, Math.max(10000, 30000 - (Date.now() - _dbLastRetryAt)));
+}
+
+async function _dbCheckAccess() {
+  const user = firebase.auth().currentUser;
+  if (!user) throw Object.assign(new Error('Sign in to connect'), { code: 'PERMISSION_DENIED' });
+  const snap = await dbReadWithTimeout(_db.ref(`hotels/${HOTEL_ID}/users/${user.uid}`), 8000);
+  if (!snap.val()?.active) throw Object.assign(new Error('Hotel account is not active'), { code: 'PERMISSION_DENIED' });
 }
 
 /** Reconnect and reattach cancelled reads. Never replay application writes or launch a job. */
@@ -133,25 +170,28 @@ function fbRetryConnection() {
   _dbRetry = (async () => {
     if (!_db || navigator.onLine === false) return false;
     try {
-      if (!_online) dbUseLongPolling();
+      _dbLastRetryAt = Date.now();
+      const needsFallback = !_online;
       _db.goOffline();
+      if (needsFallback) dbUseLongPolling();
       _db.goOnline();
       const user = firebase.auth().currentUser;
       if (!user) return false;
-      await dbReadWithTimeout(_db.ref(`hotels/${HOTEL_ID}/users/${user.uid}`), 8000);
+      await _dbCheckAccess();
       // Reads cancelled by permission errors do not restart themselves in Firebase.
       const failed = _fbFailedListeners.splice(0);
       failed.forEach(([path, cb]) => fbListen(path, cb));
       const paths = Array.from(_dbFaults.keys()).filter(k => k.startsWith('reading ')).map(k => k.slice(8));
       await Promise.all(paths.map(path => fbGet(path)));
       _dbClearError('connection');
-      return !_dbError;
+      return _online && !_dbError;
     } catch (e) { _dbNoteError('connection', e); return false; }
   })().finally(() => {
     _dbRetry = null;
     const button = document.querySelector('#dbErrorBanner .db-error-retry');
     if (button) button.disabled = false;
     updateConnectionUI(_online);
+    if (!_online) _dbScheduleReconnect();
   });
   const button = document.querySelector('#dbErrorBanner .db-error-retry');
   if (button) button.disabled = true;
@@ -171,7 +211,7 @@ function hoLocalISO(d) { d = d || new Date(); return `${d.getFullYear()}-${Strin
 async function fbSet(path, data) {
   if (typeof rbStampReset === 'function' && /^roster\/days/.test(path)) rbStampReset();   // the roster changed: counted again on the next redraw
   lsSave(path, data);
-  if (!_ref) return;
+  if (!_ref || !_fbSignedIn()) return;
   try { await _ref.child(path).set(data); _dbClearError('saving ' + path); }
   catch (e) { _dbNoteError('saving ' + path, e); }
 }
@@ -190,7 +230,7 @@ function fbApplyPatch(obj, patch) {
 async function fbUpdate(path, patch) {
   if (!patch || !Object.keys(patch).length) return;
   lsSave(path, fbApplyPatch(lsLoad(path), patch));
-  if (!_ref) return;
+  if (!_ref || !_fbSignedIn()) return;
   try { await _ref.child(path).update(patch); _dbClearError('saving ' + path); }
   catch (e) { _dbNoteError('saving ' + path, e); }
 }
@@ -229,6 +269,7 @@ function fbSignedInNow() {
   _fbWaiting.splice(0).forEach(([p, c]) => fbListen(p, c));
   _fbReadWaiting.splice(0).forEach(([p, resolve]) => fbGet(p).then(resolve));
   updateConnectionUI(_online);
+  if (!_online) _dbScheduleReconnect();
 }
 function fbListen(path, cb) {
   if (!_fbSignedIn()) { _fbWaiting.push([path, cb]); return; }
@@ -301,7 +342,7 @@ async function saveFeedback(log) {
  *  every entry a colleague added since this device loaded. Resolves with the log as now saved. */
 async function fbPushLog(path, entry, max) {
   const top = cur => [entry].concat(Array.isArray(cur) ? cur.filter(Boolean) : (cur && typeof cur === 'object') ? Object.values(cur) : []).slice(0, max || 100);
-  if (!_ref) { const v = top(lsLoad(path)); lsSave(path, v); return v; }
+  if (!_ref || !_fbSignedIn()) { const v = top(lsLoad(path)); lsSave(path, v); return v; }
   try {
     const r = await _ref.child(path).transaction(top);
     const v = r && r.snapshot ? r.snapshot.val() : null;

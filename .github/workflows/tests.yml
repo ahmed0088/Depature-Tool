@@ -26,6 +26,7 @@ jobs:
         run: |
           node --test tests/database-connection.test.js
           node tests/database-connection.browser.test.js
+          node tests/login-update.browser.test.js
       - name: Regression tests
         run: node tests/run-tests.js
       - name: Rented beds yearly counts and Excel exports

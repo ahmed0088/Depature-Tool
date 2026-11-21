@@ -5,9 +5,10 @@ function harness(auth=false){
  const store=new Map(),timers=new Map(),reads=[],writes=[],callbacks=new Map(),failures=new Map(),values=new Map(),events=[];let next=0;
  const user={uid:'user-one',email:'owner@example.test'},firebaseAuth={currentUser:user,signOut:async()=>{events.push('signOut');firebaseAuth.currentUser=null;},onAuthStateChanged:fn=>{firebaseAuth.emit=fn;},setPersistence:async()=>{},signInWithEmailAndPassword:async()=>{events.push('password');return{user};}};
  const ref=path=>({child:p=>ref(path+'/'+p),once:async()=>{reads.push(path);if(failures.has(path))throw failures.get(path);return snap(values.has(path)?values.get(path):null);},on:(name,fn,error)=>{callbacks.set(path,{fn,error});return fn;},off:()=>{},set:async value=>{writes.push({path,value});},update:async value=>{writes.push({path,value});},limitToFirst(){return this;}});
- const db={ref,goOffline:()=>events.push('offline'),goOnline:()=>events.push('online')};
+ const db={ref,INTERNAL:{forceLongPolling:()=>events.push('longPolling')},goOffline:()=>{events.push('offline');callbacks.get('.info/connected')?.fn(snap(false));},goOnline:()=>{events.push('online');if(!ctx.blockConnection)callbacks.get('.info/connected')?.fn(snap(true));}};
+ values.set('hotels/hotel_a/users/user-one',{active:true,role:'owner'});
  const elements=new Map();function el(id){if(!elements.has(id))elements.set(id,{value:'',checked:false,style:{},dataset:{},textContent:'',classList:{add(){},remove(){},toggle(){}},setAttribute(){},removeAttribute(){},addEventListener(){}});return elements.get(id);}
- const ctx={console:{log(){},warn(){},error(){}},Map,Set,Promise,Date,Object,Array,JSON,String,Number,Error,HOTEL_ID:'hotel_a',navigator:{onLine:true},localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,String(v)),removeItem:k=>store.delete(k)},sessionStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,String(v))},document:{hidden:false,addEventListener(){},getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[]},setTimeout:(fn,ms)=>{const id=++next;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),firebase:{database:Object.assign(()=>db,{INTERNAL:{forceLongPolling:()=>events.push('longPolling')}}),auth:()=>firebaseAuth},window:{addEventListener(){}},location:{reload:()=>events.push('reload')}};
+ const ctx={console:{log(){},warn(){},error(){}},Map,Set,Promise,Date,Object,Array,JSON,String,Number,Error,HOTEL_ID:'hotel_a',navigator:{onLine:true},localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,String(v)),removeItem:k=>store.delete(k)},sessionStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,String(v))},document:{hidden:false,addEventListener(){},getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[]},setTimeout:(fn,ms)=>{const id=++next;timers.set(id,{fn:()=>{timers.delete(id);return fn();},ms});return id;},clearTimeout:id=>timers.delete(id),firebase:{database:Object.assign(()=>db,{INTERNAL:{initStandalone(){}}}),auth:()=>firebaseAuth},window:{addEventListener(){}},location:{reload:()=>events.push('reload')}};
  vm.createContext(ctx);vm.runInContext(fs.readFileSync('db.js','utf8'),ctx);
  vm.runInContext("_dbShowBanner = msg => { globalThis.banner = msg; }; let currentUser = null;",ctx);
  if(auth){
@@ -24,7 +25,7 @@ const flush=async()=>{for(let i=0;i<10;i++)await Promise.resolve();};
 test('pre-login reads and listeners wait for the verified profile without exposing a cached guest',async()=>{
  const h=harness();h.run('dbInit();lsSave("departures", {guest:"old guest"});globalThis.result="pending";fbGet("departures").then(v=>globalThis.result=v);globalThis.changes=[];fbListen("departures",v=>changes.push(v));');
  assert.equal(h.reads.length,0);assert.equal(h.ctx.result,'pending');assert.equal(h.ctx.changes.length,0);assert.equal(h.run('dbError()'),'');
- h.values.set('hotels/hotel_a/departures',{date:'2026-11-21'});h.run('currentUser={uid:"user-one"};fbSignedInNow();');await flush();
+ h.values.set('hotels/hotel_a/departures',{date:'2026-11-21'});h.callbacks.get('.info/connected').fn(snap(true));h.run('currentUser={uid:"user-one"};fbSignedInNow();');await flush();
  assert.equal(h.ctx.result.date,'2026-11-21');assert(h.callbacks.has('hotels/hotel_a/departures'));assert.equal(h.timers.size,0);
 });
 test('successful reads do not hide failed writes or an access refusal on another path',async()=>{
@@ -76,4 +77,22 @@ test('background reads also wait when auth.js has not loaded yet',()=>{
 });
 test('use another account cancels the recovery timer and invalidates pending profile responses',async()=>{
  const h=harness(true);h.run('_authLoadEpoch=1;');h.failures.set('hotels/hotel_a/users/user-one',Object.assign(Error('network'),{code:'db/timeout'}));await h.run('_authOpenUser(firebase.auth().currentUser,1)');assert([...h.timers.values()].some(t=>t.ms===5000));await h.run('authUseAnotherAccount()');assert.equal(h.firebaseAuth.currentUser,null);assert.equal(h.run('_authLoadEpoch'),2);assert(![...h.timers.values()].some(t=>t.ms===5000));assert(!h.ctx.opened);
+});
+test('a cached account read cannot claim recovery while the socket stays disconnected',async()=>{
+ const h=harness();h.ctx.blockConnection=true;h.run('dbInit();currentUser={uid:"user-one"};');assert.equal(await h.run('fbRetryConnection()'),false);assert.equal(h.run('isOnline()'),false);assert([...h.timers.values()].some(t=>t.ms>=10000));assert.equal(h.writes.length,0);
+});
+test('signed-in offline sessions automatically reconnect over the real instance transport API',async()=>{
+ const h=harness();h.run('dbInit();currentUser={uid:"user-one"};fbSignedInNow();');const timer=[...h.timers.values()].find(t=>t.ms===10000);assert(timer);await timer.fn();assert.equal(h.run('_dbLongPolling'),true);assert.equal(h.run('isOnline()'),true);assert.deepEqual(h.events,['offline','longPolling','online']);assert.equal(h.timers.size,0);assert.equal(h.writes.length,0);
+});
+test('saved HTTPS transport is enabled before connecting on the next app launch',()=>{
+ const h=harness();h.store.set('ho_db_long_poll_v1','1');h.run('dbInit()');assert.equal(h.run('_dbLongPolling'),true);assert.deepEqual(h.events,['longPolling']);assert.equal(h.writes.length,0);
+});
+test('connection recovery rejects inactive profiles even when the socket is online',async()=>{
+ const h=harness();h.values.set('hotels/hotel_a/users/user-one',{active:false,role:'owner'});h.run('dbInit();currentUser={uid:"user-one"};');assert.equal(await h.run('fbRetryConnection()'),false);assert.match(h.run('dbError()'),/access was refused/);await h.run('fbGet("departures")');assert.match(h.run('dbError()'),/access was refused/);assert.equal(h.writes.length,0);
+});
+test('offline recovery is throttled and waits for internet rather than repeatedly reconnecting',async()=>{
+ const h=harness();h.ctx.blockConnection=true;h.run('dbInit();currentUser={uid:"user-one"};fbSignedInNow();');const first=[...h.timers.values()].find(t=>t.ms===10000);await first.fn();assert.equal(h.events.filter(e=>e==='offline').length,1);const retry=[...h.timers.values()].filter(t=>t.ms>=29000);assert(retry.length);h.ctx.navigator.onLine=false;await retry.at(-1).fn();assert.equal(h.events.filter(e=>e==='offline').length,1);assert.equal(h.writes.length,0);
+});
+test('anonymous background saves stay local and cannot produce a late database refusal after sign-in',async()=>{
+ const h=harness();h.run('dbInit()');await h.run('fbSet("settings",{theme:"opera"})');await h.run('fbUpdate("settings",{theme:"midnight"})');await h.run('fbPushLog("activityLog",{kind:"background"})');assert.equal(h.writes.length,0);assert.equal(h.run('lsLoad("settings").theme'),'midnight');assert.equal(h.run('dbError()'),'');h.run('currentUser={uid:"user-one"};');await h.run('fbUpdate("settings",{theme:"opera"})');assert.equal(h.writes.length,1);
 });
