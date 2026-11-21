@@ -453,6 +453,7 @@ function depReport(rows) {
 const DEP_ACTIVE = ['due', 'late', 'na', 'dnd'];
 // Receiving an unchanged cached screen again is not newer reservation evidence.
 const evidenceAt = read => +(read && (read.contentAt != null ? read.contentAt : read.at)) || 0;
+const nextEvidenceAt = (previous, h, now) => previous && previous.h === h ? evidenceAt(previous) || now : now;
 function depRecon(I) {
   const t = I.today, D = I.dep;
   if (!D || !Array.isArray(D.rows)) return { state: 'none', diffs: [] };
@@ -1453,7 +1454,7 @@ function receive(raw, h, reply) {
   }
   const n = snap.rows.length || (snap.folio ? snap.folio.postings.length : 0) || (snap.traces || []).length || (snap.tables || []).reduce((a, tb) => a + tb.rows.length, 0);
   const readAt = Math.max(Date.now(), ...Object.values(LAST).map(x => (+(x && x.at) || 0) + 1));
-  LAST[snap.kind] = { kind: snap.kind, date: snap.date, title: snap.title, total: snap.total, n, at: readAt, contentAt: readAt, h, rows: snap.rows.slice(0, 600) };
+  LAST[snap.kind] = { kind: snap.kind, date: snap.date, title: snap.title, total: snap.total, n, at: readAt, contentAt: nextEvidenceAt(LAST[snap.kind], h, readAt), h, rows: snap.rows.slice(0, 600) };
   ['folio', 'traces', 'tables', 'audit'].forEach(k => { if (snap[k]) LAST[snap.kind][k] = snap[k]; });
   saveLast();
   safe(() => remember(snap));

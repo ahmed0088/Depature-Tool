@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 608, items: ['Reopening HotelOps preserves the original evidence time of an unchanged cached Opera screen, so reconnecting an old Departures tab cannot reset a colleague’s confirmed extension.'] },
   { v: 607, items: [
     'The Departures board recognizes a saved checkout from a reservation search or refreshed list even if a colleague checked out an extended stay whose booked departure date is still later. No checkout click on your own PC is needed.',
     'Repeated copies of an old Departures screen no longer count as newer reservation evidence. Confirmed extensions shared from another desk retain their saved status until newer Opera data says otherwise.',
