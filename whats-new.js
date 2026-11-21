@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 611, items: [
+    'Monthly audit keeps separate Opera postings together when you verify that they belong to the same booking and day. A second charge cannot overwrite a different linked posting, and verified combined charges stay matched after refresh.',
+    'Amount differences on existing Reviewed sales can now be reviewed and corrected while preserving the seller. Reviewed revenue remains included in totals.',
+    'IN-Gauge-only sales and fully reversed Opera fees have a review-denial option. Confirm report coverage, check the guest bill and enter a reason before selecting a denial. Each selected change shows its effect on revenue; no records are changed until you apply your review.'
+  ] },
   { v: 610, items: [
     'The current departure queue follows a complete, unfiltered Opera Departures read for the linked hotel and day. Reservations that disappear move to Check Opera; their original records, notes and actual completed statuses are retained.',
     'Refreshing WhatsApp no longer adds unrelated in-house or arriving guests to today’s departures. The verified queue is shared across devices, and older chat messages cannot overwrite a newer Opera read.',

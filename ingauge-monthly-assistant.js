@@ -21,13 +21,22 @@
     if(first)output.verified.push(row);
     // Only an already-settled current sale can recover a previously verified bill link.
     // This cannot generate a missing sale, move a date, assign a seller or approve a request.
-    const proof=op.reconciliation,b=proof?.booking;
-    if(!['add','edit','approve'].includes(op.action)||!C.isRevenueStatus(live.status)||!b||proof.reviewed!==true||b.schema!==1||b.verified!==true||b.snapshotId!==plan.snapshotId||proof.snapshotId!==plan.snapshotId||b.confirmation!==live.confirmation||!C.sameBinding(b.binding,binding)||C.stable(b.period)!==C.stable(proof.period)||!proof.journalIds?.includes(b.transaction)||!C.day(b.arrival)||!C.day(b.departure)||b.arrival>b.departure)continue;
-    const raw=postings.get(b.transaction),day=raw&&dateOf(raw.BUSINESS_DATE),explicit=raw&&text(raw.CONFIRMATION_NO||raw.CONFIRMATION_NUMBER);if(!raw||postingSignature(raw)!==postingSignature(b.sourceSignature)||day!==b.day||day!==live.businessDate||explicit&&explicit!==live.confirmation||text(raw.CURRENCY1).toUpperCase()!==text(s.settings.currency).toUpperCase())continue;
-    const debit=C.cents(text(raw.CASHIER_DEBIT)||'0'),credit=C.cents(text(raw.CASHIER_CREDIT)||'0');if(debit===null||credit===null||debit-credit<=0||debit-credit!==live.totalCents||proof.journalCents!==live.totalCents)continue;
-    const known=reservations.filter(r=>text(r.CONFIRMATION_NO)===live.confirmation&&name(r.FULL_NAME));if(known.length&&!known.some(r=>name(r.FULL_NAME)===name(raw.GUEST_FULL_NAME)))continue;
-    const hint={transaction:b.transaction,sourceSignature:C.stable(raw),confirmation:live.confirmation,recordId:live.id,recordFingerprint:C.fingerprint(live),snapshotId:s.id,binding:C.binding(binding),day,arrival:live.arrival,departure:live.departure,tag:row.tag,at:row.at};
-    if(hints.has(b.transaction)&&hints.get(b.transaction).confirmation!==hint.confirmation){output.conflicts.push(b.transaction);continue;}hints.set(b.transaction,hint);
+    const proof=op.reconciliation,bookings=proof?.bookings||[proof?.booking].filter(Boolean);
+    if(!['add','edit','approve'].includes(op.action)||!C.isRevenueStatus(live.status)||!bookings.length||proof.reviewed!==true||proof.snapshotId!==plan.snapshotId)continue;
+    if(bookings.length>1&&(new Set(bookings.map(b=>b.transaction)).size!==bookings.length||bookings.length!==proof.journalIds?.length))continue;
+    const checked=[];let sourceTotal=0;
+    for(const b of bookings){
+     if(b.schema!==1||b.verified!==true||b.snapshotId!==plan.snapshotId||b.confirmation!==live.confirmation||!C.sameBinding(b.binding,binding)||C.stable(b.period)!==C.stable(proof.period)||!proof.journalIds?.includes(b.transaction)||!C.day(b.arrival)||!C.day(b.departure)||b.arrival>b.departure)break;
+     const raw=postings.get(b.transaction),day=raw&&dateOf(raw.BUSINESS_DATE),explicit=raw&&text(raw.CONFIRMATION_NO||raw.CONFIRMATION_NUMBER);if(!raw||postingSignature(raw)!==postingSignature(b.sourceSignature)||day!==b.day||day!==live.businessDate||explicit&&explicit!==live.confirmation||text(raw.CURRENCY1).toUpperCase()!==text(s.settings.currency).toUpperCase())break;
+     const debit=C.cents(text(raw.CASHIER_DEBIT)||'0'),credit=C.cents(text(raw.CASHIER_CREDIT)||'0');if(debit===null||credit===null||debit-credit<=0)break;
+     const known=reservations.filter(r=>text(r.CONFIRMATION_NO)===live.confirmation&&name(r.FULL_NAME));if(known.length&&!known.some(r=>name(r.FULL_NAME)===name(raw.GUEST_FULL_NAME)))break;
+     sourceTotal+=debit-credit;checked.push({b,raw,day});
+    }
+    if(checked.length!==bookings.length||sourceTotal!==live.totalCents||proof.journalCents!==live.totalCents)continue;
+    for(const {b,raw,day}of checked){
+     const hint={transaction:b.transaction,sourceSignature:C.stable(raw),confirmation:live.confirmation,recordId:live.id,recordFingerprint:C.fingerprint(live),snapshotId:s.id,binding:C.binding(binding),day,arrival:live.arrival,departure:live.departure,tag:row.tag,at:row.at};
+     if(hints.has(b.transaction)&&hints.get(b.transaction).confirmation!==hint.confirmation){output.conflicts.push(b.transaction);continue;}hints.set(b.transaction,hint);
+    }
    }
   }
   for(const [tx,hint]of hints)if(!output.conflicts.includes(tx))output.bookings[tx]=hint;

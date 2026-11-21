@@ -76,6 +76,8 @@ jobs:
           node tests/ingauge-reconciliation.browser.test.js
           node tests/ingauge-booking-choice.test.js
           node tests/ingauge-booking-choice.browser.test.js
+          node --test tests/ingauge-mercure-reconciliation.test.js
+          node tests/ingauge-mercure.browser.test.js
 
       - name: Accor enrollment country and result checks
         run: |
