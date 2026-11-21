@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 609, items: [
+    'Fixed the phone Departures toolbar: Sort stays horizontal and opens the searchable menu instead of squeezing Smart into a tall vertical strip.',
+    'Compact and comfortable room views now keep Check out readable and show six labelled secondary actions in a phone-sized grid. Notes and Guest said menus keep their intended space and visibility.',
+    'Phone dropdown replacements respect controls hidden by responsive CSS and update when the layout or screen size changes. The fix covers cards and list views across themes.'
+  ] },
   { v: 608, items: ['Reopening HotelOps preserves the original evidence time of an unchanged cached Opera screen, so reconnecting an old Departures tab cannot reset a colleague’s confirmed extension.'] },
   { v: 607, items: [
     'The Departures board recognizes a saved checkout from a reservation search or refreshed list even if a colleague checked out an extended stay whose booked departure date is still later. No checkout click on your own PC is needed.',
