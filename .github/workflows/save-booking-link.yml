@@ -1,0 +1,22 @@
+name: Save owner-confirmed booking link
+on:
+  push:
+    branches: ['fix/reviewed-booking-link-20261121']
+    paths: ['scripts/save-booking-link.cjs', '.github/workflows/save-booking-link.yml']
+permissions:
+  contents: read
+jobs:
+  save:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Save the explicitly reviewed reporting identity only
+        run: node scripts/save-booking-link.cjs
+        env:
+          HOTELOPS_HOTEL: ibis_dubai
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
