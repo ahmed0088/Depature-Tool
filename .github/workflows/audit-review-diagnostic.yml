@@ -1,4 +1,4 @@
-name: Audit review saved-run diagnosis
+name: Mercure audit saved-run diagnosis
 on:
   push:
     branches: ['diagnose/audit-review-20261121']
