@@ -64,7 +64,7 @@ function gpNormEmail(raw) {
 function gpLogKey(email) { return String(email || '').toLowerCase().replace(/[.#$\[\]\/@]/g, '_'); }
 function gpReviewKey(r) { return JSON.stringify([typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '', r.conf, r.name, r.email, r.phone, r.nat]); }
 function gpCountryMissing(r) { return !String(r.nat || '').trim() || /^(unknown|n\/a|none|not (provided|given|known)|no nationality|-+)$/i.test(String(r.nat).trim()); }
-function gpCloudSelection() { const selected=gpEnrollRows().filter(r=>!r.member);return {rows:selected,held:[],fallback:selected.filter(gpCountryMissing)}; }
+function gpCloudSelection() { const selected=gpEnrollRows().filter(r=>!r.member),counts=new Map();if(typeof GP_SOURCE!=='undefined'&&GP_SOURCE==='excel')selected.forEach(r=>counts.set(r.email,(counts.get(r.email)||0)+1));const held=selected.filter(r=>counts.get(r.email)>1),rows=selected.filter(r=>!held.includes(r));return {rows,held,fallback:rows.filter(gpCountryMissing)}; }
 
 function gpParse(text) {
   const lines = String(text || '').split(/\r?\n/).filter(l => l.trim());
@@ -151,8 +151,8 @@ function gpClear() {
 function gpSaveDraft() {
   try {
     const d = {};
-    gpRows.forEach(r => { if (r.civility || r.consent || r.reviewed) d[r.conf] = { reviewKey:r.reviewKey||gpReviewKey(r),civility: r.civility, consent: r.consent, civSrc: r.civSrc || '',...(r.reviewed?{details:{name:r.name,email:r.email,phone:r.phone,nat:r.nat}}:{}) }; });
-    localStorage.setItem(GP_DRAFT_KEY, JSON.stringify(d));
+    gpRows.forEach(r => { if (r.civility || r.consent || r.reviewed) d[GP_SOURCE==='excel'?r.excelId:r.conf] = { reviewKey:r.reviewKey||gpReviewKey(r),civility: r.civility, consent: r.consent, civSrc: r.civSrc || '',...(r.reviewed?{details:{name:r.name,email:r.email,phone:r.phone,nat:r.nat}}:{}) }; });
+    localStorage.setItem(gpActiveDraftKey(), JSON.stringify(d));
   } catch (_) {}
 }
 
@@ -217,7 +217,7 @@ const GP_FLAG = {
 
 function gpTracked(r) { return r.email ? gpLog[gpLogKey(r.email)] : null; }
 
-function gpEligible(r) { return r.email && r.flag !== 'dup' && r.flag !== 'invalid'; }
+function gpEligible(r) { return r.email && !r.enrolHold && r.flag !== 'dup' && r.flag !== 'invalid'; }
 
 function gpRenderSummary() {
   const box = document.getElementById('gpSummary');
@@ -368,18 +368,22 @@ async function gpAccCloudRestart() {
     showToast('☁️ Enrolment started again', 'ok');
   } catch (e) { showToast(e.message, 'err'); }
 }
+let gpAccStarting=false;
 async function gpAccCloudEnroll(test) {
+  if(gpAccStarting)return;
+  if(GP_SOURCE==='excel'&&GP_ACC.live?.state==='run'&&Date.now()-(GP_ACC.live.at||0)<4*3600000){showToast('An enrolment run is active. Open Run progress or wait for it to finish.','info');gpAccorRunWin(true);return;}
   const {rows} = gpCloudSelection(); if (!rows.length) { showToast('Tick Agreed and choose a civility first', 'err'); return; }
   const url = (document.getElementById('gpAccorUrl')?.value || '').trim();
   if (!gpValidAccorUrl(url)) { showToast('Enter a valid HTTPS enrolment link on secure.guestinternet.com first', 'err'); return; }
+  const sourceIssue=gpExcelDestinationIssue(url);if(sourceIssue){gpVerifyExcelDestination(false);showToast(sourceIssue,'err');return;}
   const destination=window.GPEnrollmentLinks?.selected(url),portalName=destination?.name||'';
-  if (!test && !confirm(`Run the cloud enrolment for ${rows.length} ready guest(s)${portalName?' · '+portalName:''}? Only guests marked Agreed will be sent. UAE is used if a country is missing or unavailable in the portal.`)) return;
-  gpCloudTag = 'acc' + Date.now().toString(36); const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
+  if (!test && !confirm(`Run the cloud enrolment for ${rows.length} ready guest(s)${portalName?' · '+portalName:''}${GP_SOURCE==='excel'?' · Guests from '+GP_EXCEL_CONTEXT.hotel:''}? Only guests marked Agreed will be sent. UAE is used if a country is missing or unavailable in the portal.`)) return;
+  gpAccStarting=true;gpCloudTag = 'acc' + Date.now().toString(36); const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
   gpSaveAccorUrl(url);
   try {
-    await fbSet('enrollJob', { tsv: gpEnrollTsv(rows, true), n: rows.length, at: Date.now(), by: (currentProfile && currentProfile.name) || '', test: !!test, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url,portalName });
+    await fbSet('enrollJob', { tsv: gpEnrollTsv(rows, true), n: rows.length, at: Date.now(), by: (currentProfile && currentProfile.name) || '', test: !!test, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url,portalName,...(GP_SOURCE==='excel'?{source:'excel',sourceInfo:{fileId:GP_EXCEL_CONTEXT.fileId,fileName:GP_EXCEL_CONTEXT.fileName,sheet:GP_EXCEL_CONTEXT.sheet,hotel:GP_EXCEL_CONTEXT.hotel,from:GP_EXCEL_CONTEXT.from,to:GP_EXCEL_CONTEXT.to}}:{}) });
     await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Starting the cloud enrolment…', con: [] });
-    try { if (window.hoRuns) window.hoRuns.start('enrol', gpCloudTag, { hotel: (document.getElementById('hotelName') || {}).textContent || '', n: rows.length, test: !!test, how: 'cloud' }); } catch (_) {}
+    try { if (window.hoRuns) window.hoRuns.start('enrol', gpCloudTag, { hotel: GP_SOURCE==='excel'?GP_EXCEL_CONTEXT.hotel:(document.getElementById('hotelName') || {}).textContent || '', n: rows.length, test: !!test, how: 'cloud' }); } catch (_) {}
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: test ? '1' : '', tag: gpCloudTag, hid, portal_url: url } }) });
     GP_ACC.at = Date.now(); GP_ACC.cat = '';
     gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'GitHub accepted the run · waiting for a cloud computer…', con: [{ t: Date.now(), g: 'GH', m: 'Run requested from HotelOps · ' + rows.length + ' guest(s) who agreed' }] });
@@ -388,6 +392,7 @@ async function gpAccCloudEnroll(test) {
     showToast((test ? '🧪 Test started — nothing will be submitted' : '☁️ Enrolment started'), 'ok');
   } catch (e) { showToast(e.message, 'err'); gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'error', step: 'error', note: e.message, con: [{ t: Date.now(), g: 'ERR', m: e.message }] });
     try { await fbUpdate('enrollLive', { at: Date.now(), state: 'error', step: 'error', tag: gpCloudTag, note: 'Not started: ' + e.message }); } catch (_) {} }   // every device (and 🗂 Runs) sees it stopped
+  finally{gpAccStarting=false;}
 }
 // GitHub's side of the run (queued / running / failed): kept apart from the robot's own report (enrollLive),
 // so a GitHub status never wipes the robot's console. Both are merged by gpCloudPaint.
@@ -440,6 +445,27 @@ function gpAgentPaint(a) {
 // Guest Pipeline page (it is the same list): no e-mail / duplicate / already enrolled / ALL member → can't be ticked.
 let GP_SOURCE = '';
 const GP_REVIEW_DRAFTS = new Map();
+let GP_EXCEL_CONTEXT=null,GP_EXCEL_RETURN=null;
+function gpActiveDraftKey(){return GP_SOURCE==='excel'&&GP_EXCEL_CONTEXT?'gp_excel_draft_v1:'+JSON.stringify([GP_EXCEL_CONTEXT.scope,GP_EXCEL_CONTEXT.fileId,GP_EXCEL_CONTEXT.sheet,GP_EXCEL_CONTEXT.from,GP_EXCEL_CONTEXT.to]):GP_DRAFT_KEY;}
+function gpExcelDestinationIssue(url){if(GP_SOURCE!=='excel')return '';if(!GP_EXCEL_CONTEXT||GP_EXCEL_CONTEXT.scope!==(typeof HOTEL_ID!=='undefined'?String(HOTEL_ID||''):''))return 'The workspace changed. Reopen the Excel guest list before enrolling.';return GP_EXCEL_CONTEXT.verifiedUrl===url?'':'Confirm that this enrolment link belongs to '+GP_EXCEL_CONTEXT.hotel+' before starting.';}
+function gpVerifyExcelDestination(on){if(!GP_EXCEL_CONTEXT)return;const url=String(document.getElementById('gqUrl')?.value||'').trim();GP_EXCEL_CONTEXT.verifiedUrl=on&&gpValidAccorUrl(url)?url:'';const check=document.getElementById('gqExcelDestination');if(check)check.checked=!!GP_EXCEL_CONTEXT.verifiedUrl;}
+function gpReviewExcelGuests(rows,meta){
+  gpQuickClose();
+  GP_EXCEL_RETURN={rows:gpRows,source:GP_SOURCE,input:document.getElementById('gpInput')?.value||'',drafts:new Map(GP_REVIEW_DRAFTS)};
+  GP_EXCEL_CONTEXT={...meta,verifiedUrl:''};GP_SOURCE='excel';GP_REVIEW_DRAFTS.clear();
+  gpRows=rows.map(r=>({...r,excelId:r.id,consent:false,civility:'',given:r.title||'',reviewKey:JSON.stringify([meta.scope,'excel',meta.fileId,meta.sheet,r.id,r.conf,r.name,r.email,r.phone,r.nat])}));
+  try{const saved=JSON.parse(localStorage.getItem(gpActiveDraftKey())||'{}');for(const r of gpRows){const old=saved[r.excelId];if(old?.reviewKey!==r.reviewKey)continue;if(old.details){const e=gpNormEmail(old.details.email);if(e.email&&!['invalid','ota','no-email'].includes(e.flag)&&String(old.details.name||'').trim())Object.assign(r,old.details,{email:e.email,reviewed:true});}r.civility=old.civility||'';r.civSrc=old.civSrc||'';r.consent=!!old.consent;}}catch(_){}
+  gpAutoTitles();gpQuickShow();
+}
+function gpQuickClose(){
+  document.getElementById('gpQuick')?.classList.remove('on');
+  if(!GP_EXCEL_RETURN)return;
+  gpSaveDraft();const same=GP_EXCEL_CONTEXT?.scope===(typeof HOTEL_ID!=='undefined'?String(HOTEL_ID||''):'');
+  gpRows=same?GP_EXCEL_RETURN.rows:[];GP_SOURCE=same?GP_EXCEL_RETURN.source:'';
+  const input=document.getElementById('gpInput');if(input)input.value=same?GP_EXCEL_RETURN.input:'';
+  GP_REVIEW_DRAFTS.clear();if(same)for(const [k,v]of GP_EXCEL_RETURN.drafts)GP_REVIEW_DRAFTS.set(k,v);
+  GP_EXCEL_CONTEXT=GP_EXCEL_RETURN=null;gpRender();window.GPExcelEnrollment?.refresh();
+}
 function gpReviewEditor(r,i) {
   if(r.member || r.flag==='dup' || (gpTracked(r)&&GP_DONE_RE.test(gpTracked(r).status)))return '';
   const field=(key,label,type='text')=>`<label><span>${label}</span><input data-gq-field="${key}" type="${type}" value="${escapeHtml(r[key]||'')}" maxlength="${key==='email'?254:120}" ${key==='email'?'autocapitalize="none" spellcheck="false"':''}></label>`;
@@ -479,6 +505,7 @@ function gpEnrollFromPurpose() {
     'No guests with a usable e-mail yet. Upload the Purpose of Stay sheet (it needs an Email column) first.');
 }
 function gpQuickEnroll(cards, source) {
+  if(GP_EXCEL_RETURN)gpQuickClose();
   GP_SOURCE = source || '';
   const c = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
   const list = (cards || []).filter(r => r && r.conf);
@@ -497,7 +524,10 @@ function gpQuickShow() {
     w = document.createElement('div'); w.id = 'gpQuick'; w.className = 'gp-accor-modal';
     w.innerHTML = '<div class="gp-accor-modal-bg" data-gq-close="1"></div><section class="gp-accor-modal-card gq-card" role="dialog" aria-modal="true" aria-label="Enrol guests"><header class="gp-accor-modal-h"><span class="gp-accor-modal-ic">✍️</span><div><b>Enrol guests</b><small id="gqSub"></small></div><button type="button" class="gp-accor-modal-x" data-gq-close="1" aria-label="Close">✕</button></header><div class="gp-accor-modal-b" id="gqBody"></div><footer class="gq-foot" id="gqFoot"></footer></section>';
     document.body.appendChild(w);
-    w.addEventListener('click', e => { if (e.target.closest('[data-gq-close]')) w.classList.remove('on'); });
+    w.addEventListener('click', e => { if (e.target.closest('[data-gq-close]')) gpQuickClose(); });
+    w.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();gpQuickClose();}});
+    w.addEventListener('change',e=>{if(GP_SOURCE==='excel'&&['gqUrl','gqPortalSelect'].includes(e.target.id))gpVerifyExcelDestination(false);});
+    w.addEventListener('input',e=>{if(GP_SOURCE==='excel'&&e.target.id==='gqUrl')gpVerifyExcelDestination(false);});
   }
   w.classList.add('on'); gpQuickPaint();
 }
@@ -511,11 +541,11 @@ function gpQuickPaint() {
   let url = ''; try { url = (document.getElementById('gqUrl')||document.getElementById('gpAccorUrl') || {}).value || gpLoadAccorUrl(); } catch (_) {}
   gpAutoTitles();
   const sub = document.getElementById('gqSub'); if (sub) sub.textContent = can.length + ' guest' + (can.length === 1 ? '' : 's') + ' can be enrolled · tick only the ones who said YES · titles fill themselves';
-  const srcNote = GP_SOURCE === 'opera' ? `<div class="gq-src">📡 These came from the <b>Opera reader</b> (guests you opened with a real e-mail). Opera does not know who agreed to join ALL — tick only the guests who actually said yes.</div>`
+  const srcNote = GP_SOURCE === 'excel'&&GP_EXCEL_CONTEXT?`<div class="gq-src"><b>Excel · ${escapeHtml(GP_EXCEL_CONTEXT.hotel)}</b><br>${escapeHtml(GP_EXCEL_CONTEXT.fileName)} · ${escapeHtml(GP_EXCEL_CONTEXT.sheet)}${GP_EXCEL_CONTEXT.from||GP_EXCEL_CONTEXT.to?' · '+escapeHtml(GP_EXCEL_CONTEXT.from||'start')+' → '+escapeHtml(GP_EXCEL_CONTEXT.to||'end'):' · All dates'}<br>Only this Excel list is being reviewed. Tick Agreed for the guests who said yes.</div>`:GP_SOURCE === 'opera' ? `<div class="gq-src">📡 These came from the <b>Opera reader</b> (guests you opened with a real e-mail). Opera does not know who agreed to join ALL — tick only the guests who actually said yes.</div>`
     : GP_SOURCE === 'sheet' ? `<div class="gq-src">📄 From the <b>uploaded sheet</b> (guests with an e-mail). Check the guest details and tick only the guests who agreed to join ALL.</div>`
     : GP_SOURCE === 'neorcha' ? `<div class="gq-src">🪪 From the <b>Neorcha cards</b>. Tick only the guests who agreed to join ALL.</div>` : '';
   const portalPicker=window.GPEnrollmentLinks?GPEnrollmentLinks.html('gq',url):`<label class="gq-url"><span>🔗 Enrolment portal link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>`;
-  body.innerHTML = `${srcNote}<div class="gq-src">Country: keep the matching source country; use <b>UAE</b> if it is missing or unavailable in the portal. Fallbacks are marked in the results.</div>${portalPicker}
+  body.innerHTML = `${srcNote}<div class="gq-src">Country: keep the matching source country; use <b>UAE</b> if it is missing or unavailable in the portal. Fallbacks are marked in the results.</div>${portalPicker}${GP_SOURCE==='excel'?'<label class="gex-destination"><input type="checkbox" id="gqExcelDestination" '+(GP_EXCEL_CONTEXT.verifiedUrl&&GP_EXCEL_CONTEXT.verifiedUrl===String(url).trim()?'checked':'')+' onchange="gpVerifyExcelDestination(this.checked)"><span>I checked that this enrolment link belongs to <b>'+escapeHtml(GP_EXCEL_CONTEXT.hotel)+'</b>.</span></label>':''}
     ${can.length ? `<div class="gq-bar"><span>Tap a guest to tick them</span><button type="button" class="btn sm" onclick="gpQuickAll(${can.every(([r]) => r.consent) ? 'false' : 'true'})">${can.every(([r]) => r.consent) ? '✕ Untick all' : '✓ Tick all'}</button></div><div class="gq-list">${can.map(([r, i]) => `<div class="gq-row${r.consent ? ' on' : ''}" onclick="if(!event.target.closest('.gq-title,input,label,button,details,summary'))gpQuickTick(${i})">
       <label class="gq-yes"><input type="checkbox" ${r.consent ? 'checked' : ''} onchange="gpSet(${i},'consent',this.checked);gpQuickPaint()"><span>Agreed</span></label>
       <div class="gq-who"><b>${escapeHtml(r.name || '—')}</b><small>${r.room ? 'Room ' + escapeHtml(r.room) + ' · ' : ''}${escapeHtml(r.email)}${r.phone ? ' · 📞' : ''}${r.nat ? ' · ' + escapeHtml(r.nat) : ''}</small>${gpTracked(r) ? `<small class="gq-last">Last try ${escapeHtml(gpTracked(r).date || '')}: ${escapeHtml(gpTryWords(gpTracked(r).status))}${gpCountryWords(gpTracked(r))?'<br>'+escapeHtml(gpCountryWords(gpTracked(r))):''}</small>` : ''}</div>
@@ -523,8 +553,8 @@ function gpQuickPaint() {
       : '<div class="acr-empty">None of these guests can be enrolled (no e-mail, already members or already enrolled).</div>'}
     ${off.length ? `<details class="gq-off"><summary>${off.length} guest${off.length === 1 ? '' : 's'} left out</summary>${off.map(r => `<div><b>${escapeHtml(r.name || r.conf)}</b> · ${escapeHtml(why(r))}${gpReviewEditor(r,gpRows.indexOf(r))}</div>`).join('')}</details>` : ''}`;
   const selection=gpCloudSelection(),ready = selection.rows.filter(r => !r.member), ticked = can.filter(([r]) => r.consent).length, noCiv = can.filter(([r]) => r.consent && !r.civility).length;
-  if (foot) foot.innerHTML = `<div class="gq-count"><b>${ready.length}</b> ready${selection.fallback.length?` · <span class="gq-warn">${selection.fallback.length} use UAE fallback</span>`:''}${noCiv ? ` · <span class="gq-warn">${noCiv} ticked without Mr/Ms</span>` : ''}${!ticked ? ' · tick who said yes' : ''}</div>
-    <button type="button" class="btn" onclick="gpQuickGo(true)"${ready.length ? '' : ' disabled'}>🧪 Test</button><button type="button" class="btn gold" onclick="gpQuickGo(false)"${ready.length ? '' : ' disabled'}>☁️ Enroll ${ready.length || ''} guest${ready.length === 1 ? '' : 's'}</button>`;
+  if (foot) foot.innerHTML = `<div class="gq-count"><b>${ready.length}</b> ready${selection.fallback.length?` · <span class="gq-warn">${selection.fallback.length} use UAE fallback</span>`:''}${selection.held.length?` · <span class="gq-warn">${selection.held.length} share an email · review the recipient</span>`:''}${noCiv ? ` · <span class="gq-warn">${noCiv} ticked without Mr/Ms</span>` : ''}${!ticked ? ' · tick who said yes' : ''}</div>
+    ${GP_SOURCE==='excel'?'':`<button type="button" class="btn" onclick="gpQuickGo(true)"${ready.length ? '' : ' disabled'}>🧪 Test</button>`}<button type="button" class="btn gold" onclick="gpQuickGo(false)"${ready.length ? '' : ' disabled'}>☁️ Enroll ${ready.length || ''} guest${ready.length === 1 ? '' : 's'}</button>`;
   body.querySelectorAll('details[data-gq-review]').forEach(editor=>{const r=gpRows[+editor.dataset.gqReview],draft=r&&GP_REVIEW_DRAFTS.get(r.reviewKey);if(draft){editor.open=true;editor.querySelectorAll('[data-gq-field]').forEach(el=>{if(el.dataset.gqField in draft)el.value=draft[el.dataset.gqField];});}});
   body.scrollTop=scroll;
 }
@@ -541,7 +571,7 @@ async function gpQuickGo(test) {
   if (gpRows.some(r => r.member && r.consent)) gpRows.forEach(r => { if (r.member) r.consent = false; });
   const w = document.getElementById('gpQuick');
   const before = GP_ACC.at; await gpAccCloudEnroll(test);
-  if (GP_ACC.at !== before && w) w.classList.remove('on');
+  if (GP_ACC.at !== before && w) gpQuickClose();
 }
 // ── 📡 the live window (same look and feel as the Neorcha cloud run) ──
 const GP_ACC_STEPS = [['gh', '🖥️', 'Start a GitHub computer'], ['open', '🌐', 'Open the enrolment portal'], ['worker', '🤖', 'Start the enrollment robot'], ['enroll', '✍️', 'Enroll the guests who agreed'], ['save', '💾', 'Save the results in HotelOps']];
@@ -777,7 +807,7 @@ function gpAgentBeat() {
 // ── Enrollment tracker (shared via Firebase) ──────────────
 async function gpLoadLog() {
   try { gpLog = (typeof fbGet === 'function' ? await fbGet('enrollLog') : null) || {}; } catch (_) { gpLog = {}; }
-  gpRenderTracker(); gpRender();
+  gpRenderTracker(); gpRender();window.GPExcelEnrollment?.refresh();
 }
 
 async function gpImportResults() {

@@ -39,7 +39,7 @@ function showPanel(name) {
   // Read history every time Trends is opened, so a run in another panel shows up without a reload.
   if (name === 'trends' && typeof trLoad === 'function') trLoad();
   if (name === 'adagio' && typeof window._adgBoot === 'function') window._adgBoot();
-  if (name === 'pipeline' && typeof gpLoadLog === 'function') gpLoadLog();
+  if (name === 'pipeline') { if (typeof gpLoadLog === 'function') gpLoadLog(); window.GPExcelEnrollment?.mount(); }
   if (name === 'home' && typeof homeRender === 'function') homeRender();
   if (name === 'history' && typeof histLoad === 'function') histLoad();
   if (name === 'settings' && typeof hoSettingsRender === 'function') hoSettingsRender();
@@ -668,7 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v611';
+const APP_VERSION = 'v612';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: '22'
       - name: Audit parser dependency
-        run: npm install --no-save --no-audit --no-fund graphql@16.11.0 playwright-core@1.49.1
+        run: npm install --no-save --no-audit --no-fund graphql@16.11.0 playwright-core@1.49.1 xlsx@0.18.5
       - name: Syntax check every script
         run: for f in *.js scripts/*.js tests/*.js; do node --check "$f"; done
       - name: Regression tests
@@ -78,6 +78,8 @@ jobs:
           node tests/ingauge-booking-choice.browser.test.js
           node --test tests/ingauge-mercure-reconciliation.test.js
           node tests/ingauge-mercure.browser.test.js
+          node --test tests/ingauge-confirmation-links.test.js
+          node tests/ingauge-confirmation-links.browser.test.js
 
       - name: Accor enrollment country and result checks
         run: |
@@ -92,6 +94,8 @@ jobs:
           node tests/accor-progress.browser.test.js
           node tests/enrolment-links.test.js
           node tests/enrolment-links.browser.test.js
+          node --test tests/enrolment-excel.test.js
+          node tests/enrolment-excel.browser.test.js
 
       - name: Purpose report business day and referral column
         run: |

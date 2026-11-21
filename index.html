@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v611"/>
+<meta name="ho-version" content="v612"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -320,6 +320,7 @@
 <link rel="stylesheet" href="ingauge-workspace.css"/>
 <link rel="stylesheet" href="ingauge-month-close.css"/>
 <link rel="stylesheet" href="backtrack.css"/>
+<link rel="stylesheet" href="enrolment-excel.css"/>
 </head>
 <body>
 
@@ -537,7 +538,7 @@
        with Ctrl/Cmd+Shift+M (see the keydown handler further down), or the
        panel is still addressable directly via showPanel('guestmem'). -->
   <div class="nav-item" onclick="showPanel('pipeline')" id="nav-pipeline" data-panel="pipeline">
-    <div class="nav-icon">🧲</div>Guest Pipeline
+    <div class="nav-icon">🧲</div>Guest enrolment
     <span class="nav-badge" id="badge-pipeline">—</span>
   </div>
   <div class="nav-item" onclick="showPanel('standards')" id="nav-standards" data-panel="standards">
@@ -1529,11 +1530,17 @@
   <div style="max-width:1200px;">
     <div class="page-hd">
       <div class="page-hd-left">
-        <h1>Guest Pipeline</h1>
-        <p>Neorcha guest emails → clean list → Purpose of Stay and guest enrolment · everything in one place</p>
+        <h1>Guest enrolment</h1>
+        <p>Choose Neorcha / Opera or upload an Excel guest list. Use your hotel’s enrolment link and review the guests before running.</p>
       </div>
     </div>
 
+    <nav class="gex-tabs" role="tablist" aria-label="Guest list source">
+      <button type="button" role="tab" id="gpSourceNeorcha" data-gp-source="neorcha" aria-controls="gpNeorchaSource" aria-selected="true">Neorcha / Opera<span>Ibis · Mercure</span></button>
+      <button type="button" role="tab" id="gpSourceExcel" data-gp-source="excel" aria-controls="gpExcel" aria-selected="false">Excel guest list<span>Adagio · other hotels</span></button>
+    </nav>
+    <section id="gpExcel" role="tabpanel" aria-labelledby="gpSourceExcel" hidden></section>
+    <section id="gpNeorchaSource" role="tabpanel" aria-labelledby="gpSourceNeorcha">
     <details class="howto"><summary>❔ How to use this</summary>
       <p style="margin:0 0 6px;">This page runs the daily guest-email routine in four steps. You do them in order, top to bottom:</p>
       <ol>
@@ -1598,6 +1605,8 @@
         </div>
       </div>
     </div>
+
+    </section>
 
     <!-- STEP 4 -->
     <div class="card gp-step">
@@ -4477,7 +4486,7 @@ function mobMoreFilter(q) {
   document.querySelectorAll('#mobMoreDrawer .mob-more-item').forEach(b => {
     if (b.id === 'mobAdminBtn' && b.dataset.hiddenByRole !== undefined) return;
     const KW = { dtcm: 'td tourism dirham recon reconcile dtcm xml', tourism: 'td tourism dirham portal date', 'td-audit': 'td 30 nights cap long stay',
-      purpose: 'purpose stay email nationality origin', pipeline: 'neorcha email all enroll scraper loyalty', noshow: 'no show na40 pdf',
+      purpose: 'purpose stay email nationality origin', pipeline: 'neorcha excel adagio spreadsheet email all enroll scraper loyalty', noshow: 'no show na40 pdf',
       immig: 'immigration passport police', 'inhouse-tally': 'vicas inhouse in-house', audit: 'pm rooms night audit excel',
       standards: 'accor standards help guide all loyalty rules', history: 'history log audit who did what activity', roster: 'roster rota schedule my shifts day off who is working staff week', settings: 'settings options preferences hide show theme text size menu', learn: 'learn guide training help tutorial new staff how to', rent: 'rented rooms beds', xref: 'extension arrivals departures',
       nationality: 'country nationality report', adagio: 'long stay collections balance cheque', trends: 'month charts history',
@@ -5360,7 +5369,7 @@ async function appInit() {
       <span class="mob-item-icon">🎁</span>Package Audit
     </button>
     <button class="mob-more-item" data-panel="pipeline"       onclick="showPanel('pipeline');closeMobMore()">
-      <span class="mob-item-icon">🧲</span>Guest Pipeline
+      <span class="mob-item-icon">🧲</span>Guest enrolment
     </button>
     <button class="mob-more-item" data-panel="standards"      onclick="showPanel('standards');closeMobMore()">
       <span class="mob-item-icon">📘</span>Standards
@@ -5583,6 +5592,7 @@ async function appInit() {
 <script src="accor-standards.js"></script>
 <script src="enrolment-links.js"></script>
 <script src="guest-pipeline.js"></script>
+<script src="enrolment-excel.js"></script>
 <script src="found-web.js"></script>
 <script src="stratum-fx.js"></script>
 <script src="run-dock.js"></script>

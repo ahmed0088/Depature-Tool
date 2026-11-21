@@ -40,7 +40,7 @@
    if(explicit)candidates=candidates.filter(r=>r.conf===explicit);
    if(candidates.length>1&&automatic&&['BB','ROOM','DIN','HB','FB'].includes(f)){const nights=unique(rows.filter(r=>day<r.departure));if(nights.length===1){candidates=nights;basis='Automatic night posting: exact guest/room and arrival ≤ posting date < departure';}}
    const historical=A?.booking(input.historyBookings,j,s,reportDate);
-   if(historical&&(!explicit||explicit===historical.confirmation)){const live=s.records.find(r=>r.id===historical.recordId),product=s.products.find(p=>p.id===live.productId);if((C.kind(live.product)||C.kind(product?.name)||C.kind(product?.code))===f){candidates=[{conf:historical.confirmation,arrival:historical.arrival,departure:historical.departure,room:room(j.ROOM),roomType:''}];basis='Previously verified bill link; current IN-Gauge record still matches the saved review';}}
+   if(historical&&(!explicit||explicit===historical.confirmation)){if(historical.kind==='reviewer-confirmed'){candidates=[{conf:historical.confirmation,arrival:historical.arrival,departure:historical.departure,room:room(j.ROOM),roomType:''}];basis='Confirmation supplied and verified by the reviewer for this exact Opera posting';}else{const live=s.records.find(r=>r.id===historical.recordId),product=s.products.find(p=>p.id===live.productId);if((C.kind(live.product)||C.kind(product?.name)||C.kind(product?.code))===f){candidates=[{conf:historical.confirmation,arrival:historical.arrival,departure:historical.departure,room:room(j.ROOM),roomType:''}];basis='Previously verified bill link; current IN-Gauge record still matches the saved review';}}}
    const verified=[input.reviewedBooking,...(input.reviewedBookings||[])].filter(Boolean).find(b=>b.transaction===tx);
    if(verified?.transaction===tx){
     if(verified.schema!==1||verified.verified!==true||verified.snapshotId!==s.id||!C.sameBinding(verified.binding,s.binding)||C.stable(verified.period)!==C.stable(period)||verified.sourceSignature!==signature||!/^\d{1,24}$/.test(verified.confirmation)||!C.day(verified.arrival)||!C.day(verified.departure)||verified.arrival>verified.departure||explicit&&explicit!==verified.confirmation)throw Error('The booking evidence changed. Check the confirmation against the current Opera posting again.');
@@ -63,6 +63,13 @@
    if(records.length>1){make('duplicate',posts,records,'This one-off fee has one Opera posting and several approved/reviewed/pending IN-Gauge entries.','Check the guest bill. Choose one entry to keep at the posted amount; review each extra entry before denying it.',{canReview:true});consumed.add(key(p.conf,p.family,p.day));}
    else if(records.length===1&&records[0].businessDate!==p.day){make('date',posts,records,'The same one-off fee exists under another business date.','Review the posting date and amount on the existing entry; do not add another request.',{canReview:true});consumed.add(key(p.conf,p.family,p.day));}
    else if(!records.length&&all.some(r=>!C.withinPeriod(r.businessDate,period)&&!['PURGED','DELETED'].includes(r.status))){make('held',posts,[],'This one-off product already exists outside the selected posting period.','Check the existing request and bill. An older completed sale must not be edited or duplicated from this period.',{canReview:false});consumed.add(key(p.conf,p.family,p.day));}
+  }
+  const dated=new Map();for(const posts of groups.values()){const p=posts[0];if(['EC','LC'].includes(p.family))continue;const k=key(p.conf,p.family);if(!dated.has(k))dated.set(k,[]);dated.get(k).push(...posts);}
+  for(const [k,posts]of dated){
+   if(posts.length!==1)continue;const p=posts[0],records=(allByConfFamily.get(k)||[]).filter(r=>C.withinPeriod(r.businessDate,period)&&C.scopeAllows(scope,C.saleCategory(r))&&(C.isRevenueStatus(r.status)||r.status==='PENDING'));
+   if(records.length!==1||records[0].businessDate===p.day||records[0].totalCents!==p.cents||p.cents<=0||p.currency!==text(s.settings.currency).toUpperCase())continue;
+   const r=records[0];if((recordsByTransaction.get(p.id)||[]).some(linked=>linked.id!==r.id)||C.journalIds(r.memo).some(tx=>tx!==p.id))continue;
+   make('date',posts,records,'The same booking and product has one Opera charge and one IN-Gauge entry for the same amount, on different business dates.','Confirm the posting date on the Opera bill. Move the existing entry to '+p.day+' through the reviewed automation; preserve its seller and do not add another sale.',{canReview:true});consumed.add(key(p.conf,p.family,p.day));
   }
   for(const [k,posts] of groups){
    if(consumed.has(k))continue;const p=posts[0],records=confRecords.get(k)||[],unknown=unknownByDay.get(key(p.conf,p.day))||[],net=sum(posts,'cents');
@@ -135,10 +142,10 @@
   const extraIds=[...new Set(choice.additionalTransactions||[])];if(extraIds.some(id=>!details.relatedPostings.some(p=>p.id===id)))throw Error('The related postings changed. Check the booking and bill again.');
   const proofs=[proof,...extraIds.map(transaction=>{const raw=input.journal.find(j=>text(j.TRX_NO)===transaction);return {...proof,transaction,sourceSignature:C.stable(raw)};})];
   const result=analyse({...input,reviewedBookings:proofs}),found=result.cases.filter(c=>c.posts.some(post=>post.id===p.id));
-  if(!result.ready)throw Error(result.reason);if(!found.length)return {settled:true,details,proof,note:'This confirmation already has a matching approved or reviewed sale. No addition is needed.'};
+  if(!result.ready)throw Error(result.reason);if(!found.length)return {settled:true,details,proof,proofs,note:'This confirmation already has a matching approved or reviewed sale. No addition is needed.'};
   if(found.length!==1)throw Error('Several billing cases need checking. Review the source postings before selecting a change.');
   const item={...found[0],key:caseKey,bookingReview:proof,bookingReviews:proofs};item.reason+=' Confirmation '+proof.confirmation+' was entered and checked by the reviewer for Opera posting'+(proofs.length>1?'s ':' ')+proofs.map(b=>b.transaction).join(', ')+'; the posting date stays '+p.day+'.';
-  return {item,details,proof,settled:false};
+  return {item,details,proof,proofs,settled:false};
  }
  function seller(post,s,aliases=[]){
   const note=post.note||'';for(const re of [/\*{1,2}\s*([A-Za-z][A-Za-z .'-]*?)(?=\s+-\s+\d|\*{1,2}|\||$)/gi,/(?:upsold|upsell|sold)\s*(?:by\s+)?([A-Za-z][A-Za-z .'-]+)\s*$/gi,/(?:breakfast|pax)\s+([A-Za-z][A-Za-z .'-]+)\s*$/gi]){for(const m of note.matchAll(re)){const who=C.resolveSeller(m[1].trim(),s.contributors,aliases);if(who.state==='matched')return {person:who.person,basis:'Opera note',named:m[1].trim(),reason:'The note names '+m[1].trim()+'. Posted by '+(post.cashier||post.login)+'. Confirm credit before saving.'};}}

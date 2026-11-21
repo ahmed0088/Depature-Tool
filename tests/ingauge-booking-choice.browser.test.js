@@ -17,7 +17,7 @@ async function fixture(browser,width,independent){
  },independent);
  await page.locator('.mt-difference>summary').click();await page.locator('.mt-money-checks>summary').click();return{page,errors};
 }
-const enter=async(page,conf='12345678')=>{await page.locator('[data-mt-booking]').click();await page.locator('#igBookingConfirmation').fill(conf);await page.locator('[data-ig-booking-lookup]').click();};
+const enter=async(page,conf='12345678')=>{await page.locator('.mt-money-review [data-mt-booking]').click();await page.locator('#igBookingConfirmation').fill(conf);await page.locator('[data-ig-booking-lookup]').click();};
 const save=async page=>{await page.locator('#igEditor [data-ig-save]').click();};
 (async()=>{const executablePath=[process.env.CHROME_PATH,'/usr/bin/google-chrome','/usr/bin/chromium'].find(p=>p&&fs.existsSync(p)),browser=await chromium.launch({executablePath,headless:true,args:['--no-sandbox']});try{
  for(const width of [390,1280])for(const independent of [false,true]){
@@ -29,10 +29,10 @@ const save=async page=>{await page.locator('#igEditor [data-ig-save]').click();}
   await page.locator('#igBookingVerified').check();await page.locator('#igBookingContinue').click();assert(await page.locator('#igBookingReview').isHidden());assert(await page.locator('#igEditor').isVisible());
   assert.equal(await page.locator('#igEditUnit').inputValue(),'122.45');assert.equal(await page.locator('#igEditDay').inputValue(),'2026-11-17');assert.equal(await page.locator('#igEditArrival').inputValue(),'2026-11-10');assert.equal(await page.locator('#igEditDeparture').inputValue(),'2026-11-15');assert.equal(await page.locator('#igEditPerson').inputValue(),'5');assert.match(await page.locator('#igSellerCredit').innerText(),/Opera note|Note identifies/);assert.match(await page.locator('#igSellerCredit').innerText(),/Bob Poster/);
   await save(page);assert.match(await page.locator('#igEditError').innerText(),/evidence|assign/);await page.locator('#igAssignmentConfirmed').check();await save(page);
-  assert.equal(await page.evaluate(()=>InGaugeWorkspace.state.selected.size),1);assert.equal(await page.locator('[data-mt-booking]').count(),0,'a saved booking choice leaves the held list');assert.equal(await page.evaluate(()=>requests.length),0);
+  assert.equal(await page.evaluate(()=>InGaugeWorkspace.state.selected.size),1);assert.equal(await page.locator('.mt-money-review [data-mt-booking]').count(),0,'a saved booking choice leaves the held list');assert.equal(await page.evaluate(()=>requests.length),0);
   const op=await page.evaluate(()=>InGaugeWorkspace.state.drafts.get('t-901'));assert.equal(op.confirmation,'12345678');assert.equal(op.values.totalCents,12245);assert.equal(op.reconciliation.booking.day,'2026-11-17');assert.equal(op.statusAfter,'PENDING');
   assert(await page.evaluate(()=>originalSource===JSON.stringify({snapshot:InGaugeWorkspace.state.snapshot,reports:InGaugeWorkspace.state.reports})),'booking entry cannot mutate reports or source sales');
-  await page.locator('.mt-money-selected>summary').click();await page.locator('[data-mt-selection-remove="t-901"]').click();assert.equal(await page.locator('[data-mt-booking]').count(),1);await page.locator('.mt-money-checks>summary').click();
+  await page.locator('.mt-money-selected>summary').click();await page.locator('[data-mt-selection-remove="t-901"]').click();assert.equal(await page.locator('.mt-money-review [data-mt-booking]').count(),1);await page.locator('.mt-money-checks>summary').click();
   await enter(page,'99999999');assert(await page.locator('#igBookingArrival').isVisible());await page.locator('#igBookingVerified').check();await page.locator('#igBookingContinue').click();assert.match(await page.locator('#igBookingError').innerText(),/actual booking arrival/);
   await page.locator('#igBookingArrival').fill('2026-11-16');await page.locator('#igBookingDeparture').fill('2026-11-21');await page.locator('#igBookingVerified').check();await page.locator('#igBookingContinue').click();assert.equal(await page.locator('#igEditDay').inputValue(),'2026-11-17');assert.equal(await page.locator('#igEditArrival').inputValue(),'2026-11-16');await page.locator('#igEditor [data-ig-cancel]').first().click();assert.equal(await page.evaluate(()=>InGaugeWorkspace.state.selected.size),0);
   assert.deepEqual(errors,[]);await page.close();

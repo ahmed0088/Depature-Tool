@@ -44,9 +44,30 @@
  }
  function booking(hints,raw,s,dateOf=date){
   const h=hints?.[text(raw.TRX_NO)];if(!h||h.snapshotId!==s?.id||!C.sameBinding(h.binding,s.binding)||h.sourceSignature!==C.stable(raw)||h.day!==dateOf(raw.BUSINESS_DATE))return null;
+  if(h.kind==='reviewer-confirmed')return h.verified===true&&/^\d{1,24}$/.test(h.confirmation)&&C.day(h.arrival)&&C.day(h.departure)&&h.arrival<=h.departure&&(!text(raw.CONFIRMATION_NO||raw.CONFIRMATION_NUMBER)||text(raw.CONFIRMATION_NO||raw.CONFIRMATION_NUMBER)===h.confirmation)?h:null;
   const r=s.records.find(r=>r.id===h.recordId);if(!r||r.reportingOnly||!C.isRevenueStatus(r.status)||r.confirmation!==h.confirmation||r.businessDate!==h.day||C.fingerprint(r)!==h.recordFingerprint||r.propertyId!==s.binding.propertyId||r.departmentId!==s.binding.departmentId)return null;
   const explicit=text(raw.CONFIRMATION_NO||raw.CONFIRMATION_NUMBER);return explicit&&explicit!==h.confirmation?null:h;
  }
+ // An explicit confirmation decision can settle a reporting-only identity mismatch.
+ // It never approves, edits, denies or assigns seller credit by itself.
+ const nameDigests=new Map(),digestPending=new Map();
+ function guestDigest(value,onReady){const valueKey=name(value);if(nameDigests.has(valueKey))return nameDigests.get(valueKey);if(!digestPending.has(valueKey)&&globalThis.crypto?.subtle){const pending=globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(valueKey)).then(bytes=>{nameDigests.set(valueKey,[...new Uint8Array(bytes)].map(n=>n.toString(16).padStart(2,'0')).join(''));digestPending.delete(valueKey);},()=>{digestPending.delete(valueKey);});digestPending.set(valueKey,pending);}if(onReady&&digestPending.has(valueKey))digestPending.get(valueKey).then(onReady);return '';}
+ function confirmed({choices={},rules={},snapshot:s,binding=s?.binding,hotelId=s?.hotelId,period,journal=[],reservations=[],dateOf=date,now=Date.now(),onReady}={}){
+  const out={};if(!usable(s,binding,now)||s.hotelId!==hotelId||!C.withinPeriod(period?.from,s)||!C.withinPeriod(period?.to,s))return out;
+  const byId=new Map();for(const raw of journal){const id=text(raw.TRX_NO);if(!byId.has(id))byId.set(id,raw);else if(postingSignature(raw)!==postingSignature(byId.get(id)))byId.set(id,null);}
+  const install=(proof,raw)=>{const day=raw&&dateOf(raw.BUSINESS_DATE),explicit=raw&&text(raw.CONFIRMATION_NO||raw.CONFIRMATION_NUMBER);if(!raw||proof?.schema!==1||proof.verified!==true||proof.hotelId!==hotelId||!C.sameBinding(proof.binding,binding)||!/^\d{1,24}$/.test(proof.confirmation)||postingSignature(raw)!==postingSignature(proof.sourceSignature)||day!==proof.day||!C.withinPeriod(day,period)||!C.day(proof.arrival)||!C.day(proof.departure)||proof.arrival>proof.departure||explicit&&explicit!==proof.confirmation||text(raw.CURRENCY1).toUpperCase()!==text(s.settings.currency).toUpperCase())return;
+   const known=reservations.filter(r=>text(r.CONFIRMATION_NO)===proof.confirmation&&name(r.FULL_NAME));if(known.length&&!known.some(r=>name(r.FULL_NAME)===name(raw.GUEST_FULL_NAME)))return;
+   out[text(raw.TRX_NO)]={...proof,kind:'reviewer-confirmed',sourceSignature:C.stable(raw),snapshotId:s.id,binding:C.binding(binding)};
+  };
+  for(const proof of list(choices))install(proof,byId.get(text(proof?.transaction)));
+  for(const rule of list(rules)){
+   if(rule?.schema!==1||rule.verified!==true||rule.hotelId!==hotelId||!C.sameBinding(rule.binding,binding)||!/^\d{1,24}$/.test(rule.confirmation)||!Number.isSafeInteger(rule.cents)||rule.cents<=0||!C.withinPeriod(rule.day,period))continue;
+   const r=s.records.find(r=>r.id===rule.recordId),product=r&&s.products.find(p=>p.id===r.productId);if(!r||r.confirmation!==rule.confirmation||r.businessDate!==rule.day||r.totalCents!==rule.cents||!C.isRevenueStatus(r.status)||(C.kind(r.product)||C.kind(product?.name)||C.kind(product?.code))!==rule.family)continue;
+   const room=v=>text(v).replace(/^0+(?=\d)/,''),matches=[...byId.values()].filter(raw=>raw&&dateOf(raw.BUSINESS_DATE)===rule.day&&room(raw.ROOM)===room(rule.room)&&text(raw.CURRENCY1).toUpperCase()===text(rule.currency).toUpperCase()&&C.cents(text(raw.CASHIER_DEBIT)||'0')-C.cents(text(raw.CASHIER_CREDIT)||'0')===rule.cents&&text(raw.TRX_CODE)===rule.code&&(rule.guestDigest?/^[a-f0-9]{64}$/.test(rule.guestDigest)&&guestDigest(raw.GUEST_FULL_NAME,onReady)===rule.guestDigest:!!name(rule.guest)&&name(raw.GUEST_FULL_NAME)===name(rule.guest)));
+   if(matches.length===1){const raw=matches[0];install({...rule,transaction:text(raw.TRX_NO),sourceSignature:C.stable(raw),arrival:r.arrival,departure:r.departure},raw);}
+  }
+  return out;
+ }
  async function copy(value){const v=text(value);if(!/^\d{1,24}$/.test(v))throw Error('A valid confirmation number is needed.');try{if(globalThis.navigator?.clipboard?.writeText){await navigator.clipboard.writeText(v);return v;}}catch(_){}if(typeof document==='undefined')throw Error('Clipboard unavailable.');const input=document.createElement('textarea');input.value=v;input.readOnly=true;input.style.cssText='position:fixed;top:0;left:0;opacity:0;font-size:16px';document.body.appendChild(input);const focused=document.activeElement;input.focus({preventScroll:true});input.select();input.setSelectionRange(0,v.length);const ok=document.execCommand?.('copy');input.remove();focused?.focus?.({preventScroll:true});if(!ok)throw Error('Copy unavailable. Long-press the confirmation to copy it.');return v;}
- return {date,postingSignature,usable,history,booking,copy};
+ return {date,postingSignature,usable,history,confirmed,booking,copy};
 });

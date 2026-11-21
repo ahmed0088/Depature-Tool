@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 612, items: [
+    'Guest enrolment now has an Excel guest list tab for Adagio and hotels without Neorcha. Upload a Purpose of Stay workbook, choose its worksheet and dates, review the guests, then use the same saved hotel link and cloud enrolment.',
+    'The Excel preview separates missing details, shared email addresses, repeated guests and previous enrolments. Your Neorcha list stays separate. No agreement is taken from the spreadsheet; only the guests you mark Agreed are sent.',
+    'Enter missing confirmations directly on monthly audit difference cards. Your exact confirmation choice is remembered, so an already-correct sale matches after refresh. Amount or supported date corrections go through the reviewed automation; no duplicate addition is needed.'
+  ] },
   { v: 611, items: [
     'Monthly audit keeps separate Opera postings together when you verify that they belong to the same booking and day. A second charge cannot overwrite a different linked posting, and verified combined charges stay matched after refresh.',
     'Amount differences on existing Reviewed sales can now be reviewed and corrected while preserving the seller. Reviewed revenue remains included in totals.',

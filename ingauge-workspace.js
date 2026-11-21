@@ -132,7 +132,7 @@
   }
   async function prepareTarget(binding,ref){
     const key=await targetKey(binding),independent=!sameTarget(binding,S.legacyBinding);
-    const context=independent?(await ref.child('ingauge/targets/'+key+'/auditContext').once('value')).val()||{}:{};
+    const stored=(await ref.child('ingauge/targets/'+key+'/auditContext').once('value')).val()||{},context=independent?stored:{bookingLinks:stored.bookingLinks||{},bookingRules:stored.bookingRules||{}};
     return {key,independent,context};
   }
   function aliases(){return S.independent?S.targetContext.staff||{}:typeof pkgStaffDb!=='undefined'?pkgStaffDb:{};}
@@ -434,11 +434,25 @@
       el('igBookingContinue').disabled=false;
     }catch(error){session.details=null;el('igBookingResult').innerHTML='';el('igBookingContinue').disabled=true;el('igBookingError').textContent=error.message;}
   }
-  function continueMoneyBooking(){
+  async function continueMoneyBooking(){
     const session=bookingSession;if(!session?.details)return;
-    try{const result=reviewMoneyDifference(session.caseKey,{confirmation:el('igBookingConfirmation').value,bookingVerified:!!el('igBookingVerified')?.checked,sourceSignature:session.details.sourceSignature,additionalTransactions:[...el('igBookingReview').querySelectorAll('[data-ig-related-posting]:checked')].map(n=>n.dataset.igRelatedPosting),arrival:el('igBookingArrival')?.value||session.details.arrival,departure:el('igBookingDeparture')?.value||session.details.departure},session.context);
-      if(result?.settled){el('igBookingError').textContent='';el('igBookingResult').textContent=result.note;el('igBookingContinue').disabled=true;return;}closeBooking(false);
+    const button=el('igBookingContinue');if(button.disabled)return;button.disabled=true;
+    try{const choice={confirmation:el('igBookingConfirmation').value,bookingVerified:!!el('igBookingVerified')?.checked,sourceSignature:session.details.sourceSignature,additionalTransactions:[...el('igBookingReview').querySelectorAll('[data-ig-related-posting]:checked')].map(n=>n.dataset.igRelatedPosting),arrival:el('igBookingArrival')?.value||session.details.arrival,departure:el('igBookingDeparture')?.value||session.details.departure};
+      moneyCase(session.caseKey,session.context);const prepared=W.InGaugeReconciliation.resolveBooking(session.context,session.caseKey,choice);await saveBookingLinks(prepared.proofs||[prepared.proof],session.context);
+      if(bookingSession!==session)return;
+      if(prepared.settled){closeBooking(false);render();notify('Confirmation matched · the existing IN-Gauge amount already agrees. No financial change needed.','ok');return;}
+      const result=reviewMoneyDifference(session.caseKey,choice,session.context);closeBooking(false);
     }catch(error){el('igBookingError').textContent=error.message;}
+    finally{if(button.isConnected)button.disabled=false;}
+  }
+  async function saveBookingLinks(proofs,context){
+    if(!allowed()||!db())throw Error('Connect as an owner or manager to save the confirmation for future comparisons.');
+    const ref=db(),hid=hotel(),snapshot=S.snapshot,binding=C.binding(S.binding),key=S.targetKey||await targetKey(binding),links={};
+    if(context.snapshot!==snapshot)throw Error('The snapshot changed. Check the confirmation again.');
+    for(const p of proofs){if(!p||p.verified!==true||p.snapshotId!==snapshot.id||!C.sameBinding(p.binding,binding)||!/^\d+$/.test(p.transaction))throw Error('Recheck the confirmation against this Opera posting.');links[p.transaction]={...p,hotelId:hid,at:Date.now(),by:profile()?.name||''};}
+    await ref.child('ingauge/targets/'+key+'/auditContext/bookingLinks').update(links);
+    if(ref!==db()||hid!==hotel()||snapshot!==S.snapshot||!C.sameBinding(binding,S.binding))throw Error('The hotel or snapshot changed. Refresh the comparison.');
+    S.targetContext={...S.targetContext,bookingLinks:{...S.targetContext.bookingLinks,...links}};
   }
   function editSelectedChange(key,source){if(!S.selected.has(key))throw Error('This change is no longer selected. Review its remaining case.');edit(key,source);}
   function unselectChange(key){if(S.busy||S.switching||S.uploading||restoring)throw Error('Wait for the current run or report upload before changing your selection.');if(!S.selected.delete(key))return;invalidate();renderProposals();renderControls();notify('Unselected · no change was sent to IN-Gauge','ok');}
