@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 605, items: ['Final monthly reports now require the booking and amount review to cover the same whole month as the displayed totals. Narrower reviews remain eligible for checkpoints, with the remaining check shown clearly.'] },
   { v: 604, items: [
     'Package audit now has a Monthly close area: compare, review, apply and save the month. The month selector and a clear next action stay visible, with differences grouped by what to fix, product or current seller.',
     'Save monthly checkpoints and final reports for each linked hotel. Saved months show their own hotel, currency, period and difference. Earlier versions remain available when a final report is reopened.',
