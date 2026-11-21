@@ -1,0 +1,22 @@
+name: Audit review saved-run diagnosis
+on:
+  push:
+    branches: ['diagnose/audit-review-20261121']
+    paths: ['scripts/audit-review-diagnostic.cjs', '.github/workflows/audit-review-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Read saved audit outcomes without changes
+        run: node scripts/audit-review-diagnostic.cjs
+        env:
+          HOTELOPS_HOTEL: ibis_dubai
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
