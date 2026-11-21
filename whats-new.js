@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 606, items: [
+    'Fixed reviewed seller changes being held as duplicates when two existing room-upsell charges share the same booking, product and date. The exact existing record can be reassigned while its product, amounts, dates, quantity, status and notes remain unchanged.',
+    'Already-correct live results now refresh the monthly read too. A request that is already Approved no longer returns from an old Pending snapshot after the run finishes.',
+    'Unsuccessful audit suggestions show the last run’s actual reason and a Refresh live records action. Runs with held changes say Needs attention; a finished workflow no longer implies every selected change was saved.',
+    'Confirmed fixes leave the active selection after verification. New sales and changes to products, money or dates keep their existing duplicate and financial checks.'
+  ] },
   { v: 605, items: ['Final monthly reports now require the booking and amount review to cover the same whole month as the displayed totals. Narrower reviews remain eligible for checkpoints, with the remaining check shown clearly.'] },
   { v: 604, items: [
     'Package audit now has a Monthly close area: compare, review, apply and save the month. The month selector and a clear next action stay visible, with differences grouped by what to fix, product or current seller.',

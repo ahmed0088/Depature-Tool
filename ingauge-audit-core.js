@@ -228,6 +228,13 @@
     return plan;
   }
   function values(r){return {unitCents:r.unitCents,totalCents:r.totalCents,chargeDays:r.chargeDays,arrival:r.arrival,departure:r.departure,businessDate:r.businessDate,room:r.room,memo:r.memo};}
+  // Existing charges may share a booking, package and date. Reassigning one
+  // exact record does not add revenue or decide whether its siblings are duplicates.
+  function creditOnlyEdit(op,current){
+    return !!(op?.action==='edit'&&current&&id(op.recordId)===current.id&&op.expected===fingerprint(current)
+      &&op.confirmation===current.confirmation&&id(op.productId)===current.productId
+      &&op.statusAfter===current.status&&stable(op.values)===stable(values(current)));
+  }
   function payload(op,snapshot,current){
     const error=operationError(op,snapshot);if(error)fail(error);if(!['add','edit'].includes(op.action))fail('This action changes audit status, not product data.');
     const v=op.values,ms=s=>new Date(s+'T00:00:00Z').getTime();
@@ -279,6 +286,6 @@
   function matches(op,r){
     return differences(op,r).length===0;
   }
-  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,matches,differences,systemMemoChange,systemMemoNote,terminal,saleCategory,operationCategory,scopeAllows,isRevenueStatus,reportingMessage,reportingCents,reportingRecord,recordAmountIssue};
+  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,creditOnlyEdit,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,matches,differences,systemMemoChange,systemMemoNote,terminal,saleCategory,operationCategory,scopeAllows,isRevenueStatus,reportingMessage,reportingCents,reportingRecord,recordAmountIssue};
   root.InGaugeAuditCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

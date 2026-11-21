@@ -107,6 +107,12 @@
 #igWorkspace .iga-run-activity{border-radius:14px;background:var(--mc-soft);padding:18px;border-color:var(--mc-line)}
 #igWorkspace .iga-run-activity h3{font-size:16px;font-weight:700;margin:6px 0}
 #igWorkspace .iga-run-activity>p{font-size:12px;line-height:1.7;color:var(--mc-muted)}
+#igWorkspace .iga-last-outcome{padding:14px;border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border));border-radius:11px;background:color-mix(in srgb,var(--accent) 5%,var(--card));margin:14px 0}
+#igWorkspace .iga-last-outcome>b{font-size:12px}
+#igWorkspace .iga-last-outcome p{font-size:12px;line-height:1.65;margin:6px 0}
+#igWorkspace .iga-last-outcome small{display:block;font-size:10px;line-height:1.7;color:var(--text2);margin:8px 0 12px}
+#igWorkspace .iga-run-activity[data-outcome=attention],#igRunWindow .iga-run-status.attention{border-color:var(--gold,var(--accent));background:color-mix(in srgb,var(--gold,var(--accent)) 7%,var(--card))}
+#igRunWindow .iga-neorcha-bar.attention i{background:var(--gold,var(--accent))}
 #igRunWindow{backdrop-filter:blur(5px)}
 #igRunWindow .iga-run-window{width:min(780px,100%);border-radius:20px}
 #igRunWindow .iga-run-header{padding:22px;gap:12px;background:var(--card)}

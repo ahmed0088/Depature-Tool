@@ -10,8 +10,8 @@ const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
 const targetKey=(b,hid)=>b?'ig-'+sha(C.stable(C.binding(b))).slice(0,32):'discover-'+hid;
 const overviewPath=(binding,month)=>'ingauge/targets/t'+sha(C.stable(Pins.identity(binding))).slice(0,40)+'/overview/'+month;
 async function invalidateOverviewReads(db,plan,snapshot,results,at=Date.now()){
-  if(!snapshot||!results.some(r=>['applied','uncertain'].includes(r.state)))return;
-  const months=new Set();for(const result of results.filter(r=>['applied','uncertain'].includes(r.state))){const op=plan.operations.find(o=>o.key===result.key);if(!op)continue;const before=snapshot.records.find(r=>r.id===op.recordId);for(const value of [before?.businessDate,op.values?.businessDate])if(C.day(value))months.add(value.slice(0,7));}
+  if(!snapshot||!results.some(r=>['applied','uncertain','unchanged'].includes(r.state)))return;
+  const months=new Set();for(const result of results.filter(r=>['applied','uncertain','unchanged'].includes(r.state))){const op=plan.operations.find(o=>o.key===result.key);if(!op)continue;const before=snapshot.records.find(r=>r.id===op.recordId);for(const value of [before?.businessDate,op.values?.businessDate])if(C.day(value))months.add(value.slice(0,7));}
   for(const month of months)await db.put(overviewPath(plan.binding,month)+'/changedAt',at);
 }
 async function sellerPinGuard(db,plan,snapshot){
@@ -65,10 +65,10 @@ function completionNote(outcome,test,total){
   const rows=outcome.results,counts={};for(const r of rows)counts[r.state]=(counts[r.state]||0)+1;
   const changes=Object.entries({add:'added',edit:'edited / fixed',approve:'approved',deny:'denied',delete:'removed'}).map(([action,label])=>{const n=rows.filter(r=>r.state==='applied'&&r.action===action).length;return n?n+' '+label:'';}).filter(Boolean);
   const parts=[...changes,...(counts.tested?[counts.tested+' readiness checks passed']:[]),...(counts.unchanged?[counts.unchanged+' already correct']:[]),...(counts.held?[counts.held+' held; not sent']:[]),...(counts.uncertain?[counts.uncertain+' need verification']:[]),...(total>rows.length?[total-rows.length+' not attempted']:[])];
-  return (outcome.stopped?'Stopped: ':'Finished: ')+(parts.join(' · ')||'no changes')+'. '+(outcome.uncertain?'Check the returned values before retrying.':test?'No financial changes sent.':'Successful changes were reread and verified in IN-Gauge.');
+  return (outcome.stopped?'Stopped: ':'Finished: ')+(parts.join(' · ')||'no changes')+'. '+(outcome.uncertain?'Check the returned values before retrying.':test?'No financial changes sent.':counts.applied?'Successful changes were reread and verified in IN-Gauge.':counts.unchanged?'Existing matching records were verified in IN-Gauge.':'No financial changes were confirmed. Review the held results before another run.');
 }
 async function refreshAfterApply({db,portal,plan,snapshot,results,tag,stop=async()=>false,progress=async()=>{}}){
-  if(!results.some(r=>['applied','uncertain'].includes(r.state))||await stop())return null;
+  if(!results.some(r=>['applied','uncertain','unchanged'].includes(r.state))||await stop())return null;
   const id='igverify'+sha(tag).slice(0,40),period=plan.period||{from:snapshot.from,to:snapshot.to};
   await progress('refresh','Refreshing the monthly records to verify the remaining differences');
   const fresh=await portal.snapshot(plan.binding,period.from,period.to,plan.hotelId,id);
@@ -86,7 +86,7 @@ async function main(){
   if(!['discover','snapshot','apply'].includes(plan.mode))throw Error('Unknown job mode.');
   if(E.TARGET_KEY!==targetKey(plan.binding,db.hotelId))throw Error('This workflow does not hold the correct property queue.');
   let snapshot=null;
-  const invalidateSnapshot=async results=>{if(snapshot&&!test&&results.some(r=>['applied','uncertain'].includes(r.state))){await db.patch('ingauge/snapshots/'+snapshot.id,{invalidatedAt:Date.now(),invalidatedBy:tag});await invalidateOverviewReads(db,plan,snapshot,results);}};
+  const invalidateSnapshot=async results=>{if(snapshot&&!test&&results.some(r=>['applied','uncertain','unchanged'].includes(r.state))){await db.patch('ingauge/snapshots/'+snapshot.id,{invalidatedAt:Date.now(),invalidatedBy:tag});await invalidateOverviewReads(db,plan,snapshot,results);}};
   const run=E.GITHUB_RUN_ID?'https://github.com/ahmed0088/Depature-Tool/actions/runs/'+E.GITHUB_RUN_ID:'';
   const publish=async(results,state='running',note='Checking IN-Gauge',extra={})=>{
     publishedResults=results;

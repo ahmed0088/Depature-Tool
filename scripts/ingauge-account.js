@@ -209,7 +209,7 @@ class InGaugeAccount {
     ]);
     const locked=this.data(lockResponse);
     if(typeof locked!=='boolean'||locked)throw new PortalError('This accounting period is locked or its lock state is unknown. Use IN-Gauge’s adjustment workflow.');
-    if(['add','edit'].includes(op.action)&&C.duplicates(op,records.filter(r=>String(r.id)!==String(op.recordId||'')),fresh.products).some(r=>!C.reviewedDuplicate(op,r,snapshot)))throw new PortalError('An existing request or product already represents this sale. It was not duplicated.');
+    if(['add','edit'].includes(op.action)&&!C.creditOnlyEdit(op,current)&&C.duplicates(op,records.filter(r=>String(r.id)!==String(op.recordId||'')),fresh.products).some(r=>!C.reviewedDuplicate(op,r,snapshot)))throw new PortalError('An existing request or product already represents this sale. It was not duplicated.');
     const checked={current,snapshot:fresh,payload:['add','edit'].includes(op.action)?C.payload(op,fresh,current):op.action==='approve'&&!approvalAlreadyMatches(op,current,fresh)?C.approvalPayload(op,fresh,current):null};this.preflight={key:C.stable(op),binding:C.stable(snapshot.binding),at:Date.now(),checked};return checked;
   }
   async apply(op,snapshot){
