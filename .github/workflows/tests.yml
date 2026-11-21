@@ -123,6 +123,8 @@ jobs:
           node tests/monthly-difference.test.js
           node tests/monthly-difference.browser.test.js
           node --test tests/ingauge-monthly-assistant.test.js
+          node --test tests/ingauge-month-close.test.js
+          node tests/ingauge-month-close.browser.test.js
           node --test tests/ingauge-after-apply.test.js
           node tests/ingauge-monthly-assistant.browser.test.js
 

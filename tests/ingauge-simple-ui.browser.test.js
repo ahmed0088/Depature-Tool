@@ -37,7 +37,7 @@ async function fixture(browser,phone,{linked=true}={}){
     assert(await page.locator('#igStepReports').isHidden());assert(await page.locator('#igStepReview').isHidden());assert(await page.locator('#igStepRun').isHidden());
     assert.equal(await page.locator('#igSetupDetails').evaluate(el=>el.open),false,'linked hotel setup stays tucked away');
     assert(await page.locator('.mt-confirm').evaluate(label=>{const box=label.querySelector('input').getBoundingClientRect(),text=label.querySelector('span').getBoundingClientRect();return text.left>=box.right&&Math.abs(text.top-box.top)<6;}),'report confirmation stays beside its checkbox');
-    assert(await page.locator('.mt-upload').evaluate(el=>el.getBoundingClientRect().right<=document.querySelector('#igMonthlyTally').getBoundingClientRect().right),'upload control stays inside the card');
+    assert(await page.locator('.mt-upload').evaluateAll(els=>els.length===2&&els.every(el=>el.getBoundingClientRect().right<=document.querySelector('#igMonthlyTally').getBoundingClientRect().right)),'upload control stays inside the card');
     if(process.env.SIMPLE_UI_SCREENSHOT_DIR){fs.mkdirSync(process.env.SIMPLE_UI_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:process.env.SIMPLE_UI_SCREENSHOT_DIR+(phone?'/monthly-start-phone.png':'/monthly-start-desktop.png'),fullPage:true});}
 
 

@@ -9,6 +9,13 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 604, items: [
+    'Package audit now has a Monthly close area: compare, review, apply and save the month. The month selector and a clear next action stay visible, with differences grouped by what to fix, product or current seller.',
+    'Save monthly checkpoints and final reports for each linked hotel. Saved months show their own hotel, currency, period and difference. Earlier versions remain available when a final report is reopened.',
+    'Download an organized eight-sheet Excel report: Summary, By product, By business date, Confirmations, Team totals, Reviewed selection, Change history, and Checks and sources. Actual run outcomes stay separate from changes not yet sent.',
+    'Final reports require a complete past month, matching totals, resolved pending and booking checks, and your seller review. Report saving never applies financial changes.',
+    'Automation has cleaner phone layouts, readable steps, clear outcomes and a collapsible Activity log. Its open state and scroll position are kept during progress updates; close and cancel remain separate.'
+  ] },
   { v: 603, items: [
     'The Opera reader follows the selected reservation when you check out. It waits for Opera’s completed status or fresh success message, then updates the matching room and confirmation automatically.',
     'Stay extensions use Opera’s saved departure date and actual nights. Unsaved edits, failed saves and a room disappearing from Departures no longer confirm an extension.',
