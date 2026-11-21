@@ -1,7 +1,7 @@
 name: Mercure audit saved-run diagnosis
 on:
   push:
-    branches: ['diagnose/audit-review-20261121']
+    branches: ['diagnose/mercure-20261121-v611']
     paths: ['scripts/audit-review-diagnostic.cjs', '.github/workflows/audit-review-diagnostic.yml']
 permissions:
   contents: read
