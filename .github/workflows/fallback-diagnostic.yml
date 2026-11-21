@@ -1,0 +1,20 @@
+name: Database HTTPS fallback diagnosis
+on:
+  push:
+    branches: [diagnose/connection-fallback-20261121]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-audit --no-fund playwright-core@1.49.1
+      - run: node scripts/fallback-diagnostic.cjs
+        env:
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
