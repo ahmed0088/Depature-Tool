@@ -4914,6 +4914,26 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
 .db-error-banner > span:first-child { flex-shrink: 0; font-size: 0.9rem; line-height: 1.2; }
+.db-error-retry {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid currentColor;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.db-error-retry:disabled { opacity: .6; cursor: wait; }
+.db-error-retry:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+#dbErrorText { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 540px) {
+  .db-error-banner { display: grid; width: calc(100vw - 24px); grid-template-columns: 18px minmax(0, 1fr) 24px; }
+  .db-error-retry { grid-column: 2; justify-self: start; }
+  .db-error-x { grid-column: 3; grid-row: 1; min-height: 32px; min-width: 24px; }
+}
 .db-error-x {
   flex-shrink: 0;
   margin-left: auto;

@@ -71,46 +71,118 @@ function authInit() {
     document.getElementById('rememberMe').checked = true;
   }
 
-  firebase.auth().onAuthStateChanged(async user => {
-    if (!user) { showLoginScreen(); return; }
-    // open the hotel this person was assigned to (tenant.js)
-    if (typeof tnResolveHotel === 'function' && await tnResolveHotel(user.uid) === 'reloading') return;
-    const profile = await loadUserProfile(user.uid);
-    if (!profile || !profile.active) {
-      await firebase.auth().signOut();
-      showLoginScreen(navigator.onLine === false ? 'You\'re offline. Connect to the internet once to sign in on this device.' : 'We couldn\'t find an active account for you. Please ask your manager.');
-      return;
-    }
-    // An unrecognised role gets the least access, never the most
-    if (!ROLES[profile.role]) {
-      console.warn('[Auth] Unknown role "' + profile.role + '" — using read only');
-      profile.role = 'readonly';
-    }
-    currentUser    = user;
-    currentProfile = profile;
-    if (typeof fbSignedInNow === 'function') setTimeout(fbSignedInNow, 0);   // live updates that waited for sign-in
-    if (typeof hoRoleRules !== 'undefined' && hoRoleRules.start) setTimeout(hoRoleRules.start, 0);   // Team → Roles & access changes, live
-
-    // Clear any stale forceLogout flag left from a previous disconnect
-    if (profile.forceLogout) {
-      try { await firebase.database().ref(`hotels/${HOTEL_ID}/users/${user.uid}`).update({ forceLogout: false }); } catch(e) {}
-    }
-
-    // not awaited: a database write only settles when the server confirms, so offline these never
-    // finished and the app stayed on the login screen. They are sent when the connection is back.
-    updateLastLogin(user.uid);
-    logActivity('login');
-    let myTheme = null; try { myTheme = localStorage.getItem('ho_theme_v1'); } catch (_) {}
-    if (profile.theme && !myTheme) setTheme(profile.theme, null, true);   // this device's own choice wins
-    applyRole(profile.role);
-    hideLoginScreen();
-    updateAuthUI();
-    if (typeof _gmApplyOwnerAutoUnlock === 'function') _gmApplyOwnerAutoUnlock();
-
-    // Start watching own record live — catches disable, delete, force-disconnect
-    _startSelfListener(user.uid);
-    _resetIdleTimer();
+  firebase.auth().onAuthStateChanged(user => {
+    const epoch = ++_authLoadEpoch;
+    clearTimeout(_authRetryTimer);
+    _authConnecting = false;
+    if (!user) { currentUser = null; currentProfile = null; showLoginScreen(); return; }
+    _authOpenUser(user, epoch);
   });
+}
+
+// A database outage is separate from a failed password. Keep the authenticated
+// session while retrying the hotel/profile read, instead of signing it out.
+let _authLoadEpoch = 0, _authRetryTimer = null, _authRetryAttempt = 0, _authConnecting = false;
+function _authStillCurrent(user, epoch) {
+  return epoch === _authLoadEpoch && firebase.auth().currentUser?.uid === user.uid;
+}
+async function _authOpenUser(user, epoch) {
+  if (!_authStillCurrent(user, epoch)) return;
+  _authConnecting = true;
+  let profile;
+  try {
+    if (typeof tnResolveHotel === 'function' && await tnResolveHotel(user.uid) === 'reloading') return;
+    if (!_authStillCurrent(user, epoch)) return;
+    profile = await loadUserProfile(user.uid);
+  } catch (e) {
+    if (_authStillCurrent(user, epoch)) _authConnectionFailed(user, epoch, e);
+    return;
+  }
+  if (!_authStillCurrent(user, epoch)) return;
+  if (!profile || !profile.active) {
+    _authConnecting = false;
+    await firebase.auth().signOut();
+    showLoginScreen('We couldn\'t find an active account for you. Please ask your manager.');
+    return;
+  }
+  // An unrecognised role gets the least access, never the most
+  if (!ROLES[profile.role]) {
+    console.warn('[Auth] Unknown role "' + profile.role + '" — using read only');
+    profile.role = 'readonly';
+  }
+  // Clear any stale forceLogout flag left from a previous disconnect
+  if (profile.forceLogout) {
+    try { await _authWait(firebase.database().ref(`hotels/${HOTEL_ID}/users/${user.uid}`).update({ forceLogout: false })); }
+    catch (e) { if (_authStillCurrent(user, epoch)) _authConnectionFailed(user, epoch, e); return; }
+    if (!_authStillCurrent(user, epoch)) return;
+  }
+  _authConnecting = false;
+  _authRetryAttempt = 0;
+  clearTimeout(_authRetryTimer);
+  currentUser    = user;
+  currentProfile = profile;
+  if (typeof fbSignedInNow === 'function') setTimeout(fbSignedInNow, 0);   // live updates that waited for sign-in
+  if (typeof hoRoleRules !== 'undefined' && hoRoleRules.start) setTimeout(hoRoleRules.start, 0);   // Team → Roles & access changes, live
+
+  // not awaited: a database write only settles when the server confirms, so offline these never
+  // finished and the app stayed on the login screen. They are sent when the connection is back.
+  updateLastLogin(user.uid);
+  logActivity('login');
+  let myTheme = null; try { myTheme = localStorage.getItem('ho_theme_v1'); } catch (_) {}
+  if (profile.theme && !myTheme) setTheme(profile.theme, null, true);   // this device's own choice wins
+  applyRole(profile.role);
+  hideLoginScreen();
+  updateAuthUI();
+  if (typeof _gmApplyOwnerAutoUnlock === 'function') _gmApplyOwnerAutoUnlock();
+
+  // Start watching own record live — catches disable, delete, force-disconnect
+  _startSelfListener(user.uid);
+  _resetIdleTimer();
+}
+
+function _authConnectionFailed(user, epoch, error) {
+  _authConnecting = false;
+  console.warn('[Auth] Hotel connection unavailable:', error?.code || 'connection');
+  showLoginScreen();
+  const denied = /PERMISSION[_ ]DENIED/i.test(String(error?.code || error?.message || ''));
+  _lgShowMsg(denied
+    ? 'You are signed in, but your hotel data access was refused. Retry the connection; if it continues, ask your manager to check your access.'
+    : 'You are signed in. Your hotel data is not connecting yet. Check the internet or tap Retry connection. We will also retry automatically.', 'warn');
+  const btn = document.getElementById('loginBtn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Retry connection'; }
+  const other = document.getElementById('loginOtherAccount');
+  if (other) other.hidden = false;
+  _authRetryTimer = setTimeout(() => {
+    if (_authStillCurrent(user, epoch)) return _authRetrySignedIn();
+  }, Math.min(30000, 5000 * ++_authRetryAttempt));
+}
+
+async function _authRetrySignedIn() {
+  const user = firebase.auth().currentUser;
+  if (!user || currentUser || _authConnecting) return;
+  const epoch = _authLoadEpoch;
+  clearTimeout(_authRetryTimer);
+  _authConnecting = true;
+  _lgBtn('busy');
+  const label = document.querySelector('#loginBtn .lg-btn-label');
+  if (label) label.textContent = 'Connecting…';
+  _lgShowMsg('Signed in. Reconnecting to your hotel data…', 'info');
+  try { if (typeof fbRetryConnection === 'function') await fbRetryConnection(); } catch (_) {}
+  if (!_authStillCurrent(user, epoch)) return;
+  await _authOpenUser(user, epoch);
+}
+async function authUseAnotherAccount() {
+  clearTimeout(_authRetryTimer);
+  ++_authLoadEpoch;
+  _authConnecting = false;
+  await firebase.auth().signOut();
+  showLoginScreen();
+  _lgShowMsg('');
+  const pass = document.getElementById('loginPass');
+  if (pass) pass.value = '';
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('online', () => { if (firebase.auth().currentUser && !currentUser) _authRetrySignedIn(); });
 }
 
 // ── Idle auto-logout — shared front-desk PCs stay signed in forever
@@ -205,50 +277,57 @@ function _afterSignOut(message) {
 }
 
 /** A database read that gives up after ms (offline, the read would otherwise wait forever). */
+function _authWait(operation, ms) {
+  let timer;
+  return Promise.race([operation, new Promise((_, no) => {
+    timer = setTimeout(() => no(Object.assign(new Error('Database connection timed out'), { code: 'db/timeout' })), ms || 8000);
+  })]).finally(() => clearTimeout(timer));
+}
 function _authRead(ref, ms) {
-  return Promise.race([ref.once('value'), new Promise((_, no) => setTimeout(() => no(new Error('offline')), ms || 8000))]);
+  return _authWait(ref.once('value'), ms);
 }
 async function loadUserProfile(uid) {
   const cacheKey = 'ho_profile_' + HOTEL_ID + '_' + uid;
   let snap;
   try { snap = await _authRead(firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`)); }
   catch (e) {
-    // offline: the profile this device saw last time this person signed in
+    // Only a network outage may use this device's previous profile. An explicit
+    // access refusal must be checked online, even when a cached owner exists.
+    if (/PERMISSION[_ ]DENIED/i.test(String(e.code || e.message || ''))) throw e;
     try { const c = JSON.parse(localStorage.getItem(cacheKey) || 'null'); if (c) return c; } catch (_) {}
-    return null;
+    throw e;
   }
-  try {
-    const profile = snap.val();
-    // If profile exists, return it as-is
-    if (profile) { try { localStorage.setItem(cacheKey, JSON.stringify(profile)); } catch (_) {} return profile; }
-    // No profile found — check if this Firebase Auth user has an email we can use
-    // as a fallback so the owner is never locked out
-    // Only the very first account of a brand-new hotel becomes its owner: once the hotel has users,
-    // an account nobody added gets no access (anyone can make a sign-in with the public API key)
-    const authUser = firebase.auth().currentUser;
-    let hasUsers = true;
-    try { hasUsers = (await firebase.database().ref(`hotels/${HOTEL_ID}/users`).limitToFirst(1).once('value')).exists(); } catch (e) {}
-    if (authUser && authUser.email && !hasUsers) {
-      console.warn('[Auth] No DB profile found for', uid, '— creating owner fallback record');
-      const fallback = {
-        uid,
-        name: authUser.email.split('@')[0],
-        email: authUser.email,
-        role: 'owner',
-        active: true,
-        createdAt: new Date().toISOString(),
-        createdBy: 'auto-fallback',
-      };
-      // Write it so future logins work normally
-      try {
-        await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).set(fallback);
-      } catch(e) {
-        console.warn('[Auth] Could not write fallback profile (will use in-memory):', e);
-      }
-      return fallback;
+  const profile = snap.val();
+  // If profile exists, return it as-is
+  if (profile) { try { localStorage.setItem(cacheKey, JSON.stringify(profile)); } catch (_) {} return profile; }
+  // No profile found — check if this Firebase Auth user has an email we can use
+  // as a fallback so the owner is never locked out
+  // Only the very first account of a brand-new hotel becomes its owner: once the hotel has users,
+  // an account nobody added gets no access (anyone can make a sign-in with the public API key)
+  const authUser = firebase.auth().currentUser;
+  let hasUsers = true;
+  try { hasUsers = (await _authRead(firebase.database().ref(`hotels/${HOTEL_ID}/users`).limitToFirst(1))).exists(); } catch (e) { if (!/PERMISSION[_ ]DENIED/i.test(String(e.code || e.message || ''))) throw e; }
+  if (authUser && authUser.email && !hasUsers) {
+    console.warn('[Auth] No DB profile found for', uid, '— creating owner fallback record');
+    const fallback = {
+      uid,
+      name: authUser.email.split('@')[0],
+      email: authUser.email,
+      role: 'owner',
+      active: true,
+      createdAt: new Date().toISOString(),
+      createdBy: 'auto-fallback',
+    };
+    // Write it so future logins work normally
+    try {
+      await _authWait(firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).set(fallback));
+    } catch(e) {
+      console.warn('[Auth] Could not confirm the first account profile:', e.code || 'connection');
+      throw e;
     }
-    return null;
-  } catch(e) { return null; }
+    return fallback;
+  }
+  return null;
 }
 
 // ── Apply role ────────────────────────────────────────────
@@ -336,6 +415,8 @@ function _lgWire() {
   window.addEventListener('online', () => { const el = document.getElementById('loginError'); if (el && /offline/i.test(el.textContent)) _lgShowMsg(''); });
 }
 function showLoginScreen(errorMsg) {
+  const other = document.getElementById('loginOtherAccount');
+  if (other) other.hidden = true;
   const scr = document.getElementById('loginScreen');
   clearTimeout(_lgLeaveT); clearTimeout(_lgDoneT); _lgSigningIn = false;
   scr.classList.remove('lg-leaving');
@@ -419,6 +500,7 @@ function _applyLoginTheme(name) {
 
 // ── Login ─────────────────────────────────────────────────
 async function authLogin() {
+  if (firebase.auth().currentUser && !currentUser) { await _authRetrySignedIn(); return; }
   const email  = document.getElementById('loginEmail').value.trim();
   const pass   = document.getElementById('loginPass').value;
   const remember = document.getElementById('rememberMe')?.checked;

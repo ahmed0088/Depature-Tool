@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 613, items: [
+    'A slow hotel database connection keeps your signed-in session and retries automatically. The login screen explains the connection problem and offers Retry connection or Use another account.',
+    'Protected background reads wait until your hotel profile is ready. Connection errors stay visible until the affected operation recovers, with a phone-friendly retry button and an HTTPS connection fallback for networks that block WebSockets.'
+  ] },
   { v: 612, items: [
     'Guest enrolment now has an Excel guest list tab for Adagio and hotels without Neorcha. Upload a Purpose of Stay workbook, choose its worksheet and dates, review the guests, then use the same saved hotel link and cloud enrolment.',
     'The Excel preview separates missing details, shared email addresses, repeated guests and previous enrolments. Your Neorcha list stays separate. No agreement is taken from the spreadsheet; only the guests you mark Agreed are sent.',

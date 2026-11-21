@@ -13,19 +13,23 @@ let _online = false;
 // app keeps showing yesterday's cache and keeps accepting edits that never
 // leave the device. This is what makes that state visible.
 let _dbError = '';
+const _dbFaults = new Map();
+let _dbRetry = null;
+let _dbLongPolling = false;
 
 // Read-only accessor used by other modules (shifts.js, etc.)
 function isOnline() { return _online; }
 function dbError()  { return _dbError; }
 
-// Firebase reports a rules rejection as PERMISSION_DENIED. That is a very
-// different problem from being offline — usually the Realtime Database
-// rules expired or were changed — so it is worth naming precisely.
+// A denied read can be an account/access issue. It does not prove that
+// database rules expired, and a successful unrelated read cannot resolve it.
 function _dbNoteError(where, err) {
+  if (!_fbSignedIn()) return;
   const code = String(err && (err.code || err.message) || '').toUpperCase();
   const msg  = /PERMISSION[_ ]DENIED/.test(code)
-    ? 'The database refused this device. Check the Realtime Database rules in the Firebase console — test-mode rules expire on a set date.'
+    ? 'Your hotel data access was refused. Retry the connection; if it continues, ask your hotel administrator to check your account access.'
     : `Could not reach the database (${where}).`;
+  _dbFaults.set(where, msg);
   if (_dbError === msg) return;      // don't re-announce the same fault
   _dbError = msg;
   console.warn('[DB]', where, err);
@@ -33,9 +37,11 @@ function _dbNoteError(where, err) {
   _dbShowBanner(msg);
 }
 
-function _dbClearError() {
-  if (!_dbError) return;
-  _dbError = '';
+function _dbClearError(where) {
+  if (where && !_dbFaults.has(where)) return;
+  if (where) _dbFaults.delete(where); else _dbFaults.clear();
+  _dbError = Array.from(_dbFaults.values()).pop() || '';
+  if (_dbError) { _dbShowBanner(_dbError); updateConnectionUI(_online); return; }
   const b = document.getElementById('dbErrorBanner');
   if (b) b.remove();
   updateConnectionUI(_online);
@@ -53,14 +59,20 @@ function _dbShowBanner(msg) {
     b.className = 'db-error-banner';
     document.body.appendChild(b);
   }
+  b.setAttribute('role', 'status');
   b.innerHTML = `<span>⚠</span><span id="dbErrorText"></span>`
+              + `<button type="button" class="db-error-retry">Retry connection</button>`
               + `<button type="button" class="db-error-x" aria-label="Dismiss">✕</button>`;
-  b.querySelector('#dbErrorText').textContent = msg + ' Anything you change is being kept on this device only.';
+  b.querySelector('#dbErrorText').textContent = msg + ' Changes have not all been confirmed by the database.';
+  const retry = b.querySelector('.db-error-retry');
+  retry.disabled = !!_dbRetry;
+  retry.onclick = () => fbRetryConnection();
   b.querySelector('.db-error-x').onclick = () => b.remove();
 }
 
 function dbInit() {
   try {
+    try { if (sessionStorage.getItem('ho_db_long_poll_v1') === '1') dbUseLongPolling(); } catch (_) {}
     _db  = firebase.database();
     _ref = _db.ref(`hotels/${HOTEL_ID}`);
     console.log('✅ Firebase DB ready — hotel:', HOTEL_ID);
@@ -78,7 +90,11 @@ function updateConnectionUI(online) {
   const dot = document.getElementById('fbDot');
   const lbl = document.getElementById('fbLabel');
   if (!dot || !lbl) return;
-  if (_dbError) {
+  if (!_fbSignedIn()) {
+    dot.style.background = 'var(--amber)';
+    dot.style.boxShadow = 'none';
+    lbl.textContent = 'Firebase · Connecting';
+  } else if (_dbError) {
     dot.style.background = 'var(--rose)';
     dot.style.boxShadow  = '0 0 6px var(--rose)';
     lbl.textContent      = 'Firebase · Not saving';
@@ -93,6 +109,62 @@ function updateConnectionUI(online) {
   }
 }
 
+/** Bounded reads leave no timeout behind after a successful response. */
+function dbReadWithTimeout(ref, ms) {
+  let timer;
+  return Promise.race([ref.once('value'), new Promise((_, no) => {
+    timer = setTimeout(() => no(Object.assign(new Error('Database connection timed out'), { code: 'db/timeout' })), ms || 10000);
+  })]).finally(() => clearTimeout(timer));
+}
+
+/** Some desk/phone networks block WebSockets; Firebase also supports HTTPS polling. */
+function dbUseLongPolling() {
+  if (_dbLongPolling) return;
+  if (firebase.database.INTERNAL && typeof firebase.database.INTERNAL.forceLongPolling === 'function') {
+    firebase.database.INTERNAL.forceLongPolling();
+    _dbLongPolling = true;
+    try { sessionStorage.setItem('ho_db_long_poll_v1', '1'); } catch (_) {}
+  }
+}
+
+/** Reconnect and reattach cancelled reads. Never replay application writes or launch a job. */
+function fbRetryConnection() {
+  if (_dbRetry) return _dbRetry;
+  _dbRetry = (async () => {
+    if (!_db || navigator.onLine === false) return false;
+    try {
+      if (!_online) dbUseLongPolling();
+      _db.goOffline();
+      _db.goOnline();
+      const user = firebase.auth().currentUser;
+      if (!user) return false;
+      await dbReadWithTimeout(_db.ref(`hotels/${HOTEL_ID}/users/${user.uid}`), 8000);
+      // Reads cancelled by permission errors do not restart themselves in Firebase.
+      const failed = _fbFailedListeners.splice(0);
+      failed.forEach(([path, cb]) => fbListen(path, cb));
+      const paths = Array.from(_dbFaults.keys()).filter(k => k.startsWith('reading ')).map(k => k.slice(8));
+      await Promise.all(paths.map(path => fbGet(path)));
+      _dbClearError('connection');
+      return !_dbError;
+    } catch (e) { _dbNoteError('connection', e); return false; }
+  })().finally(() => {
+    _dbRetry = null;
+    const button = document.querySelector('#dbErrorBanner .db-error-retry');
+    if (button) button.disabled = false;
+    updateConnectionUI(_online);
+  });
+  const button = document.querySelector('#dbErrorBanner .db-error-retry');
+  if (button) button.disabled = true;
+  return _dbRetry;
+}
+
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('online', () => { if (_fbSignedIn() && (_dbError || !_online)) fbRetryConnection(); });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && _fbSignedIn() && (_dbError || !_online)) fbRetryConnection();
+  });
+}
+
 // ── Helpers ───────────────────────────────────────────────
 /** Today (or date d) as YYYY-MM-DD on this device's clock: toISOString() is UTC, the day before in Dubai until 04:00. */
 function hoLocalISO(d) { d = d || new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
@@ -100,7 +172,7 @@ async function fbSet(path, data) {
   if (typeof rbStampReset === 'function' && /^roster\/days/.test(path)) rbStampReset();   // the roster changed: counted again on the next redraw
   lsSave(path, data);
   if (!_ref) return;
-  try { await _ref.child(path).set(data); _dbClearError(); }
+  try { await _ref.child(path).set(data); _dbClearError('saving ' + path); }
   catch (e) { _dbNoteError('saving ' + path, e); }
 }
 
@@ -119,21 +191,23 @@ async function fbUpdate(path, patch) {
   if (!patch || !Object.keys(patch).length) return;
   lsSave(path, fbApplyPatch(lsLoad(path), patch));
   if (!_ref) return;
-  try { await _ref.child(path).update(patch); _dbClearError(); }
+  try { await _ref.child(path).update(patch); _dbClearError('saving ' + path); }
   catch (e) { _dbNoteError('saving ' + path, e); }
 }
 
 async function fbGet(path) {
+  // Background modules also start on the login page. Wait for the verified
+  // profile before requesting protected data or returning a previous guest cache.
+  if (!_fbSignedIn()) return new Promise(resolve => _fbReadWaiting.push([path, resolve]));
   if (!_ref) return lsLoad(path);
   try {
     // offline, once() waits until the connection is back: give up after 10 s and use this device's copy
     // (noted as a read error, so nothing is saved over the team's data from it)
-    const snap = await Promise.race([_ref.child(path).once('value'),
-      new Promise((_, no) => setTimeout(() => no(new Error('no answer from the database (offline?)')), 10000))]);
+    const snap = await dbReadWithTimeout(_ref.child(path));
     const val  = snap.val();
     if (val === null) lsDelete(path);
     else lsSave(path, val);
-    _dbClearError();
+    _dbClearError('reading ' + path);
     return val;
   } catch (e) { _dbNoteError('reading ' + path, e); return lsLoad(path); }
 }
@@ -144,18 +218,29 @@ async function fbGet(path) {
 // screen, the database refuses it and Firebase cancels it for good, so after a sign-out (which
 // reloads) and a slower sign-in, roster, wake-ups, notes and settings never updated that session.
 const _fbWaiting = [];
-function _fbSignedIn() { return typeof currentUser === 'undefined' || !!currentUser; }
-function fbSignedInNow() { _fbWaiting.splice(0).forEach(([p, c]) => fbListen(p, c)); }
+const _fbReadWaiting = [];
+const _fbFailedListeners = [];
+function _fbSignedIn() {
+  // db.js loads before auth.js; its missing (or not-yet-initialized) binding
+  // means sign-in is still pending, never permission to read guest data.
+  try { return !!currentUser; } catch (_) { return false; }
+}
+function fbSignedInNow() {
+  _fbWaiting.splice(0).forEach(([p, c]) => fbListen(p, c));
+  _fbReadWaiting.splice(0).forEach(([p, resolve]) => fbGet(p).then(resolve));
+  updateConnectionUI(_online);
+}
 function fbListen(path, cb) {
-  if (!_ref) { _fbWaiting.push([path, cb]); cb(lsLoad(path)); return; }
   if (!_fbSignedIn()) { _fbWaiting.push([path, cb]); return; }
+  if (!_ref) { _fbWaiting.push([path, cb]); cb(lsLoad(path)); return; }
   _ref.child(path).on('value', snap => {
     const val = snap.val();
     if (val === null) lsDelete(path);
     else lsSave(path, val);
-    _dbClearError();
+    _dbClearError('reading ' + path);
     cb(val);
   }, err => {
+    if (!_fbFailedListeners.some(([p, c]) => p === path && c === cb)) _fbFailedListeners.push([path, cb]);
     _dbNoteError('reading ' + path, err);
     cb(lsLoad(path));
   });
@@ -221,7 +306,7 @@ async function fbPushLog(path, entry, max) {
     const r = await _ref.child(path).transaction(top);
     const v = r && r.snapshot ? r.snapshot.val() : null;
     if (v) lsSave(path, v);
-    _dbClearError();
+    _dbClearError('saving ' + path);
     return Array.isArray(v) ? v : (v && typeof v === 'object') ? Object.values(v) : null;
   } catch (e) { _dbNoteError('saving ' + path, e); return null; }
 }

@@ -37,7 +37,11 @@ async function tnResolveHotel(uid) {
     // accounts from before hotels had their own spaces belong to this one
     try {
       const here = await read(_tnDb().ref(`hotels/${HOTEL_ID}/users/${uid}`));
-      if (here.exists()) { await _tnDb().ref('userHotels/' + uid).set(HOTEL_ID); assigned = HOTEL_ID; }
+      if (here.exists()) {
+        // Linking a legacy account must not hold a successful sign-in open while offline.
+        _tnDb().ref('userHotels/' + uid).set(HOTEL_ID).catch(e => console.warn('[tenant] link pending:', e.code || 'connection'));
+        assigned = HOTEL_ID;
+      }
     } catch (_) {}
   }
   if (assigned && assigned !== HOTEL_ID) { tnMoveDevice(assigned); return 'reloading'; }

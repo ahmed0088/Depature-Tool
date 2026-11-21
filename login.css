@@ -291,3 +291,8 @@ html[data-skin] #loginScreen .fl-btn, html[data-skin] #loginScreen .login-error 
 html[data-skin] #loginScreen .lg-title, html[data-skin] #loginScreen .lg-word { font-family: var(--sk-title-font, var(--font)) !important; text-transform: var(--sk-title-case, none) !important; font-weight: var(--sk-title-w, 700) !important; }
 html[data-skin] #loginScreen .login-label { font-family: var(--rl-label, var(--font)) !important; }
 html[data-skin] #loginScreen .lg-sky { display: var(--sk-sky, block); }
+
+/* Connection recovery stays separate from entering another account. */
+.lg-other-account { min-height:44px; margin:0 0 12px; padding:8px 0; border:0; background:transparent; color:var(--lg-a, var(--accent)); font:inherit; text-decoration:underline; cursor:pointer; }
+.lg-other-account[hidden] { display:none; }
+.lg-other-account:focus-visible { outline:2px solid currentColor; outline-offset:3px; border-radius:4px; }

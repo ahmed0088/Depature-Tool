@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v612"/>
+<meta name="ho-version" content="v613"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -360,6 +360,7 @@
       <p class="lg-sub lg-in" style="--i:2">Sign in to start your shift.</p>
 
       <div id="loginError" class="login-error" role="alert" aria-live="polite" style="display:none;"></div>
+      <button id="loginOtherAccount" class="lg-other-account" type="button" onclick="authUseAnotherAccount()" hidden>Use another account</button>
 
       <form id="loginForm" onsubmit="event.preventDefault();authLogin();" novalidate>
         <div class="login-field lg-in" style="--i:3">
@@ -5043,7 +5044,9 @@ async function appInit() {
     if (depRooms.length && !(typeof depIsTyping === 'function' && depIsTyping())) depRender();
   }, 60000);
 
-  showToast('App ready — connected to Firebase', 'ok');
+  if (typeof dbError === 'function' && dbError()) showToast('Hotel data connection needs attention. Use Retry connection below.', 'warn');
+  else if (typeof isOnline === 'function' && !isOnline()) showToast('Opened this device’s saved copy. Waiting for the database connection.', 'warn');
+  else showToast('App ready — connected to Firebase', 'ok');
 }
 
 // appInit is called by hideLoginScreen after auth succeeds
