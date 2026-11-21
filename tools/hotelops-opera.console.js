@@ -1684,6 +1684,12 @@
       idle(function () { deb = 0; lastScan = Date.now(); scan(); });
     }, ms);
   }
+  // A colleague's saved changes may already be visible when this tab resumes.
+  // Read them promptly; never click Search/Refresh or reload an editing screen.
+  function resumeRead() { if (!stopped && !document.hidden) laterScan(100); }
+  window.addEventListener('focus', resumeRead);
+  window.addEventListener('pageshow', resumeRead);
+  document.addEventListener('visibilitychange', resumeRead);
 
   // ── when it can't read a screen: a report of the screen's layout (never its values) for the developer ──
   // Checked on every read (cheap: what readGrids already saw). A report is built only when the same stuck screen shows on two reads
@@ -2235,6 +2241,7 @@
     stopped = true;
     try { if (obs) obs.disconnect(); } catch (_) {}
     clearInterval(iv); clearInterval(uiIv); clearTimeout(deb);
+    window.removeEventListener('focus', resumeRead); window.removeEventListener('pageshow', resumeRead); document.removeEventListener('visibilitychange', resumeRead);
     window.removeEventListener('message', onWinMsg);
     window.removeEventListener('click', onClickLearn, { capture: true });
     window.removeEventListener('click', captureOperaClick, { capture: true }); window.removeEventListener('input', captureDraft, { capture: true }); window.removeEventListener('change', captureDraft, { capture: true });

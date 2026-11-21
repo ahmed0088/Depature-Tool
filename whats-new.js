@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 607, items: [
+    'The Departures board recognizes a saved checkout from a reservation search or refreshed list even if a colleague checked out an extended stay whose booked departure date is still later. No checkout click on your own PC is needed.',
+    'Repeated copies of an old Departures screen no longer count as newer reservation evidence. Confirmed extensions shared from another desk retain their saved status until newer Opera data says otherwise.',
+    'The reader scans promptly when its tab becomes visible again. It reads the linked Opera screen: after changes at another desk, refresh the appropriate Opera list so those saved changes are visible. A missing row alone does not decide checkout versus extension.'
+  ] },
   { v: 606, items: [
     'Fixed reviewed seller changes being held as duplicates when two existing room-upsell charges share the same booking, product and date. The exact existing record can be reassigned while its product, amounts, dates, quantity, status and notes remain unchanged.',
     'Already-correct live results now refresh the monthly read too. A request that is already Approved no longer returns from an old Pending snapshot after the run finishes.',

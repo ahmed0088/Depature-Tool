@@ -8,6 +8,34 @@ test('a confirmed checkout updates the same booking, including a manually extend
 test('an old arrival of the same reservation cannot turn its confirmed checkout into an extension',()=>{const p=O.plan({snap:{kind:'details',date:T,rows:[{...guest,status:'checked_out'}]},today:T,board,arr:[{room:'0102',name:'Alpha Example',conf:guest.conf,nights:2}],pur:[],ih:null});assert.equal(p.dep.out.length,1);assert.equal(p.dep.ext.length,0);});
 test('disappearance and an intention to extend never invent a night or auto-confirm a stay',()=>{for(const intent of ['extending','maybe_extend']){const r=O.depRecon({dep:{date:T,total:1,rows:[{...guest,room:'0103',conf:'700000003',name:'Other Guest'}]},board:{...board,rooms:[{...board.rooms[0],intent}]},today:T,reads:{}}),d=r.diffs.find(d=>d.room==='0102');assert.equal(d.why,'waiting');assert.equal(d.nights,0);assert.equal(d.sure,false);assert(!O.reconAuto(r).some(d=>d.room==='0102'));}});
 test('a saved later departure extends the correct reservation with its real number of nights',()=>{const p=plan([{...guest,status:'in_house',departure:'2026-11-23'}]);assert.equal(p.dep.ext.length,1);assert.equal(p.dep.ext[0].nights,3);assert.equal(p.dep.ext[0].to,'2026-11-23');});
+test('another desk can check out an extended reservation without a local click or a today departure value',()=>{
+ for(const departure of ['2026-11-23',''])for(const kind of ['details','search','list','inhouse','departures']){
+  const p=O.plan({snap:{kind,date:T,rows:[{...guest,status:'checked_out',departure}]},today:T,board:{...board,rooms:[{...board.rooms[0],status:'extended'}]},arr:[],pur:[],ih:null});assert.equal(p.dep.out.length,1,kind+' '+departure);assert.equal(p.dep.ext.length,0);
+ }
+ for(const row of [{...guest,status:'checked_out',conf:'700000999'},{...guest,status:'cancelled',departure:'2026-11-23'},{...guest,status:'in_house',departure:T}])assert.equal(plan([row]).dep.out.length,0);
+ assert.equal(O.plan({snap:{kind:'details',date:'2026-11-19',rows:[{...guest,status:'checked_out',departure:'2026-11-23'}]},today:T,board,arr:[],pur:[],ih:null}).dep.out.length,0);
+});
+test('a current reservation search status resolves a missing departure; older and other-booking reads do not',()=>{
+ const dep={date:T,at:200,contentAt:100,total:0,rows:[]},search={date:T,at:201,contentAt:101,rows:[{...guest,status:'checked_out',departure:'2026-11-23'}]},read=()=>O.depRecon({dep,board,today:T,reads:{search}});
+ assert.equal(read().diffs[0].type,'status');assert.equal(O.reconAuto(read()).length,1);
+ search.contentAt=99;assert.equal(O.reconAuto(read()).length,0);search.contentAt=101;search.rows[0].conf='700000999';assert.equal(O.reconAuto(read()).length,0);
+});
+test('unchanged Departures heartbeats cannot outweigh newer saved reservation evidence',()=>{
+ const dep={date:T,total:1,at:300,contentAt:100,rows:[guest]},details={date:T,at:200,contentAt:101,rows:[{...guest,status:'in_house',departure:'2026-11-23'}]};
+ const r=O.depRecon({dep,board,today:T,reads:{details}});assert.equal(r.diffs[0].why,'extended');assert.equal(r.diffs[0].nights,3);
+ dep.contentAt=102;assert.equal(O.depRecon({dep,board,today:T,reads:{details}}).diffs.length,0,'a genuinely changed newer due-out list wins');
+});
+test('a shared confirmed extension survives an older Departures screen on another PC',()=>{
+ const b={...board,rooms:[{...board.rooms[0],status:'extended',extVia:'opera',extConfirmed:true,operaStateAt:101,extensionNights:3}]},dep={date:T,total:1,at:300,contentAt:100,rows:[guest]};
+ assert.equal(O.depRecon({dep,board:b,today:T,reads:{}}).diffs.length,0);
+ dep.contentAt=102;assert.equal(O.depRecon({dep,board:b,today:T,reads:{}}).diffs[0].type,'notext');
+ b.rooms[0].extConfirmed=false;dep.contentAt=100;assert.equal(O.depRecon({dep,board:b,today:T,reads:{}}).diffs[0].type,'notext','an unconfirmed WhatsApp extension retains existing checks');
+});
+test('a newer explicit checkout cannot be reversed by an older In House read or confused with the next booking in that room',()=>{
+ const dep={date:T,total:1,at:102,contentAt:102,rows:[{...guest,status:'checked_out',departure:'2026-11-23'}]},details={date:T,at:101,rows:[{...guest,status:'in_house',departure:'2026-11-23'}]};
+ for(const status of ['due','extended','out']){const r=O.depRecon({dep,board:{...board,rooms:[{...board.rooms[0],status}]},today:T,reads:{details}});assert(!O.reconAuto(r).some(d=>d.why==='extended'));assert.equal(O.reconAuto(r).length,status==='out'?0:1);}
+ dep.rows=[{...guest,conf:'700000999',name:'BETA, EXAMPLE'}];const r=O.depRecon({dep,board:{...board,rooms:[{...board.rooms[0],status:'extended',extVia:'opera'}]},today:T,reads:{}});assert.equal(O.reconAuto(r).length,0);
+});
 test('uncertain differences stay quiet instead of interrupting Opera with binary questions',()=>{const items=O.operaThoughts({stuck:[],asked:{},taught:{h:{},s:{}},cfg:{auto:true},board:{rooms:[]},last:{},now:Date.now(),today:T,recon:{state:'ok',diffs:[{type:'missing',room:'0102',why:'waiting',sure:false,reason:'Waiting for saved departure date'}]},routines:[],seen:{}}).filter(r=>r.type==='opAsk');assert.equal(items.length,1);assert.equal(items[0].loud,false);assert.match(items[0].text,/Waiting for Opera/);});
 test('an older Departures list cannot undo a newer saved extension or re-question a confirmed checkout',()=>{
  const dep={date:T,total:1,at:100,rows:[guest]},details={date:T,at:101,rows:[{...guest,departure:'2026-11-23',status:'in_house'}]};

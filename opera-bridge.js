@@ -277,6 +277,17 @@ function plan(inp) {
       if (r.arrival && !b.arrival) set.arrival = operaDay(r.arrival);
       if (Object.keys(set).length) P.dep.fill.push({ room: b.roomStr, set });
     });
+    // A colleague may check out a previously extended stay. Its saved status is
+    // authoritative even when the reservation still carries the booked later date.
+    // Require a current-day reservation/list read and the exact board identity.
+    if (!arrOnly && screenToday && ['departures', 'inhouse', 'details', 'search', 'list'].includes(kind)) rows.forEach(r => {
+      if (r.status !== 'checked_out' || !realRoom(r.room)) return;
+      const b = findB(r);
+      if (!b || b.status === 'out' || !departureMatch(b, r) || P.dep.out.some(o => o.room === b.roomStr) || P.dep.ext.some(e => e.room === b.roomStr)) return;
+      const again = againOf(r.name || b.name, b.roomStr, r.conf || b.conf);
+      if (again) P.dep.ext.push({ room: b.roomStr, nights: again.nights, to: again.to, row: r, again: true });
+      else P.dep.out.push({ room: b.roomStr, row: r });
+    });
     // the departure moved to a later day in Opera: the stay was extended there
     if (!arrOnly) rows.forEach(r => {
       if (!realRoom(r.room) || !r.departure || r.departure <= t || r.status === 'checked_out' || (r.arrival && r.arrival > t)) return;
@@ -440,6 +451,8 @@ function depReport(rows) {
 // → { state: 'none' | 'otherday' | 'noboard' | 'incomplete' | 'ok', read, total, opN, boardN, extN, diffs: [{type, room, name, reason, why, nights, to, sure, acts, row}] }
 //   type: 'missing' (on the board, not in Opera) · 'extra' (in Opera, not on the board) · 'guest' (same room, another guest) · 'status' (left in Opera, due here)
 const DEP_ACTIVE = ['due', 'late', 'na', 'dnd'];
+// Receiving an unchanged cached screen again is not newer reservation evidence.
+const evidenceAt = read => +(read && (read.contentAt != null ? read.contentAt : read.at)) || 0;
 function depRecon(I) {
   const t = I.today, D = I.dep;
   if (!D || !Array.isArray(D.rows)) return { state: 'none', diffs: [] };
@@ -450,12 +463,12 @@ function depRecon(I) {
   if (total && read < total) return { state: 'incomplete', read, total, diffs: [] };
   const bk = b => roomKey(b.roomStr != null ? b.roomStr : b.room), keep = I.keep || {};
   const opBy = new Map();
-  D.rows.forEach(r => { if (realRoom(r.room) && !isPm(r.room) && !BAD.has(r.status) && (!r.departure || r.departure === t) && !opBy.has(roomKey(r.room))) opBy.set(roomKey(r.room), r); });
+  D.rows.forEach(r => { if (realRoom(r.room) && !isPm(r.room) && !BAD.has(r.status) && (r.status === 'checked_out' || !r.departure || r.departure === t) && !opBy.has(roomKey(r.room))) opBy.set(roomKey(r.room), r); });
   const others = [];
-  Object.keys(I.reads || {}).forEach(k => { const L = I.reads[k]; if (k !== 'departures' && L && Array.isArray(L.rows) && (!L.date || L.date === t || k === 'inhouse' || k === 'details' || k === 'search' || k === 'list')) L.rows.forEach(r => { if (r && typeof r === 'object') others.push(Object.assign({}, r, { _k: k, _at: +L.at || 0, _date: L.date || '' })); }); });
+  Object.keys(I.reads || {}).forEach(k => { const L = I.reads[k]; if (k !== 'departures' && L && Array.isArray(L.rows) && (!L.date || L.date === t || k === 'inhouse' || k === 'details' || k === 'search' || k === 'list')) L.rows.forEach(r => { if (r && typeof r === 'object') others.push(Object.assign({}, r, { _k: k, _at: evidenceAt(L), _date: L.date || '' })); }); });
   const freshBy = new Map();
   B.forEach(b => {
-    const k = bk(b), latest = !keep[k] && others.filter(r => ['details', 'inhouse'].includes(r._k) && r._date === t && r._at > (+D.at || 0)
+    const k = bk(b), latest = !keep[k] && others.filter(r => (['details', 'inhouse'].includes(r._k) || ['search', 'list'].includes(r._k) && r.status === 'checked_out') && r._date === t && r._at > evidenceAt(D)
       && realRoom(r.room) && roomKey(r.room) === k && departureMatch(b, r))
       .sort((a, c) => c._at - a._at)[0];
     const fresh = latest && (latest.status === 'checked_out' || (latest.departure > t && !BAD.has(latest.status) && latest.status !== 'due_in' && (!latest.arrival || latest.arrival <= t))) ? latest : null;
@@ -482,9 +495,17 @@ function depRecon(I) {
     }
     if (b.status === 'extended' && !keep[k]) {
       const r0 = opBy.get(k);
+      // Another desk's confirmed update can reach the shared board before
+      // this PC refreshes its older Departures screen.
+      if (r0 && departureMatch(b, r0) && b.extConfirmed && Number(b.operaStateAt) > 0 && evidenceAt(D) <= Number(b.operaStateAt)) return;
+      if (r0 && departureMatch(b, r0) && r0.status === 'checked_out') {
+        diffs.push({ type: 'status', room: b.roomStr, name: b.name, why: 'out', sure: true, acts: ['out', 'keep'], reason: 'Opera confirms checkout for this reservation, including its earlier extension.' }); return;
+      }
       // Opera decides: still leaving today in Opera → not extended yet (the guest may pay later); back to ⏳ extending until Opera shows it
       // by itself only when WhatsApp / the reader extended it; a person who tapped Extend decides — it waits in the list for a tap
-      if (r0 && r0.status !== 'checked_out') { diffs.push({ type: 'notext', room: b.roomStr, name: b.name, reason: 'Opera still has it leaving today — not extended in Opera yet → ⏳ extending until Opera shows it' + (b.extVia === 'hand' ? ' (marked by hand here: your call)' : ''), why: 'notext', sure: b.extVia !== 'hand', acts: ['unext', 'keep'] }); return; }
+      if (r0 && departureMatch(b, r0) && r0.status !== 'checked_out') {
+        diffs.push({ type: 'notext', room: b.roomStr, name: b.name, reason: 'Opera still has it leaving today — not extended in Opera yet → ⏳ extending until Opera shows it' + (b.extVia === 'hand' ? ' (marked by hand here: your call)' : ''), why: 'notext', sure: b.extVia !== 'hand', acts: ['unext', 'keep'] }); return;
+      }
     }
     if (keep[k] || b.status === 'extended') return;
     const r = opBy.get(k);
@@ -1286,6 +1307,7 @@ function apply0(snap, how, P0) {
     const r = depRooms[i]; if (r.status === 'out') return;
     r.note = (r.note ? r.note + '\n' : '') + `[${at}] Checked out in Opera`;
     safe(() => quiet(() => depAction(i, 'out')));
+    r.operaStateAt = Date.now();
     depTouched = true;
   });
   P.dep.ext.forEach(({ room, nights, to, again }) => {
@@ -1293,6 +1315,8 @@ function apply0(snap, how, P0) {
     const r = depRooms[i];
     safe(() => quiet(() => depAction(i, 'extended', nights)));
     r.extConfirmed = true;   // already done in Opera: nothing left to put in Opera
+    r.operaStateAt = Date.now();
+    r.operaDeparture = to || '';
     r.note = (r.note ? r.note + '\n' : '') + `[${at}] ${again ? 'Checked out and checked in again in Opera → extended' : 'Extended in Opera'}${to ? ' to ' + to : ''} (${pl(nights, 'night')})`;
     safe(() => { if (typeof depSyncExtToLog === 'function') depSyncExtToLog(i); });
     depTouched = true;
@@ -1422,13 +1446,14 @@ function receive(raw, h, reply) {
   if (raw && raw.url) safe(() => rememberHome(raw.url));
   h = String(h || hashOf([snap.kind, snap.date, snap.rows]));
   if (SEEN.has(h) && SEEN.get(h) !== WAITING && LAST[snap.kind] && LAST[snap.kind].h === h) {   // the same screen again: nothing new to read (a folio back to an earlier state is read again)
+    if (LAST[snap.kind].contentAt == null) LAST[snap.kind].contentAt = LAST[snap.kind].at;
     LAST[snap.kind].at = Date.now(); saveLast();   // …but Opera still shows it: the read is still fresh
     if (snap.kind === 'departures') safe(reconAutoRun);   // the board may have changed since (WhatsApp, a tap): compare again
     return SEEN.get(h);
   }
   const n = snap.rows.length || (snap.folio ? snap.folio.postings.length : 0) || (snap.traces || []).length || (snap.tables || []).reduce((a, tb) => a + tb.rows.length, 0);
   const readAt = Math.max(Date.now(), ...Object.values(LAST).map(x => (+(x && x.at) || 0) + 1));
-  LAST[snap.kind] = { kind: snap.kind, date: snap.date, title: snap.title, total: snap.total, n, at: readAt, h, rows: snap.rows.slice(0, 600) };
+  LAST[snap.kind] = { kind: snap.kind, date: snap.date, title: snap.title, total: snap.total, n, at: readAt, contentAt: readAt, h, rows: snap.rows.slice(0, 600) };
   ['folio', 'traces', 'tables', 'audit'].forEach(k => { if (snap[k]) LAST[snap.kind][k] = snap[k]; });
   saveLast();
   safe(() => remember(snap));
@@ -2248,7 +2273,7 @@ function stuckHtml(pg) {
 /** the small strip at the top of Departures and Arrivals (desk PC only: hidden on phones and touch screens) */
 function stripHtml() {
   const S = openNow();
-  const st = S.state === 'nohelper' ? 'Get the helper in Settings → Opera reader to link with one click' : S.btn.charAt(0) === '✓' ? 'Reads Opera by itself · this list stays up to date' : S.state === 'noscripts' ? '⚡ Reader on · reads by itself' : '⚡ Reader on · links by itself when Opera opens';
+  const st = S.state === 'nohelper' ? 'Get the helper in Settings → Opera reader to link with one click' : S.btn.charAt(0) === '✓' ? 'Reads the linked Opera screen · refresh Opera after changes at another desk' : S.state === 'noscripts' ? '⚡ Reader on · reads by itself' : '⚡ Reader on · links by itself when Opera opens';
   return `<button type="button" class="op-go sm" data-opx="open">${esc(S.btn)}</button><span class="op-strip-st">${esc(st)}</span>`;
 }
 function paintOpen() {
