@@ -1,4 +1,4 @@
-name: Opera reported-bug diagnosis
+name: Departure count diagnosis
 on:
   push:
     branches: ['diagnose/opera-reader-20261120']
@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-save --no-audit --no-fund graphql@16.11.0
-      - name: Read saved Opera reports without changes
+      - name: Read saved departure counts without changes
         run: node scripts/opera-diagnostic.cjs
         env:
           HOTELOPS_HOTEL: ibis_dubai
