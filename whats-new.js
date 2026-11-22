@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 616, items: [
+    'Monthly Check now has Room Tally. See each room, posting date and product with Opera charges and individual IN-Gauge entries. Edit an existing entry or review a denial here, save it to Selected, then use Review & apply.',
+    'Split room charges no longer block a reviewed amount edit just because another valid charge shares its booking and date. The review lists the separate entries, requires your bill check and rechecks them live before submitting. New or changed entries still stop the run.',
+    'Room cards show the exact last held reason and suggest the remaining charge when every other amount already matches. Selected changes stay marked as not applied. Tallied appears only when refreshed amounts and their booking allocation agree; overlapping confirmations still need a bill check.'
+  ] },
   { v: 615, items: [
     'Missing manual sales with several Opera charges for the same booking and day now have a Review charges action in Monthly close. Check the listed amounts, confirm the seller, then Save & select and use Review & apply.',
     'The review combines valid same-seller charges into one request using the exact Opera net total, one charge day and the actual reservation stay. Every original transaction is retained and remembered after a fresh read verifies the saved sale.',

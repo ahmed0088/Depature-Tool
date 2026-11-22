@@ -21,7 +21,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=requ
    await page.locator('.mt-difference>summary').click();
    assert.match(await page.locator('.mt-diff-summary').innerText(),/2026-10-05/);
    const row=page.locator('.mt-diff-row').first();assert.match(await row.innerText(),/Confirmation 12345/);assert.match(await row.innerText(),/EXAMPLE, ALEX/);assert.match(await row.innerText(),/Both systems have entries/);
-   await row.locator('summary').click();assert.match(await row.locator('details').innerText(),/101 \(1062\) · AED 100.00/);assert.match(await row.locator('details').innerText(),/777 · Late Check Out · APPROVED · Example Seller · AED 150.00/);
+   await row.locator('summary').filter({hasText:'Source records'}).click();assert.match(await row.locator('details').first().innerText(),/101 \(1062\) · AED 100.00/);assert.match(await row.locator('details').first().innerText(),/777 · Late Check Out · APPROVED · Example Seller · AED 150.00/);
    assert.equal(await page.locator('.mt-diff-tools input[data-ig-file=reservations]').count(),1);
    assert.match(await page.locator('.mt-warning').first().innerText(),/last posting/);
    const downloadPromise=page.waitForEvent('download');await page.locator('[data-mt-export-difference]').click();const download=await downloadPromise;assert.equal(download.suggestedFilename(),'Monthly_difference_2026-10.csv');const csv=fs.readFileSync(await download.path(),'utf8');assert(csv.includes('12345'));assert(csv.includes('Example Seller'));

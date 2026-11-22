@@ -84,6 +84,9 @@ jobs:
           node --test tests/ingauge-mercure-reconciliation.test.js
           node --test tests/ingauge-split-charges.test.js
           node tests/ingauge-split-charges.browser.test.js
+          node --test tests/ingauge-monthly-records.test.js
+          node tests/ingauge-monthly-records.browser.test.js
+          HOTELOPS_MONTHLY_STANDARD=1 node tests/ingauge-monthly-records.browser.test.js
           node tests/ingauge-mercure.browser.test.js
           node --test tests/ingauge-confirmation-links.test.js
           node tests/ingauge-confirmation-links.browser.test.js
