@@ -205,10 +205,11 @@ class InGaugeAccount {
     const v=op.action==='add'||op.action==='edit'?op.values:C.values(current);
     const [lockResponse,records]=await Promise.all([
       this.read(API+'productMetric/secure/isLocked?'+new URLSearchParams({tenantLocationId:scope.binding.propertyId,arrivalDate:v.arrival,departureDate:v.departure,businessDate:v.businessDate,metricDate:v.businessDate})),
-      ['add','edit'].includes(op.action)?this.search(scope.binding,'2000-01-01','2099-12-31',op.confirmation):Promise.resolve([])
+      (['add','edit'].includes(op.action)||op.recordReview)?this.search(scope.binding,'2000-01-01','2099-12-31',op.confirmation):Promise.resolve([])
     ]);
     const locked=this.data(lockResponse);
     if(typeof locked!=='boolean'||locked)throw new PortalError('This accounting period is locked or its lock state is unknown. Use IN-Gauge’s adjustment workflow.');
+    if(op.recordReview){const issue=C.recordReviewError(op,snapshot,records);if(issue)throw new PortalError(issue);}
     if(['add','edit'].includes(op.action)&&!C.creditOnlyEdit(op,current)&&C.duplicates(op,records.filter(r=>String(r.id)!==String(op.recordId||'')),fresh.products).some(r=>!C.reviewedDuplicate(op,r,snapshot)))throw new PortalError('An existing request or product already represents this sale. It was not duplicated.');
     const checked={current,snapshot:fresh,payload:['add','edit'].includes(op.action)?C.payload(op,fresh,current):op.action==='approve'&&!approvalAlreadyMatches(op,current,fresh)?C.approvalPayload(op,fresh,current):null};this.preflight={key:C.stable(op),binding:C.stable(snapshot.binding),at:Date.now(),checked};return checked;
   }

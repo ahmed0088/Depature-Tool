@@ -178,6 +178,7 @@
         if(op.confirmation!==before.confirmation)fail('A reviewed operation cannot change its reservation identity.');
       }else if(!/^\d+$/.test(text(op.confirmation))||!text(op.transaction))fail('A missing sale needs its confirmation and Opera transaction.');
       const dateIssue=operationPeriodError(op,snapshot,period);if(dateIssue)fail(dateIssue);
+      if(op.recordReview){const issue=recordReviewError(op,snapshot);if(issue)fail(issue);}
       if(op.action==='add'){const existing=snapshot.records.filter(r=>journalIds(r.memo).includes(text(op.transaction)));if(existing.length)fail('Opera transaction '+text(op.transaction)+' already exists in IN-Gauge as record '+existing.map(r=>r.id).join(', ')+'. Review the existing entry and product instead of adding it again.');}
       if(op.reconciliation){const proof=op.reconciliation;
         const unsupported=op.action==='deny'&&proof.role==='unsupported'&&['ingauge-only','reversed'].includes(proof.kind)&&proof.journalCents===0&&(proof.kind==='reversed'?proof.journalIds?.length>1:proof.coverageVerified===true);
@@ -286,10 +287,33 @@
     return records.filter(r=>journalIds(r.memo).some(tx=>sourceIds.has(tx))||r.confirmation===op.confirmation&&(r.productId===id(op.productId)||!r.productId||/UNKNOWN|UNMAPPED/.test(key(r.product))||op.reconciliation?.kind==='split-missing'&&(!recordFamily(r,products)||recordFamily(r,products)===op.reconciliation.family))&&(once||r.businessDate===op.values?.businessDate));
   }
   function reviewedDuplicate(op,live,snapshot){
+    if(op.recordReview&&op.action==='edit'&&!recordReviewError(op,snapshot)){
+      const proof=op.recordReview,source=snapshot.records.find(r=>r.id===String(live.id));
+      if(proof.related.some(r=>r.id===String(live.id))&&source&&fingerprint(source)===fingerprint(live))return true;
+    }
     const proof=op.reconciliation;if(op.action!=='edit'||proof?.kind!=='duplicate'||proof.role!=='keep'||proof.reviewed!==true||!proof.recordIds?.includes(String(live.id)))return false;
     const source=snapshot.records.find(r=>r.id===String(live.id)),before=snapshot.records.find(r=>r.id===String(op.recordId));
     if(!source||!before||live.confirmation!==op.confirmation||live.propertyId!==snapshot.binding.propertyId||live.departmentId!==snapshot.binding.departmentId||live.productId!==before.productId||!withinPeriod(live.businessDate,proof.period))return false;
     return live.status==='DENIED'||live.status==='PURGED'||fingerprint(live)===fingerprint(source);
+  }
+  // Review an existing row alongside its distinct same-day charges. This never authorizes a new sale.
+  function recordReview(op,snapshot,period){
+    const before=snapshot.records.find(r=>r.id===id(op.recordId));if(!before)fail('Refresh the existing IN-Gauge entry before reviewing it.');
+    const rows=duplicates(op,snapshot.records.filter(r=>r.id!==before.id),snapshot.products);
+    return {schema:1,snapshotId:snapshot.id,binding:binding(snapshot.binding),period:{...period},recordId:before.id,expected:fingerprint(before),reviewed:false,related:rows.map(r=>({id:r.id,expected:fingerprint(r)}))};
+  }
+  function recordReviewError(op,snapshot,liveRecords=snapshot.records){
+    const p=op.recordReview,before=snapshot.records.find(r=>r.id===id(op.recordId));if(!p)return '';
+    if(p.schema!==1||!['edit','deny'].includes(op.action)||p.reviewed!==true||p.snapshotId!==snapshot.id||!sameBinding(p.binding,snapshot.binding)||p.recordId!==before?.id||p.expected!==op.expected||p.expected!==fingerprint(before)||!withinPeriod(before?.businessDate,p.period)||!Array.isArray(p.related)||p.related.length>100||new Set(p.related.map(r=>r?.id)).size!==p.related.length)return 'Check the bill and the existing entries before selecting this monthly edit.';
+    const expected=duplicates({...op,productId:before.productId,values:values(before)},snapshot.records.filter(r=>r.id!==before.id),snapshot.products);
+    if(stable(expected.map(r=>r.id).sort())!==stable(p.related.map(r=>r.id).sort()))return 'The related entries changed. Refresh and review this room again.';
+    for(const proof of p.related){const source=snapshot.records.find(r=>r.id===proof.id),live=liveRecords.find(r=>r.id===proof.id);if(!source||proof.expected!==fingerprint(source)||!live||fingerprint(live)!==proof.expected)return 'A related IN-Gauge entry changed after review. Refresh and review this room again.';}
+    if(op.action==='edit'&&p.related.length){
+      const product=snapshot.products.find(r=>r.id===before.productId),f=kind(product?.name)||kind(product?.code),v=op.values;
+      if(['EC','LC'].includes(f)||op.productId!==before.productId||['arrival','departure','businessDate','room'].some(k=>v?.[k]!==before[k])||v.chargeDays!==before.chargeDays||p.related.some(proof=>{const r=snapshot.records.find(r=>r.id===proof.id);return r.propertyId!==before.propertyId||r.departmentId!==before.departmentId||r.confirmation!==before.confirmation||r.productId!==before.productId||r.businessDate!==before.businessDate||journalIds(r.memo).some(tx=>journalIds(before.memo).includes(tx));}))return 'Review these booking, date, product or duplicate source changes separately. Only distinct existing charges on the same day can be edited together.';
+    }
+    if(op.action==='edit'&&stable(journalIds(op.values?.memo).sort())!==stable(journalIds(before.memo).sort()))return 'Keep the existing Opera transaction links on this entry. Check booking links separately.';
+    return '';
   }
   // IN-Gauge uses bare audit-status words as automatic memos on some records.
   // Match only observed, identity-bound rewrites; real notes remain exact.
@@ -313,6 +337,6 @@
   function matches(op,r){
     return differences(op,r).length===0;
   }
-  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,creditOnlyEdit,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,matches,differences,systemMemoChange,systemMemoNote,terminal,saleCategory,operationCategory,scopeAllows,isRevenueStatus,reportingMessage,reportingCents,reportingRecord,recordAmountIssue};
+  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,creditOnlyEdit,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,recordReview,recordReviewError,matches,differences,systemMemoChange,systemMemoNote,terminal,saleCategory,operationCategory,scopeAllows,isRevenueStatus,reportingMessage,reportingCents,reportingRecord,recordAmountIssue};
   root.InGaugeAuditCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
