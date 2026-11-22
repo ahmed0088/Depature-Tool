@@ -230,3 +230,5 @@ body:has(>#igSettingsOverlay:not([hidden])){overflow:hidden;overscroll-behavior:
 
 /* Personal character styling retains the existing articulated animation rig. */
 .iga-person-personal .iga-leg{stroke:#41483f}.iga-person-personal .iga-leg.rear{stroke:#303b36}.iga-person-personal .iga-leg .shoe{stroke:#152328}.iga-person-personal .iga-arm{stroke:#d3996f}.iga-person-personal .iga-arm.rear{stroke:#bd815b}
+
+.mt-identity-notes{margin:18px 0;border:1px solid var(--border);border-radius:12px;background:var(--bg)}.mt-identity-notes>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;cursor:pointer;padding:15px;min-height:48px;font-size:13px}.mt-identity-notes>summary:before{content:'▸';color:var(--text2)}.mt-identity-notes[open]>summary:before{content:'▾'}.mt-identity-notes>summary b{flex:1}.mt-identity-notes>summary span{font-size:12px;color:var(--text2)}.mt-identity-notes>p{padding:0 15px;font-size:13px;color:var(--text2);line-height:1.7}.mt-identity-notes .mt-money-info{margin:12px;border-color:var(--border);background:var(--card)}.mt-money-info>header strong,.mt-money-info>header small{color:var(--text2)}
