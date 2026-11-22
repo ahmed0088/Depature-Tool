@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 619, items: ['PM accounts numbered 9000 and above are now recognised as holding accounts. Transfer references link their charges to the original guest room and booking, including supported room moves, without creating a new PM upsell or changing matching IN-Gauge entries.', 'PM revenue remains counted once. Unclear transfers need an original-booking check, and PM holding amounts never generate automatic additions or amount corrections. Financial guards also block creating or approving upsells for a PM room.'] },
   { v: 618, items: ['Monthly Check now has a clear Edit or deny entries button beside the comparison. It opens and scrolls to the room entries so you can review a denial, save it to Selected and apply it from HotelOps. Financial changes still require your explicit review.'] },
   { v: 617, items: ['Package automation now shows an animated live IN-Gauge view with the current hotel, confirmation, room, package, seller and reviewed amount. The highlighted stage follows actual worker updates through checking, submitting and reading back the result.', 'The animation pauses when the run finishes or stops, preserves held and uncertain outcomes, and respects reduced-motion settings. Connection and report-fetch runs show their actual current activity too.'] },
   { v: 616, items: [

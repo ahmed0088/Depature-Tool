@@ -15,7 +15,7 @@
   function journalContext(){const S=global.InGaugeWorkspace?.state,binding=state.liveContext?.binding||S?.legacyBinding||(!S?.independent?S?.binding:null);return global.InGaugeSettings?.journal?.({binding})||{breakfastCode:'2090'};}
   function codeDescription(){return Object.entries(journalMapping(journalContext())).map(([code,family])=>code+' ('+productNames[family]+')').join(', ');}
 
-  const labels = { add: 'What to add', review: 'Needs review', coverage: 'Await newer export', existing: 'Already submitted', package: 'Automatic packages' };
+  const labels = { add: 'What to add', review: 'Needs review', coverage: 'Await newer export', existing: 'Already submitted', package: 'Automatic packages', holding: 'PM holding accounts' };
   const money = cents => (cents / 100).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   function amount(v) {
     if (typeof v === 'number') return Number.isFinite(v) ? Math.round(v * 100) : null;
@@ -158,6 +158,7 @@
       const candidates = [...new Map((guestIndex.get(room(j.ROOM) + '|' + norm(j.GUEST_FULL_NAME)) || []).filter(r => ['CKIN','CKOT','DUEIN','DUEOUT','DUOT'].includes(r.SHORT_RESV_STATUS) && day && date(r.TRUNC_BEGIN) <= day && day <= date(r.TRUNC_END)).map(r => [r.CONFIRMATION_NO, r])).values()];
       const r = { transaction: j.TRX_NO, day, code, product, family:mapping[code]||'', cents, room: clean(j.ROOM), guest: clean(j.GUEST_FULL_NAME), currency: clean(j.CURRENCY1).toUpperCase(), note: noteText(j), seller, cashier: clean(j.CASHIER_NAME), username: clean(j.USER_NAME), userId: clean(j.INSERT_USER), conf: candidates.length === 1 ? candidates[0].CONFIRMATION_NO : '', candidates, matches: [], line: j.line, bucket: '', reason: '', action: '' };
       const decide = (bucket, reason, action) => Object.assign(r, { bucket, reason, action });
+      if (/^\d+$/.test(room(j.ROOM))&&Number(room(j.ROOM))>=9000) return decide('holding', 'PM holding account: this amount belongs to the original guest booking. A holding transfer is not a new upsell.', 'Use Monthly Check to match the original room and existing sale. Do not add a sale for the PM room.');
       if (/\[NA\s+Pkgs\./i.test(r.note)) return decide('package', 'Automatic package posting. Package Audit handles package corrections.', 'Use the Audit tab for package corrections.');
       if (r.currency !== 'AED') return decide('review', 'Journal currency is missing or differs from AED.', 'Verify currency before comparing amounts.');
       if (!products[code]) return decide('review', 'This transaction code has no verified product mapping.', 'Confirm the product before adding anything.');

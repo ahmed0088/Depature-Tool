@@ -85,6 +85,8 @@ jobs:
           node --test tests/ingauge-split-charges.test.js
           node tests/ingauge-split-charges.browser.test.js
           node --test tests/ingauge-monthly-records.test.js
+          node --test tests/ingauge-pm-transfers.test.js
+          node tests/ingauge-pm-transfers.browser.test.js
           node --test tests/ingauge-animation.test.js
           node tests/ingauge-animation.browser.test.js
           node tests/ingauge-monthly-records.browser.test.js

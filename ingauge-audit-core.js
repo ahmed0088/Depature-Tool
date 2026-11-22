@@ -164,6 +164,19 @@
     const month=/^\d+$/.test(m[2])?Number(m[2]):'JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC'.split(' ').indexOf(m[2].toUpperCase())+1;
     return day((m[3].length===2?'20':'')+m[3]+'-'+String(month).padStart(2,'0')+'-'+m[1].padStart(2,'0'));
   }
+  const isPmRoom=v=>/^\d+$/.test(text(v))&&Number(v)>=9000;
+  function pmOwner(raw,reservations,snapshot,dateOf){
+    if(!isPmRoom(raw.ROOM))return null;
+    const normalize=v=>key(v).replace(/\b(MR|MRS|MS|MISS|DR|MSTR|MASTER|PROF)\b/g,' ').split(' ').filter(Boolean).sort().join(' '),room=v=>text(v).replace(/^0+(?=\d)/,''),note=[raw.REFERENCE,raw.REMARK,raw.CREDIT_CARD_SUPPLEMENT].map(text).join(' '),physical=new Set();
+    for(const m of note.matchAll(/#\s*(\d+)\s*(?:=>|→|->)[^#\[\]]*#\s*(\d+)/g)){const a=room(m[1]),b=room(m[2]);if([a,b].includes(room(raw.ROOM))&&isPmRoom(a)!==isPmRoom(b))physical.add(isPmRoom(a)?b:a);}
+    const original=physical.size===1?[...physical][0]:'',day=dateOf(raw.BUSINESS_DATE),guest=normalize(raw.GUEST_FULL_NAME),explicit=text(raw.CONFIRMATION_NO||raw.CONFIRMATION_NUMBER),matches=[];
+    if(original&&guest&&day)for(const r of reservations||[]){const conf=text(r.CONFIRMATION_NO),arrival=dateOf(r.TRUNC_BEGIN),departure=dateOf(r.TRUNC_END),rr=room(r.ROOM_NO||r.DISP_ROOM_NO);if(!/^\d+$/.test(conf)||isPmRoom(rr)||normalize(r.FULL_NAME)!==guest||!arrival||!departure||arrival>day||day>departure||!['CKIN','CKOT','DUEIN','DUEOUT','DUOT'].includes(text(r.SHORT_RESV_STATUS))||explicit&&conf!==explicit)continue;
+      const recorded=(snapshot?.records||[]).some(x=>x.confirmation===conf&&room(x.room)===original&&x.propertyId===snapshot.binding.propertyId&&x.departmentId===snapshot.binding.departmentId&&x.businessDate>=arrival&&x.businessDate<=departure);
+      if(rr===original||recorded)matches.push({confirmation:conf,arrival,departure,roomType:text(r.ROOM_CATEGORY_LABEL)});
+    }
+    let unique=[...new Map(matches.map(x=>[x.confirmation,x])).values()],night=false;if(unique.length>1&&/\[NA\s+Pkgs\./i.test(note)){const nights=unique.filter(x=>day<x.departure);if(nights.length===1){unique=nights;night=true;}}const owner=unique.length===1?unique[0]:null;
+    return {pm:true,pmRoom:text(raw.ROOM),room:original,confirmation:owner?.confirmation||'',arrival:owner?.arrival||'',departure:owner?.departure||'',roomType:owner?.roomType||'',candidates:unique.map(x=>x.confirmation),reason:owner?(night?'Automatic night posting: ':'')+'PM '+text(raw.ROOM)+' holds the charge for original room '+original+'. Keep the original guest booking; no new PM sale is needed.':'PM holding account. Verify the transfer reference and original booking; do not create a sale for the PM room.'};
+  }
   function operationError(op,snapshot,period){
     try{
       if(!['add','edit','approve','deny','delete'].includes(op.action))fail('Choose a supported operation.');
@@ -216,6 +229,7 @@
         if(product&&(kind(product.name)||kind(product.code))!==expectedFamily)fail('Opera '+(op.journalCodes||op.reconciliation?.codes||[]).join(', ')+' is mapped to '+familyLabel(expectedFamily)+'. Choose a product from that family, or change the transaction-code mapping and review again.');
       }
       if(op.action==='approve'){
+        if(isPmRoom(before.room))fail('A PM holding account cannot receive upsell credit. Verify the original guest booking first.');
         const p=snapshot.products.find(p=>p.id===before.productId),person=snapshot.contributors.find(p=>p.id===before.contributorId);
         if(!p||p.activeStatus!=='NORMAL'||/UNKNOWN|UNMAPPED/.test(key(p.code+' '+p.name))||!person)fail('Identify the product and contributor before approving this request.');
         if(id(op.productId)!==before.productId||id(op.contributorId)!==before.contributorId||!op.values||stable(op.values)!==stable(values(before)))fail('An approval must preserve the existing product, seller, amount, dates and notes. Use Edit package to review other changes.');
@@ -231,7 +245,7 @@
         const person=snapshot.contributors.find(p=>p.id===id(op.contributorId));
         if(!before||before.contributorId!==id(op.contributorId)){if(!person||person.activeStatus!=='NORMAL')fail('Choose an active contributor assigned to this hotel.');}
         if(before&&before.contributorId!==id(op.contributorId)&&!snapshot.permissions.canReassign)fail('This account cannot reassign contributors.');
-        const v=op.values;if(!v||!day(v.businessDate)||!day(v.departure)||!day(v.arrival))fail('Confirm the arrival, departure and business dates.');
+        const v=op.values;if(isPmRoom(v?.room))fail('PM rooms (9000 and above) only hold transferred charges. Use the original guest room and booking; never create or move an upsell to a PM room.');if(!v||!day(v.businessDate)||!day(v.departure)||!day(v.arrival))fail('Confirm the arrival, departure and business dates.');
         if(v.arrival>v.departure)fail('Departure cannot be before arrival.');
         if(v.businessDate<snapshot.from||v.businessDate>snapshot.to)fail('The business date is outside the fetched audit period.');
         if(v.totalCents!==amountTotal(v,p,snapshot.settings))fail('The proposed total does not match this product’s configured charge calculation.');
@@ -337,6 +351,6 @@
   function matches(op,r){
     return differences(op,r).length===0;
   }
-  const api={text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,creditOnlyEdit,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,recordReview,recordReviewError,matches,differences,systemMemoChange,systemMemoNote,terminal,saleCategory,operationCategory,scopeAllows,isRevenueStatus,reportingMessage,reportingCents,reportingRecord,recordAmountIssue};
+  const api={isPmRoom,pmOwner,text,id,key,day,cents,stable,portalUrl,binding,sameBinding,humanLoginMatch,resolveSeller,resolveProduct,journalMapping,kind,familyLabel,journalIds,flatten,record,fingerprint,amountTotal,withinPeriod,operationPeriodError,operationError,validatePlan,values,creditOnlyEdit,payload,approvalPayload,auditParams,duplicates,reviewedDuplicate,recordReview,recordReviewError,matches,differences,systemMemoChange,systemMemoNote,terminal,saleCategory,operationCategory,scopeAllows,isRevenueStatus,reportingMessage,reportingCents,reportingRecord,recordAmountIssue};
   root.InGaugeAuditCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
