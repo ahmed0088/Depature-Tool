@@ -96,6 +96,7 @@
     if(/^(?:1010|ROOMUPSELL(?:ING)?|ROOMUPGRADE|USS\d+)$/.test(compact)||/^STANDARDROOM|^CLASSICROOM|^SUPERIOR(?:FAMILY)?ROOM|^PRIVILEGEROOM|^STUDIO(?:WITH|WITHOUT)|^(?:ONE|TWO|THREE|\d+)BEDROOMAPARTMENT/.test(compact))return 'ROOM';
     return '';
   }
+  function recordFamily(record,products){const product=products.find(p=>p.id===record.productId);return kind(record.product)||kind(product?.name)||kind(product?.code);}
   const familyLabel=family=>({EC:'Early check-in',LC:'Late checkout',BB:'Breakfast',ROOM:'Room upselling',DIN:'Dinner',HB:'Half board',FB:'Full board'})[family]||'';
   const journalIds=value=>[...new Set([...text(value).matchAll(/\bOpera\s+journal\s+(\d+)\b/gi)].map(m=>m[1]))];
   function resolveProduct(proposal,products){
@@ -157,6 +158,12 @@
     if(['add','edit'].includes(op.action)&&(!withinPeriod(op.values?.businessDate,snapshot)||!withinPeriod(op.values?.businessDate,selected)))return 'The proposed business date is outside the selected audit period.';
     return '';
   }
+  function journalDate(value){
+    const iso=day(value);if(iso)return iso;
+    const m=text(value).match(/^(\d{1,2})[-/.]([A-Za-z]{3}|\d{1,2})[-/.](\d{2}|\d{4})$/);if(!m)return '';
+    const month=/^\d+$/.test(m[2])?Number(m[2]):'JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC'.split(' ').indexOf(m[2].toUpperCase())+1;
+    return day((m[3].length===2?'20':'')+m[3]+'-'+String(month).padStart(2,'0')+'-'+m[1].padStart(2,'0'));
+  }
   function operationError(op,snapshot,period){
     try{
       if(!['add','edit','approve','deny','delete'].includes(op.action))fail('Choose a supported operation.');
@@ -176,6 +183,22 @@
         const unsupported=op.action==='deny'&&proof.role==='unsupported'&&['ingauge-only','reversed'].includes(proof.kind)&&proof.journalCents===0&&(proof.kind==='reversed'?proof.journalIds?.length>1:proof.coverageVerified===true);
         if(proof.schema!==1||proof.snapshotId!==snapshot.id||proof.reviewed!==true||!text(proof.key)||!Array.isArray(proof.journalIds)||(!proof.journalIds.length&&!unsupported)||proof.journalIds.some(v=>!/^\d+$/.test(String(v)))||!Number.isSafeInteger(proof.journalCents)||(proof.journalCents<=0&&!unsupported)||text(proof.currency).toUpperCase()!==text(snapshot.settings.currency).toUpperCase())fail('Check the Opera evidence, amount, confirmation and credit before saving this correction.');
         if(proof.role==='unsupported'&&(!unsupported||!before||!proof.recordIds?.includes(before.id)))fail('Review the existing entry and Opera coverage before denying this sale.');
+        if(proof.kind==='split-missing'){
+          const posts=proof.postings,ids=proof.journalIds.map(text),v=op.values;
+          if(op.action!=='add'||proof.recordIds?.length||!Array.isArray(posts)||posts.length<2||posts.length>100||posts.some(p=>!p||typeof p!=='object')||new Set(ids).size!==posts.length||!ids.includes(text(op.transaction))||stable(posts.map(p=>text(p.id)).sort())!==stable(ids.slice().sort())||!op.requireAssignment||!op.assignmentReviewed||id(op.assignmentContributorId)!==id(op.contributorId))fail('Confirm every included charge, the booking and one seller before selecting this combined sale.');
+          if(!Array.isArray(proof.bookings)||proof.bookings.length!==posts.length||proof.bookings.some(b=>!b||typeof b!=='object')||new Set(proof.bookings.map(b=>b.transaction)).size!==posts.length||posts.some(p=>!proof.bookings.some(b=>b.transaction===p.id&&b.sourceSignature===p.sourceSignature&&b.arrival===p.arrival&&b.departure===p.departure)))fail('Keep a verified booking link for every included Opera charge.');
+          let total=0;for(const p of posts){
+            if(!Number.isSafeInteger(p.cents)||p.cents<=0||p.confirmation!==op.confirmation||p.day!==v?.businessDate||!withinPeriod(p.day,proof.period)||p.currency!==proof.currency||p.arrival!==v.arrival||p.departure!==v.departure||text(p.room)!==text(v.room))fail('The combined source amount, booking, posting day or stay changed. Review these charges again.');
+            let raw;try{raw=JSON.parse(p.sourceSignature);}catch(_){fail('The original Opera evidence is missing. Refresh the reports.');}
+            if(!raw||typeof raw!=='object'||Array.isArray(raw))fail('The original Opera evidence is unreadable. Refresh the reports.');
+            const debit=cents(text(raw.CASHIER_DEBIT)||'0'),credit=cents(text(raw.CASHIER_CREDIT)||'0');
+            if(debit===null||credit===null||text(raw.TRX_NO)!==text(p.id)||text(raw.TRX_CODE)!==text(p.code)||journalDate(raw.BUSINESS_DATE)!==p.day||debit-credit!==p.cents||text(raw.CURRENCY1).toUpperCase()!==p.currency||text(raw.GUEST_FULL_NAME)!==text(p.guest)||text(raw.ROOM)!==text(p.room)||/\[NA\s+Pkgs\./i.test(text(raw.REFERENCE)+' '+text(raw.REMARK)))fail('The original Opera posting does not support this combined manual sale.');
+            if(p.namedContributorId&&id(p.namedContributorId)!==id(op.contributorId)&&text(op.reason).length<5)fail('Explain any change from a seller named on an included Opera posting.');
+            total+=p.cents;if(!Number.isSafeInteger(total))fail('The combined charge is outside the supported amount range.');
+          }
+          if(total!==proof.journalCents||v?.unitCents!==total||v.totalCents!==total||v.chargeDays!==1||stable(journalIds(v.memo).sort())!==stable(ids.slice().sort()))fail('Keep the exact sum, one charge day and every Opera transaction link for this combined sale.');
+          if(snapshot.records.some(r=>journalIds(r.memo).some(tx=>ids.includes(tx))||r.confirmation===op.confirmation&&r.businessDate===v.businessDate&&(!recordFamily(r,snapshot.products)||recordFamily(r,snapshot.products)===proof.family)))fail('An included Opera posting already has an IN-Gauge request. Refresh and review that existing entry.');
+        }
         const sourceDay=before?.businessDate||op.values?.businessDate;if(!withinPeriod(sourceDay,proof.period))fail('This correction was prepared for another posting period. Review it again.');
         if(proof.booking){const b=proof.booking;if(b.schema!==1||b.verified!==true||b.confirmation!==op.confirmation||b.snapshotId!==snapshot.id||!sameBinding(b.binding,snapshot.binding)||stable(b.period)!==stable(proof.period)||!proof.journalIds.includes(b.transaction)||!text(b.sourceSignature)||!day(b.arrival)||!day(b.departure)||b.arrival>b.departure||!withinPeriod(b.day,proof.period)||op.values?.businessDate!==b.day)fail('Recheck the manually entered booking and keep the original Opera posting date.');}
         if(proof.bookings&&(!Array.isArray(proof.bookings)||proof.bookings.some(b=>b.schema!==1||b.verified!==true||b.confirmation!==op.confirmation||b.snapshotId!==snapshot.id||!sameBinding(b.binding,snapshot.binding)||stable(b.period)!==stable(proof.period)||!proof.journalIds.includes(b.transaction)||!text(b.sourceSignature)||b.day!==op.values?.businessDate||!day(b.arrival)||!day(b.departure)||b.arrival>b.departure)))fail('Recheck every selected posting against this booking.');
@@ -260,7 +283,7 @@
   function duplicates(op,records,products){
     const product=products.find(p=>p.id===id(op.productId)),once=product&&['EC','LC'].includes(kind(product.code)||kind(product.name));
     const sourceIds=new Set([op.transaction,...(op.reconciliation?.journalIds||[])].map(text).filter(Boolean));
-    return records.filter(r=>journalIds(r.memo).some(tx=>sourceIds.has(tx))||r.confirmation===op.confirmation&&(r.productId===id(op.productId)||!r.productId||/UNKNOWN|UNMAPPED/.test(key(r.product)))&&(once||r.businessDate===op.values?.businessDate));
+    return records.filter(r=>journalIds(r.memo).some(tx=>sourceIds.has(tx))||r.confirmation===op.confirmation&&(r.productId===id(op.productId)||!r.productId||/UNKNOWN|UNMAPPED/.test(key(r.product))||op.reconciliation?.kind==='split-missing'&&(!recordFamily(r,products)||recordFamily(r,products)===op.reconciliation.family))&&(once||r.businessDate===op.values?.businessDate));
   }
   function reviewedDuplicate(op,live,snapshot){
     const proof=op.reconciliation;if(op.action!=='edit'||proof?.kind!=='duplicate'||proof.role!=='keep'||proof.reviewed!==true||!proof.recordIds?.includes(String(live.id)))return false;

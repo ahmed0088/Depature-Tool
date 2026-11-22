@@ -208,3 +208,8 @@ body:has(>#igSettingsOverlay:not([hidden])){overflow:hidden;overscroll-behavior:
 .iga-related-postings legend{padding:0 6px;font-weight:650}
 .iga-related-postings p{color:var(--text2);font-size:13px;line-height:1.55}
 .iga-related-postings .iga-confirm{align-items:flex-start;min-height:44px;overflow-wrap:anywhere}
+
+/* Split-charge review uses the same editor and Apply flow as other money corrections. */
+.iga-split-review .iga-eyebrow{display:block;margin-bottom:8px}.iga-split-postings{list-style:none;margin:14px 0;padding:0;display:grid;gap:10px}.iga-split-postings li{padding:13px;border:1px solid var(--border);border-radius:12px;background:var(--bg2)}.iga-split-postings li>div{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px}.iga-split-postings b{font-size:1rem}.iga-split-postings p{margin:8px 0;overflow-wrap:anywhere}.iga-split-postings small{color:var(--text2);overflow-wrap:anywhere}.iga-split-total{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--border);font-weight:700}.iga-split-total strong{font-size:1.18rem;white-space:nowrap}.iga-editor input[readonly]{background:var(--bg2);color:var(--text2)}
+
+.iga-split-review h3{font-size:1rem;margin:0 0 8px}.iga-split-postings li>div>span{flex:1;min-width:120px;text-align:right;font-size:.84rem;overflow-wrap:anywhere}.iga-split-postings li>small{display:block;margin-top:7px}.iga-split-note{padding:10px 0}.iga-split-note summary{cursor:pointer;color:var(--text2)}.iga-split-note label{display:grid;gap:6px;margin-top:10px}

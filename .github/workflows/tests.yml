@@ -82,6 +82,8 @@ jobs:
           node tests/ingauge-booking-choice.test.js
           node tests/ingauge-booking-choice.browser.test.js
           node --test tests/ingauge-mercure-reconciliation.test.js
+          node --test tests/ingauge-split-charges.test.js
+          node tests/ingauge-split-charges.browser.test.js
           node tests/ingauge-mercure.browser.test.js
           node --test tests/ingauge-confirmation-links.test.js
           node tests/ingauge-confirmation-links.browser.test.js

@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 615, items: [
+    'Missing manual sales with several Opera charges for the same booking and day now have a Review charges action in Monthly close. Check the listed amounts, confirm the seller, then Save & select and use Review & apply.',
+    'The review combines valid same-seller charges into one request using the exact Opera net total, one charge day and the actual reservation stay. Every original transaction is retained and remembered after a fresh read verifies the saved sale.',
+    'Changed source amounts, existing or Pending requests, conflicting named sellers, reversals and hotel/date mismatches remain protected. The review explains posting-user suggestions separately from sellers named in notes.'
+  ] },
   { v: 614, items: [
     'Fixed the HTTPS database fallback using the actual Firebase connection API and allowed its connection frames. Signed-in sessions that remain offline now retry automatically, including after reopening the app with cached data.',
     'Background saves wait for a verified sign-in, avoiding a false database refusal from chat presence on the login page. A cached account read no longer claims the connection has recovered while the database is still offline.',
