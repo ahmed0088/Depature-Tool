@@ -221,6 +221,7 @@ class InGaugeAccount {
     if(['add','edit'].includes(op.action)){path=API+'productMetric/secure';method=op.action==='add'?'post':'put';data=checked.payload;}
     else if(op.action==='approve'){path=API+'productMetric/secure';method='put';data=C.approvalPayload(op,checked.snapshot||snapshot,current);await this.progress('apply','Saving the existing sale as Approved through the edit workflow');}
     else{path=API+'auditTrail/secure?'+new URLSearchParams(C.auditParams(op));method='post';data={};}
+    await this.progress('submit','Submitting the reviewed '+op.action+' for confirmation '+op.confirmation);
     await this.checkCancelled(true);this.finishingWrite=true;
     try{
     // All browser traffic remains read-only. This single request is built from the validated reviewed operation.
@@ -228,6 +229,7 @@ class InGaugeAccount {
     try{const r=await this.context.request[method](this.origin+path,{headers:{...this.headers,tenantid:snapshot.binding.tenantId},data,timeout:30000});response=await r.json();if(!r.ok()||response.status!=='SUCCESS')throw new PortalError('IN-Gauge did not confirm this change. Check the record before retrying.',true);}
     catch(error){throw new PortalError(error instanceof PortalError?error.message:'The outcome of the request is uncertain. Check IN-Gauge before retrying.',true);}
     const recordId=op.action==='add'?C.id(response.data?.id):C.id(op.recordId);
+    await this.progress('verify','Reading back the saved entry and checking every reviewed value');
     if(!recordId)throw new PortalError('IN-Gauge did not return the new record identifier. Check the outcome before retrying.',true);
     let after;try{after=await this.readRecord(recordId);}catch(_){throw new PortalError('The change was sent but its final record could not be verified.',true);}
     if(after.propertyId!==snapshot.binding.propertyId||after.departmentId!==snapshot.binding.departmentId||!C.matches(op,after)){const error=new PortalError('The request was sent, but final values differ: '+C.differences(op,after,snapshot.binding).map(d=>d.field).join(', ')+'. Check this saved record before retrying.',true);error.observed=after;error.recordId=recordId;error.differences=C.differences(op,after,snapshot.binding);throw error;}

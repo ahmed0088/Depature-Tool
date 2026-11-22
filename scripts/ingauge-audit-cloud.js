@@ -40,7 +40,7 @@ async function execute(plan,snapshot,{portal,db,test,publish,stop,verifySeller})
       const old=await db.get('ingauge/ledger/'+ledgerKey);
       if(!test&&old&&['intent','uncertain','applied'].includes(old.state))throw Error('A prior operation may already have been sent. Refresh IN-Gauge and verify its outcome before retrying.');
       if(verifySeller)await verifySeller(op);
-      await portal.progress?.('preflight','Checking change '+(index+1)+' of '+plan.operations.length);
+      await portal.progress?.('preflight','Checking change '+(index+1)+' of '+plan.operations.length,{index:index+1,total:plan.operations.length,action:op.action,confirmation:op.confirmation,recordId:op.recordId||'',room:op.values?.room||'',product:snapshot.products.find(p=>p.id===op.productId)?.name||'',seller:snapshot.contributors.find(p=>p.id===op.contributorId)?.name||'',currency:snapshot.settings.currency,beforeCents:snapshot.records.find(r=>r.id===op.recordId)?.totalCents??null,requestedCents:op.values?.totalCents??null});
       const checked=await portal.testOperation(op,snapshot);
       if(['edit','approve'].includes(op.action)&&C.matches(op,checked.current)){await save(op,{key:op.key,confirmation:op.confirmation,state:'unchanged',after:checked.current,note:op.action==='approve'?'Already Approved. The existing sale matches your review; no change was sent.':'The selected record already has the reviewed values.',recordId:op.recordId});continue;}
       if(test){if(await stop())return {results,stopped:true};await save(op,{key:op.key,confirmation:op.confirmation,state:'tested',note:'Hotel, permissions, product, contributor, record version, duplicates and period lock checked. No financial change sent.'});continue;}
@@ -95,10 +95,11 @@ async function main(){
     const live={tag,scope:plan.scope||'all',state:state==='running'?'run':state,test,n:plan.operations?.length||0,done:results.length,note,tally,at:Date.now(),started:job.reviewedAt,run};
     await db.put('ingauge/live',live);await db.patch('cloudRuns/'+tag,{...live,kind:'ingauge',url:run,mode:plan.mode||'',...(plan.binding?.property?{hotel:plan.binding.property}:{}),...((plan.from||plan.period?.from)?{from:plan.from||plan.period.from}:{}),...((plan.to||plan.period?.to)?{to:plan.to||plan.period.to}:{}),...(['done','error','stopped'].includes(live.state)?{finishedAt:live.at}:{})});
   };
-  let browser,heartbeat,publishedResults=[];const trace=[];
-  const progress=async(stage,note)=>{
+  let browser,heartbeat,publishedResults=[];const trace=[];let activity=null;
+  const progress=async(stage,note,detail)=>{
+    if(detail)activity={...detail};if(activity)activity={...activity,stage,at:Date.now()};
     if(trace.at(-1)?.note!==note){trace.push({at:Date.now(),stage,note});if(trace.length>60)trace.shift();console.log('[IN-Gauge] '+note);}
-    await publish(publishedResults,'running',note,{stage,trace});
+    await publish(publishedResults,'running',note,{stage,trace,...(activity?{activity}:{})});
   };
   try{
     if(job.stopRequested){await publish([],'stopped','Cancelled before starting. No financial changes sent.');return;}
