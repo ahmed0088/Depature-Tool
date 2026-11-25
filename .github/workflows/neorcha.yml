@@ -47,7 +47,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   collect:
-    if: github.repository == 'ahmed0088/depature-tool'
+    if: github.repository == 'ahmed0088/Depature-Tool'
     runs-on: ubuntu-latest
     timeout-minutes: 70
     steps:
