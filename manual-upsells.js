@@ -70,6 +70,9 @@
     const lines = textLines(text), { hi, fields } = header(lines, ['CONFIRMATION_NO','FULL_NAME','TRUNC_BEGIN','TRUNC_END','ROOM_NO','SHORT_RESV_STATUS']);
     const blocks = [], rows = [], warnings = [];
     for (let i = hi + 1; i < lines.length; i++) {
+      // Opera appends a summary footer after the final reservation. Do not
+      // attach footer rows to the last guest record as address continuations.
+      if (/^(?:RMS_REPORT|LOGO|SUM_ADULTS|SUM_CHILDREN|SUM_ROOMS)(?:\t|$)/.test(lines[i])) break;
       if (/^\d{8}\t/.test(lines[i])) blocks.push({ line: i + 1, text: lines[i] });
       else if (blocks.length) blocks[blocks.length - 1].text += '\n' + lines[i];
     }

@@ -16,3 +16,19 @@ test('separate uploads retain both logs and the existing merger excludes duplica
 test('an unsuccessful second PDF remains an error rather than claiming both are loaded',async()=>{
  const h=harness(),a=file('new-reservation.pdf','NEW',1);await assert.rejects(h.upload('changes',[a,{name:'unreadable.pdf',bad:true}]),/unreadable.pdf/);assert.equal(h.ctx.pkgEvents['12345678'].length,1);assert.match(h.labels['igFile-changes'].textContent,/1 log loaded/);assert(!h.labels['igFile-changes'].textContent.includes('unreadable.pdf'));
 });
+
+test('the supplied Opera reports parse without unsupported values',()=>{
+ const manual=require('../manual-upsells.js');
+ const journal=manual.parseJournal(fs.readFileSync('/home/ubuntu/upload/finjrnlbytrans_1916245210.txt','utf8'));
+ const reservations=manual.parseReservations(fs.readFileSync('/home/ubuntu/upload/res_detail_1916245048.txt','utf8'));
+ assert.equal(journal.rows.length,801);
+ assert.equal(reservations.rows.length,2074);
+ assert.equal(reservations.warnings.length,0);
+ for(const row of [...journal.rows,...reservations.rows]) for(const value of Object.values(row)) assert.notEqual(value,undefined);
+});
+
+test('review serializer handles optional undefined array members like JSON',()=>{
+ const stable=require('../ingauge-audit-core.js').stable;
+ assert.equal(stable(['transaction',undefined,'seller']),'["transaction",null,"seller"]');
+ assert.equal(stable({optional:undefined,items:[undefined]}),'{"items":[null]}');
+});

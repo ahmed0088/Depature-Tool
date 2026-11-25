@@ -34,7 +34,11 @@
     if(negative)amount=-amount;if(amount>BigInt(Number.MAX_SAFE_INTEGER)||amount<BigInt(Number.MIN_SAFE_INTEGER))return null;
     return Number(amount);
   }
+  // Keep review plans serializable when optional array fields contain an
+  // absent value. JSON.stringify represents those entries as null; matching
+  // that behavior prevents a valid upload from failing during plan hashing.
   function stable(v){
+    if(v===undefined)return 'null';
     if(v===null||['string','boolean'].includes(typeof v))return JSON.stringify(v);
     if(typeof v==='number'){if(!Number.isFinite(v))fail('A review contains a nonfinite number.');return JSON.stringify(v);}
     if(Array.isArray(v))return '['+v.map(stable).join(',')+']';
