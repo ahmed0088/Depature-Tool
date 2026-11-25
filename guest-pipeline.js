@@ -330,11 +330,28 @@ function gpValidAccorUrl(value) {
 const gpAccKey = () => { try { return localStorage.getItem(GP_ACC_GH.key) || ''; } catch (_) { return ''; } };
 async function gpAccGh(path, opt) {
   const token = gpAccKey(); if (!token) throw new Error('Set up the GitHub start key first in Neorcha → Run in the cloud.');
-  const r = await fetch(GP_ACC_GH.api + (path || ''), Object.assign({ headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + token, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' } }, opt || {}));
-  if (r.status === 401) throw new Error('The GitHub start key was refused. Create a new one.');
-  if (r.status === 403 || r.status === 404) throw new Error('The start key needs Actions: Read and write for Depature-Tool.');
-  if (!r.ok) throw new Error('GitHub answered ' + r.status);
-  return r.status === 204 ? null : r.json();
+  const request = Object.assign({ headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + token, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' } }, opt || {});
+  // GitHub occasionally returns 500 after accepting a workflow dispatch. The tag is
+  // unique, so reconcile it before retrying; this avoids both false errors and dupes.
+  const dispatch = path === '/dispatches' && request.method === 'POST', body = dispatch ? (() => { try { return JSON.parse(request.body || '{}'); } catch (_) { return {}; } })() : {};
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(GP_ACC_GH.api + (path || ''), request);
+    if (r.ok || !dispatch || ![500, 502, 503, 504].includes(r.status) || attempt >= 2) {
+      if (r.status === 401) throw new Error('The GitHub start key was refused. Create a new one.');
+      if (r.status === 403 || r.status === 404) throw new Error('The start key needs Actions: Read and write for Depature-Tool.');
+      if (!r.ok) throw new Error('GitHub answered ' + r.status);
+      return r.status === 204 ? null : r.json();
+    }
+    const tag = body.inputs && body.inputs.tag;
+    if (tag) {
+      try {
+        const check = await fetch(GP_ACC_GH.api + '/runs?per_page=10&event=workflow_dispatch', { headers: request.headers });
+        const runs = check.ok ? await check.json() : {};
+        if ((runs.workflow_runs || []).some(x => String(x.display_title || '').includes(tag))) return null;
+      } catch (_) {}
+    }
+    await new Promise(resolve => setTimeout(resolve, 900 * (attempt + 1)));
+  }
 }
 async function gpAccControl(action) {
   const live = { at: Date.now(), control: action === 'stop' ? 'stop' : 'run', stopRequested: action === 'stop' };
