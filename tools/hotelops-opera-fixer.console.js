@@ -174,11 +174,32 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     });
     return { ok: true, rows };
   }
+  // Adds the ID document of a guest who has none (Edit is already open): New > ID Type > ID Number > Primary ticked. Only here is "New" pressed, and never when a document exists.
+  async function addIdDocument(item, typeRow, numRow, res) {
+    if (/\((primary)\)/i.test(document.body.innerText || '') || /\bPrimary\b[^\n]*\n?[^\n]*\b(PAS|IDC|RES|DRL|GCC ID)\b/.test(document.body.innerText || '')) { res.bad.push('a document already exists, not adding a second one'); logIt(item, 'idType', typeRow ? typeRow.f.value : '', 'not adding: a document already exists'); return; }
+    const idPanel = n => { for (let p = n; p; p = p.parentElement) if (/Identification/.test(own(p).slice(0, 400)) && !/Scan ID/.test('')) return true; return false; };
+    const nb = [...document.querySelectorAll('button,a,[role=button],oj-button')].filter(b => vis(b) && /^new$/i.test((b.getAttribute('aria-label') || own(b)).trim()));
+    const nbtn = nb.find(idPanel) || nb[0];
+    if (!nbtn) { res.bad.push('no New button for the ID document'); logIt(item, 'idType', '', 'no New button found'); return; }
+    logIt(item, 'idType', '', 'no ID document: pressing New ' + dsc(nbtn)); nbtn.click();   // the one deliberate press of New; nothing is saved
+    const tb = await waitFor(() => { const r = readField('idType'); return r && r.editable && isEmpty(r.value) ? r : null; }, 8000);
+    if (!tb) { res.bad.push('the new ID row did not show an ID Type box'); logIt(item, 'idType', '', 'new row: no ID Type box; page shows: ' + labelsNow().slice(0, 160)); return; }
+    for (const r of [typeRow, numRow].filter(Boolean)) {
+      const cur = r.f.field === 'idType' ? tb : await waitFor(() => { const x = readField('idNumber'); return x && x.editable ? x : null; }, 5000);
+      if (!cur) { res.bad.push('ID Number box not found on the new row'); logIt(item, r.f.field, r.f.value, 'new row: box not found'); continue; }
+      const picked = await type(cur.el, r.f.value); const back = readField(r.f.field), shown = back ? String(back.value) : '';
+      if (picked && fold(shown).startsWith(fold(r.f.value).slice(0, 4))) { cur.el.style.outline = '3px solid #1b9c5a'; res.done++; logIt(item, r.f.field, r.f.value, 'filled on the new row, not saved'); }
+      else { res.bad.push(FIELDS[r.f.field] + ' not accepted'); logIt(item, r.f.field, r.f.value, 'could not fill on the new row: type it yourself'); }
+    }
+    const pl = [...document.querySelectorAll('label')].find(l => vis(l) && fold(own(l)) === 'primary'); const cb = pl && (pl.htmlFor ? document.getElementById(pl.htmlFor) : pl.parentElement.querySelector('input[type=checkbox]'));
+    if (cb && cb.type === 'checkbox' && !cb.checked) { cb.click(); logIt(item, 'primary', '', 'ticked Primary'); }
+  }
   async function fill(item) {
-    if (st.busy) return; st.busy = true;
+    const res = { done: 0, bad: [], note: '' };
+    if (st.busy) { res.bad.push('busy'); return res; } st.busy = true;
     try {
       let c = check(item);
-      if (!c.ok) { say(c.why, true); item.fields.forEach(f => logIt(item, f.field, f.value, 'refused: wrong or no profile')); return; }
+      if (!c.ok) { say(c.why, true); item.fields.forEach(f => logIt(item, f.field, f.value, 'refused: wrong or no profile')); res.bad.push('wrong or no profile'); return res; }
       // a masked ID number cannot be told from a filled one: with the user's OK, open Show Masked Information once and look again
       const idRow = c.rows.find(r => r.f.field === 'idNumber' && r.found && isMaskedVal(r.current));
       if (idRow) {
@@ -187,33 +208,38 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       }
       let todo = c.rows.filter(r => r.found && r.empty);
       // an ID number is only typed together with its ID type; Opera keeps masked numbers non-editable and they count as filled
-      c.rows.filter(r => !r.found).forEach(r => logIt(item, r.f.field, r.f.value, 'field not found on screen'));
+      c.rows.filter(r => !r.found).forEach(r => { res.bad.push(FIELDS[r.f.field] + ' not found on screen'); logIt(item, r.f.field, r.f.value, 'field not found on screen'); });
       c.rows.filter(r => r.found && !r.empty).forEach(r => logIt(item, r.f.field, r.f.value, 'skipped: already has a value'));
-      if (!todo.length) { say('Nothing to fill: every approved field is already set or was not found.', false); return; }
-      if (st.dry) { todo.forEach(r => logIt(item, r.f.field, r.f.value, 'dry run: would fill')); say('Dry run: would fill ' + todo.map(r => FIELDS[r.f.field]).join(', ') + '. Untick Dry run to fill.', false); return; }
+      if (!todo.length) { say(res.bad.length ? 'Could not find: ' + res.bad.join(', ') : 'Nothing to fill: every approved field is already set.', !!res.bad.length); return res; }
+      if (st.dry) { todo.forEach(r => logIt(item, r.f.field, r.f.value, 'dry run: would fill')); say('Dry run: would fill ' + todo.map(r => FIELDS[r.f.field]).join(', ') + '. Untick Dry run to fill.', false); res.note = 'would fill ' + todo.length; return res; }
       if (todo.some(r => !r.editable)) {
         const btns = findEditButtons();
-        if (!btns.length) { say('The fields are read-only and no Edit button was found. Open Edit yourself, then press Fill again.', true); return; }
+        if (!btns.length) { say('The fields are read-only and no Edit button was found. Open Edit yourself, then press Fill again.', true); res.bad.push('no Edit button'); return res; }
         // the Edit of the panel that holds the first needed field (nearest ancestor that contains one)
         const first = readField(todo[0].f.field); let scopeBtn = null;
         for (let p = first && first.label ? first.label.parentElement : null; p && !scopeBtn; p = p.parentElement) { const inside = btns.filter(b => p.contains(b)); if (inside.length) scopeBtn = inside[0]; }
         if (!scopeBtn) scopeBtn = btns[0];
-        safeClick(scopeBtn); await sleep(700);
+        safeClick(scopeBtn); await sleep(500);
       }
-      const done = [];
+      const done = [], pendingId = [];
       for (const r of todo) {
         const cur = readField(r.f.field);
-        if (!cur || !cur.editable) { logIt(item, r.f.field, r.f.value, 'field not editable after Edit'); continue; }
+        if (!cur || !cur.editable) { if (r.f.field === 'idType' || r.f.field === 'idNumber') { pendingId.push(r); continue; } res.bad.push(FIELDS[r.f.field] + ' not editable'); logIt(item, r.f.field, r.f.value, 'field not editable after Edit'); continue; }
         if (!isEmpty(cur.value)) { logIt(item, r.f.field, r.f.value, 'skipped: filled meanwhile'); continue; }
         const picked = await type(cur.el, r.f.value);
         const back = readField(r.f.field), shownVal = back ? String(back.value) : '';
         const good = picked && fold(shownVal).startsWith(fold(r.f.value));
-        if (good) { cur.el.style.outline = '3px solid #1b9c5a'; cur.el.style.outlineOffset = '2px'; done.push(FIELDS[r.f.field]); logIt(item, r.f.field, r.f.value, 'filled, not saved'); }
-        else { logIt(item, r.f.field, r.f.value, 'could not fill: type it yourself'); }
+        if (good) { cur.el.style.outline = '3px solid #1b9c5a'; cur.el.style.outlineOffset = '2px'; done.push(FIELDS[r.f.field]); res.done++; logIt(item, r.f.field, r.f.value, 'filled, not saved'); }
+        else { res.bad.push(FIELDS[r.f.field] + ' not accepted'); logIt(item, r.f.field, r.f.value, 'could not fill: type it yourself'); }
       }
-      say(done.length ? 'Filled ' + done.join(', ') + '. Check them, then press Save in Opera yourself.' : 'Could not fill. Use the values shown in the list and type them yourself.', !done.length);
-    } catch (e) { say(String(e.message || e), true); }
+      if (pendingId.length) {
+        const n0 = res.done; await addIdDocument(item, pendingId.find(r => r.f.field === 'idType'), pendingId.find(r => r.f.field === 'idNumber'), res);
+        for (let i = n0; i < res.done; i++) done.push('ID');
+      }
+      say(done.length ? 'Filled ' + done.join(', ') + '.' + (res.bad.length ? ' Problem: ' + res.bad.join(', ') + '.' : '') + ' Check them, then press Save in Opera yourself.' : 'Could not fill (' + (res.bad.join(', ') || 'nothing') + '). Use the values shown in the list and type them yourself.', !done.length);
+    } catch (e) { say(String(e.message || e), true); res.bad.push(String(e.message || e).slice(0, 60)); }
     finally { st.busy = false; }
+    return res;
   }
 
   // ── auto mode: opens each guest's Identification page by itself (In House > room > reservation > guest name > Identification) ──
@@ -300,15 +326,18 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     const where = (location.hash || location.pathname || '').slice(0, 50);
     return 'The In House list did not open (step: ' + last + '; page: ' + where + '). Open Front Desk > In House yourself, then press Next guest.';
   }
-  function roomRows(item) {
+  function roomRows(item, roomOnly) {
     const want = words(item.name);
-    return [...document.querySelectorAll('tr')].filter(vis).filter(tr => {
+    return [...document.querySelectorAll('tr,[role=row]')].filter(vis).filter(tr => {
+      if (tr.querySelector('tr,[role=row]')) return false;
       const cells = [...tr.children].map(own);
       if (!cells.some(c => c && norm(c) === norm(item.room) && /^\d{3,4}$/.test(c.trim()))) return false;
+      if (roomOnly) return true;
       const rw = new Set(words(cells.join(" ")));
       return want.length > 0 && want.every(w => rw.has(w));
     });
   }
+  const noData = () => /no data|no results|no records|nothing to display/i.test(document.body.innerText || '');
   function nameCands(item) {
     return [...document.querySelectorAll('a,[role=link],h1,h2,h3,span')].filter(vis).filter(n => n.children.length <= 2 && own(n).length < 90 && nameOk(item.name, own(n)) && !FORBIDDEN.test(own(n)));
   }
@@ -326,7 +355,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     if (!hasText(/Personal Details/) || !nameOnScreen(item.name)) {
       if (!roomBox()) { nv(item, 'no Room box, returning to In House'); const why = await ensureInHouse(); if (why) return why; }
       const sb = findExact('search', 'button,a,[role=button]'); if (!sb) return 'No Search button found. ' + 'Page shows: ' + labelsNow().slice(0, 150);
-      let rows = null;
+      let rows = null, byRoom = false;
       for (const fmt of [String(item.room).replace(/\D/g, '').padStart(4, '0'), String(item.room).replace(/\D/g, '').replace(/^0+/, '')]) {
         let box = roomBox();
         if (!box) { const mod = findExact('modify search criteria', 'button,a,[role=button]'); if (mod) { nv(item, 'search panel collapsed, expanding'); try { safeClick(mod); } catch (_) {} } box = await waitFor(roomBox, 6000); }
@@ -338,16 +367,26 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
         await sleep(300); await waitFor(() => !busy(), 8000);
         rows = await waitFor(() => { const r = roomRows(item); return r.length ? r : null; }, 4000);
         nv(item, 'rows found: ' + (rows ? rows.length : 0));
+        if (!rows) {
+          const ro = await waitFor(() => { const r = roomRows(item, true); return r.length ? r : null; }, 3000);
+          nv(item, 'rows by room only: ' + (ro ? ro.length : 0));
+          if (ro) { rows = ro; byRoom = true; }
+          else { const all = [...document.querySelectorAll('tr,[role=row]')].filter(vis).length; nv(item, 'table rows on screen: ' + all + (noData() ? ', page says no data' : '') + '; links: ' + [...document.querySelectorAll('a')].filter(vis).filter(a => /^\d{5,}$/.test(own(a))).slice(0, 4).map(dsc).join(' ; ')); }
+        }
         if (rows) break;
       }
       if (!rows) { nv(item, 'no row; filters: ' + filtersNow());  return 'Room ' + item.room + ': not found in the In House list (checked out or not arrived yet?), skipped.'; }
-      if (rows.length > 1) return 'Room ' + item.room + ': more than one row matches. Open it yourself.';
-      const conf = [...rows[0].querySelectorAll('a,[role=link]')].find(a => vis(a) && /^\d{5,}$/.test(own(a)));
+      const tryN = item._try || 0;
+      if (rows.length > 1 && !byRoom) return 'Room ' + item.room + ': more than one row matches. Open it yourself.';
+      if (tryN >= rows.length) return 'Room ' + item.room + ': reservation found but this guest\'s name is not on it.';
+      const conf = [...rows[tryN].querySelectorAll('a,[role=link]')].find(a => vis(a) && /^\d{5,}$/.test(own(a)));
       if (!conf) return 'Room ' + item.room + ': no confirmation number link in the row.';
       nv(item, 'clicking Confirmation Number ' + dsc(conf).slice(0, 30)); safeClick(conf);
       if (!await waitFor(resReady, 30000)) { nv(item, 'reservation did not load; page shows: ' + labelsNow().slice(0, 200)); return 'Room ' + item.room + ': the reservation page did not load.'; }
       nv(item, 'reservation page loaded');
-      const nl = await waitFor(() => nameLink(item), 8000); if (!nl) { nv(item, 'reservation page shows: ' + labelsNow().slice(0, 200)); return 'Room ' + item.room + ': the reservation did not open or the guest name was not found.'; }
+      const nl = await waitFor(() => nameLink(item), 8000);
+      if (!nl && byRoom && tryN + 1 < rows.length) { nv(item, 'name not on reservation ' + (tryN + 1) + ' of ' + rows.length + ' (shared room), trying the next'); item._try = tryN + 1; const w = await ensureInHouse(); if (w) return w; const r2 = await goToGuest(item); item._try = 0; return r2; }
+      if (!nl) { item._try = 0; nv(item, 'reservation page shows: ' + labelsNow().slice(0, 200)); return 'Room ' + item.room + ': the reservation did not open or the guest name was not found.'; }
       nv(item, 'name candidates: ' + nameCands(item).slice(0, 4).map(dsc).join(' ; ').slice(0, 160)); nv(item, 'clicking guest name ' + dsc(nl).slice(0, 20)); safeClick(nl);
       await sleep(300);
       if (!await waitFor(() => !busy() && /Manage Profile|Personal Details/i.test(document.body.innerText || '') && (findIdent() || hasText(/Personal Details/)), 30000)) { nv(item, 'profile page shows: ' + labelsNow().slice(0, 250)); return 'Room ' + item.room + ': the profile did not open.'; }
@@ -361,24 +400,44 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     await sleep(200);
     return '';
   }
-  const CODE_V = 'v640';
+  // Save the profile after filling (only called outside dry run): press Save, wait, read any dialog, re-read the fields
+  async function saveProfile(item) {
+    const btn = [...document.querySelectorAll('button,a,[role=button],oj-button')].find(b => vis(b) && /^save$/i.test((b.getAttribute('aria-label') || own(b)).trim()));
+    if (!btn) return { ok: false, why: 'no Save button found' };
+    logIt(item, 'save', '', 'pressing Save ' + dsc(btn)); btn.click();   // the one deliberate Save, profile fields only
+    await sleep(400); await waitFor(() => !busy(), 15000); await sleep(400);
+    const dlg = [...document.querySelectorAll('[role=dialog],[role=alertdialog],oj-dialog,.oj-dialog,[class*=messages],[class*=error-message]')].filter(vis).map(own).join(' ').replace(/\s+/g, ' ').trim();
+    if (dlg) { logIt(item, 'save', '', 'Opera message: ' + dlg.slice(0, 200)); return { ok: false, why: dlg, dialog: true }; }
+    const miss = [];
+    for (const f of item.fields) { if (!f.value) continue; const r = readField(f.field); if (!r) { miss.push(FIELDS[f.field] + ' not visible'); continue; } if (f.field === 'idNumber') { if (isEmpty(r.value)) miss.push('ID number empty'); } else if (!fold(String(r.value)).startsWith(fold(f.value).slice(0, 4))) miss.push(FIELDS[f.field] + ' differs'); }
+    if (miss.length) return { ok: false, why: 'saved but could not confirm: ' + miss.join(', ') };
+    return { ok: true, why: '' };
+  }
+  const CODE_V = 'v641';
   async function autoRun(from) {
     if (st.auto || !st.plan) return; st.auto = true; st.stop = false; setBtns();
     logIt({}, 'version', '', 'fixer code ' + CODE_V + ', helper ' + (window.__hoFxVer || 'unknown'));
     try {
-      const items = st.plan.items;
+      const items = st.plan.items, seen = new Set(), summ = [];
       for (st.idx = from; st.idx < items.length; st.idx++) {
         if (st.stop) { say('Stopped.', false); return; }
         const it = items[st.idx]; st.cur = it; renderList();
+        const key = norm(it.room) + '|' + fold(it.name); if (seen.has(key)) { logIt(it, 'guest', '', 'SKIPPED already done in this run'); summ.push([it.room, 'skipped', 'duplicate']); continue; } seen.add(key);
         say('Room ' + it.room + ' (' + (st.idx + 1) + ' of ' + items.length + '): opening the guest…', false);
         const TG = Date.now();
         const why = await goToGuest(it);
-        if (why) { logIt(it, 'guest', '', (/not found in the In House/.test(why) ? 'SKIPPED not in list' : 'FAILED ' + why.slice(0, 70)) + ' (' + (Date.now() - TG) + ' ms)'); say(why, true); if (/In House list did not open/.test(why)) return; continue; }
-        await fill(it);
-        logIt(it, 'guest', '', 'DONE ' + (st.dry ? '(dry run) ' : '') + (Date.now() - TG) + ' ms');
-        if (!st.dry) { st.paused = true; say('Room ' + it.room + ' is filled. Check it, press Save in Opera, then press Next guest.', false); return; }
+        if (why) { logIt(it, 'guest', '', (/not found in the In House/.test(why) ? 'SKIPPED not in list' : 'FAILED ' + why.slice(0, 70)) + ' (' + (Date.now() - TG) + ' ms)'); summ.push([it.room, /not found in the In House/.test(why) ? 'skipped' : 'failed', why.slice(0, 60)]); say(why, true); if (/In House list did not open/.test(why)) return; continue; }
+        const res = await fill(it);
+        logIt(it, 'guest', '', (res.bad.length ? (res.done ? 'PARTIAL ' : 'FAILED ') + res.bad.join('; ').slice(0, 90) + ' ' : 'DONE ' + (st.dry ? '(dry run) ' : '')) + (Date.now() - TG) + ' ms');
+        if (!st.dry && res.done) {
+          const sv = await saveProfile(it);
+          logIt(it, 'guest', '', sv.ok ? 'SAVED ' + res.done + ' field(s) ' + (Date.now() - TG) + ' ms' : 'SAVE FAILED ' + sv.why.slice(0, 120));
+          summ.push([it.room, sv.ok ? 'saved' : 'failed', sv.ok ? '' : sv.why.slice(0, 60)]);
+          if (sv.dialog) { st.paused = true; say('Room ' + it.room + ': Opera shows a message: "' + sv.why.slice(0, 150) + '". Answer it in Opera, then press Next guest.', true); return; }
+        } else summ.push([it.room, st.dry ? 'dry run' : res.bad.length ? 'failed' : 'nothing to fill', res.bad.join('; ').slice(0, 60)]);
       }
-      say('Done. ' + (st.dry ? 'Dry run only: nothing was typed.' : 'All rooms visited.'), false);
+      const c = k => summ.filter(x => x[1] === k).length;
+      say('Finished ' + items.length + ' room(s): ' + c('saved') + ' saved, ' + c('nothing to fill') + ' nothing to fill, ' + c('skipped') + ' skipped, ' + c('failed') + ' failed' + (st.dry ? ', ' + c('dry run') + ' dry run (nothing typed)' : '') + '. ' + summ.filter(x => x[2]).map(x => x[0] + ': ' + x[2]).join(' | ').slice(0, 300), false);
     } finally { st.auto = false; setBtns(); }
   }
 
@@ -404,7 +463,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
   }
   function renderLog() { sh.getElementById('log').textContent = st.log.slice(-12).map(e => e.t.slice(11, 19) + ' r' + e.room + ' ' + e.field + ' ' + e.to + ' ' + e.result + (e.dry ? ' (dry)' : '')).join('\n'); }
   sh.getElementById('load').onclick = () => { try { st.plan = decode(sh.getElementById('plan').value); st.cur = null; renderList(); setBtns(); say('Plan loaded: ' + st.plan.items.length + ' room(s). Pick a room.', false); } catch (e) { say(e.message, true); } };
-  sh.getElementById('dry').onchange = e => { st.dry = e.target.checked; say(st.dry ? 'Dry run: nothing will be typed.' : 'Dry run off: it will fill empty fields (never Save).', false); };
+  sh.getElementById('dry').onchange = e => { st.dry = e.target.checked; say(st.dry ? 'Dry run: nothing will be typed.' : 'Dry run off: it fills empty fields and then presses Save for the profile.', false); };
   function setBtns() { const sb = sh.getElementById('startb'), nb = sh.getElementById('nextb'); if (!sb) return; sb.disabled = !st.plan || st.auto; nb.style.display = st.paused ? '' : 'none'; nb.disabled = st.auto; }
   sh.getElementById('startb').onclick = () => { st.paused = false; autoRun(0); };
   sh.getElementById('nextb').onclick = () => { st.paused = false; autoRun(st.idx + 1); };
