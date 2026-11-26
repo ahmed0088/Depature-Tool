@@ -2,7 +2,8 @@ name: Opera fixer (cloud)
 run-name: Opera fixer · ${{ inputs.mode || 'signin' }}
 # Signs in to Opera Cloud on GitHub's machine and runs the HotelOps profile fixer (scripts/opera-cloud.js).
 # mode signin = only sign in and open In House (no guest data touched). audit = read-only. save = fill empty fields and Save.
-# Needs the Secrets OPERA_URL, OPERA_USER, OPERA_PASS (and the HOTELOPS_* ones Neorcha already uses). The 6-digit code is typed in HotelOps each run.
+# Needs the Secrets OPERA_USER and OPERA_PASS (the same Microsoft login for every hotel) and the HOTELOPS_* ones Neorcha already uses.
+# The hotel is the 'url' input (not a secret). The 6-digit code is typed in HotelOps each run.
 on:
   workflow_dispatch:
     inputs:
@@ -10,6 +11,10 @@ on:
         description: 'signin (test), audit (read-only) or save'
         required: false
         default: 'signin'
+      url:
+        description: 'The hotel Opera Cloud link (paste the address you open Opera with). Empty = the OPERA_URL secret if there is one'
+        required: false
+        default: ''
       limit:
         description: 'Only the first N rooms (0 = all)'
         required: false
@@ -38,10 +43,9 @@ jobs:
         env:
           MODE: ${{ inputs.mode }}
           LIMIT: ${{ inputs.limit }}
-          OPERA_URL: ${{ secrets.OPERA_URL }}
+          OPERA_URL: ${{ inputs.url || secrets.OPERA_URL }}
           OPERA_USER: ${{ secrets.OPERA_USER }}
           OPERA_PASS: ${{ secrets.OPERA_PASS }}
-          OPERA_TOTP: ${{ secrets.OPERA_TOTP }}
           HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
           HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
           HOTELOPS_HOTEL: ${{ secrets.HOTELOPS_HOTEL }}
