@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 640, items: ['The Chrome helper now updates its Opera fixer by itself from this page, so fixer fixes no longer need a reinstall (this one download is the last). Immigration Check shows whether your extension is up to date. The fixer also always opens the real Show Menu first, then Site Map, and never types into the dashboard search.'] },
   { v: 639, items: ['The Opera fixer re-opens the collapsed Search panel when a room is not found, skips rooms that are not in In House, logs the filters it saw, and writes one DONE or SKIPPED or FAILED line per guest with its time. Update the helper zip to get it.'] },
   { v: 638, items: ['The Opera fixer opens In House faster: it tries the menu search first, clicks the result the moment it shows, and remembers what worked. The fixer log starts with its version and times each step, and the page shows your helper version. Update the helper zip to get it.'] },
   { v: 637, items: ['The Opera fixer is faster and safer: it waits for the reservation page before clicking the guest name, goes back with Back to In House, polls instead of fixed waits, and skips rooms that are not in the In House list. Update the helper zip to get it.'] },
