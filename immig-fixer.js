@@ -95,7 +95,7 @@
       (ready.length ? '<details class="imm-more"><summary>See the ' + ready.length + ' ready guests</summary>' + ready.map(row).join('') + '</details>' : '') +
       (skipped.length ? '<details class="imm-more"><summary>Why ' + skipped.length + ' cannot be fixed</summary><div class="imm-small">' + skipped.map(it => 'Room ' + esc(it.room) + ' · ' + esc(it.name) + ' · ' + esc(it.notes.join(' · ') || 'nothing to fill')).join('<br>') + '</div></details>' : '') +
       (!items.length ? '<div class="imm-sub">Nothing to fix. All good.</div>' : '') +
-      '<div class="imm-go"><button class="btn gold imm-big" id="immigFixCopy">▶ Start fixing (<span id="immigFixN">' + approvedCount() + '</span> ticked fields)</button></div>' +
+      '<div class="imm-go"><button class="btn gold imm-big" id="immigFixCopy">▶ Start fixing (<span id="immigFixN">' + approvedCount() + '</span> ticked fields)</button> <button class="btn imm-big" id="immigFixCloud">☁ Run in cloud (check only)</button></div>' +
       '<div class="imm-small" id="immigFixStatus" style="margin:6px 0">' + esc(S.fxNote || '') + '</div>' + extState() +
       (helperFx() ? '<ol class="imm-3"><li>Press <b>Start fixing</b>. The list goes to your Opera tab.</li><li>In the fixer window there, press <b>Start</b>. It opens each guest and fills the empty boxes.</li><li>Check the guest, press Save in Opera yourself, then press <b>Next guest</b>.</li></ol>' : '<ol class="imm-3"><li>Press <b>Start fixing</b>. It copies the list.</li><li>In Opera: open the fixer window, paste the list, press <b>Load</b>.</li><li>Press <b>Start</b> in the window. It opens each guest and fills the empty boxes. You press Save in Opera.</li></ol>') +
       '<details class="imm-more"><summary>More</summary><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="immigFixSave">Remember gender and nationality</button></div>' +
@@ -111,6 +111,7 @@
       }
     };
     document.getElementById('immigFixCopy').onclick = copyPlan;
+    document.getElementById('immigFixCloud').onclick = copyCloudRequest;
     document.getElementById('immigFixSave').onclick = saveShared;
     document.getElementById('immigFixLogSave').onclick = saveLog;
     showLog();
@@ -134,6 +135,22 @@
     if (d.source === 'ho-fx-progress') setStatus(d.note, d.bad);
     else if (d.source === 'ho-fx-log' && d.entry) { const ta = document.getElementById('immigFixLogIn'); if (ta) ta.value += (ta.value ? '\n' : '') + JSON.stringify(d.entry); }
   });
+  // Cloud run request: text only, no names, ID numbers as last 4. The cloud run checks these rooms in Opera (read-only) and reports. Nothing is stored by the app.
+  function cloudRequestText() {
+    const rows = [];
+    (S.plan ? S.plan.items : []).forEach(it => {
+      const ok = S.ok[it.id] || {}, f = {};
+      it.fields.forEach(x => { if (ok[x.field] && x.value) f[x.field] = x; });
+      if (!Object.keys(f).length) return;
+      rows.push([it.room, it.arrival || '', f.gender ? f.gender.value : '', f.nationality ? f.nationality.value : '', f.idType ? f.idType.value : '', f.idNumber ? f.idNumber.display : ''].join('|'));
+    });
+    return rows.length ? 'CLOUD OPERA CHECK (read-only, change nothing in Opera)\nroom|arrival|gender|nationality|id type|id number last 4\n' + rows.join('\n') : '';
+  }
+  async function copyCloudRequest() {
+    const t = cloudRequestText(); if (!t) return toast('Tick at least one fix first.', 'err');
+    try { await navigator.clipboard.writeText(t); toast('Copied. Paste it in your Instinct chat and send it. The cloud run checks these rooms in Opera and replies. No names or full ID numbers are in it.', 'ok'); } catch (_) { window.prompt('Copy this, then paste it in your Instinct chat:', t); }
+    setStatus('Cloud request copied: paste it in your Instinct chat. It only checks, it changes nothing.', false);
+  }
   async function copyPlan() {
     if (!approvedCount()) return toast('Tick at least one fix first.', 'err');
     const ov = S.opera ? A.validateOperaUrl(S.opera) : null;
