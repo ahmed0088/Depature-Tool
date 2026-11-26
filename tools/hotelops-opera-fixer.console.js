@@ -219,7 +219,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
         const first = readField(todo[0].f.field); let scopeBtn = null;
         for (let p = first && first.label ? first.label.parentElement : null; p && !scopeBtn; p = p.parentElement) { const inside = btns.filter(b => p.contains(b)); if (inside.length) scopeBtn = inside[0]; }
         if (!scopeBtn) scopeBtn = btns[0];
-        safeClick(scopeBtn); await sleep(500);
+        safeClick(scopeBtn); const tE = Date.now(); await waitFor(() => !busy() && (todo.some(r => { const x = readField(r.f.field); return x && x.editable; }) || [...document.querySelectorAll('button,a,[role=button],oj-button')].some(b => vis(b) && /^save$/i.test((b.getAttribute('aria-label') || own(b)).trim()))), 12000); logIt(item, 'edit', '', 'edit mode ready after ' + (Date.now() - tE) + ' ms');
       }
       const done = [], pendingId = [];
       for (const r of todo) {
@@ -246,7 +246,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
   // Only read-style clicks: breadcrumb "In House", the Search button, a confirmation-number link, the guest name, the "Identification" menu item.
   // The same hard refusal list applies, and the fill step never presses Save: he does.
   const norm = r => String(r || '').replace(/\D/g, '').replace(/^0+/, '');
-  const waitFor = async (fn, ms) => { const t0 = Date.now(); while (Date.now() - t0 < (ms || 20000)) { let r = null; try { r = fn(); } catch (_) {} if (r) return r; await sleep(150); } return null; };
+  const waitFor = async (fn, ms) => { const t0 = Date.now(); while (Date.now() - t0 < (ms || 20000)) { let r = null; try { r = fn(); } catch (_) {} if (r) return r; await sleep(120); } return null; };
   const hasText = re => re.test(document.body.innerText || '');
   function findExact(text, tags) {
     const t = text.toLowerCase();
@@ -287,12 +287,12 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       logIt(st.cur || {}, 'nav', '', 'round ' + round + ': hamburger ' + (ham ? elTag(ham) + ' ' + (ham.getAttribute('aria-label') || own(ham)).slice(0, 25) : 'not found') + ms(T));
       if (!ham) return null;
       try { safeClick(ham); } catch (_) { return null; }
-      if (!await waitFor(smNow, 4000)) { logIt(st.cur || {}, 'nav', '', 'menu did not open; page shows: ' + labelsNow().slice(0, 200)); return null; }
+      if (!await waitFor(smNow, 12000)) { logIt(st.cur || {}, 'nav', '', 'menu did not open; page shows: ' + labelsNow().slice(0, 200)); return null; }
     }
     logIt(st.cur || {}, 'nav', '', 'menu open' + ms(T));
     // 2. Site Map straight away (the menu search result was not clickable on his Opera; Site Map worked)
     const sm = smNow();
-    if (sm) { logIt(st.cur || {}, 'nav', '', 'Site Map' + ms(T)); try { safeClick(sm); } catch (_) {} const hit = await waitFor(inHouseItem, 10000); if (hit) { logIt(st.cur || {}, 'nav', '', 'In House found in Site Map' + ms(T)); return hit; }
+    if (sm) { logIt(st.cur || {}, 'nav', '', 'Site Map' + ms(T)); try { safeClick(sm); } catch (_) {} const hit = await waitFor(inHouseItem, 20000); if (hit) { logIt(st.cur || {}, 'nav', '', 'In House found in Site Map' + ms(T)); return hit; }
       const alpha = findExact('alphabetical', 'a,button,[role=tab],[role=button],li,span'); if (alpha) { try { safeClick(alpha); } catch (_) {} const h2 = await waitFor(inHouseItem, 5000); if (h2) return h2; } }
     logIt(st.cur || {}, 'nav', '', 'menu shows: ' + labelsNow());
     return null;
@@ -308,7 +308,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       const modify = findExact('modify search criteria', 'button,a,[role=button]');
       if (modify && /in house/i.test(document.body.innerText || '')) { last = 'expand'; try { safeClick(modify); } catch (_) {} if (await waitFor(roomBox, 3000)) return done('expand'); }
       const back = findExact('back to in house', 'a,button,[role=button],[role=link]');
-      if (back && round === 1) { last = 'back'; logIt(st.cur || {}, 'nav', '', 'Back to In House ' + dsc(back)); try { safeClick(back); } catch (_) {} if (await waitFor(roomBox, 10000)) return done('back'); }
+      if (back && round === 1) { last = 'back'; logIt(st.cur || {}, 'nav', '', 'Back to In House ' + dsc(back)); try { safeClick(back); } catch (_) {} if (await waitFor(roomBox, 25000)) return done('back'); }
       const deep = /Manage (Profile|Reservation)/i.test(document.body.innerText || '');
       const order = round === 1 && route && route !== 'hamburger' && !deep ? [route, 'hamburger', 'front', 'crumb'] : ['hamburger', 'front', 'crumb'];
       let clicked = false;
@@ -320,7 +320,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
         } else if (r === 'crumb' && !deep && round === 1) {
           const crumb = findExact('in house', 'a,[role=link]'); if (crumb) { last = 'breadcrumb'; try { safeClick(crumb); clicked = true; } catch (_) {} }
         }
-        if (clicked) { logIt(st.cur || {}, 'nav', '', 'round ' + round + ': clicked In House via ' + r); await sleep(150); await waitFor(() => !busy(), 6000); if (await waitFor(roomBox, 15000)) return done(r); const d = dialogText(); if (d) return 'The In House list did not open: Opera shows a question ("' + d + '"). Answer it yourself, then press Next guest.'; clicked = false; }
+        if (clicked) { logIt(st.cur || {}, 'nav', '', 'round ' + round + ': clicked In House via ' + r); await sleep(150); await waitFor(() => !busy(), 6000); if (await waitFor(roomBox, 25000)) return done(r); const d = dialogText(); if (d) return 'The In House list did not open: Opera shows a question ("' + d + '"). Answer it yourself, then press Next guest.'; clicked = false; }
       }
     }
     const where = (location.hash || location.pathname || '').slice(0, 50);
@@ -358,19 +358,30 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       let rows = null, byRoom = false;
       for (const fmt of [String(item.room).replace(/\D/g, '').padStart(4, '0'), String(item.room).replace(/\D/g, '').replace(/^0+/, '')]) {
         let box = roomBox();
-        if (!box) { const mod = findExact('modify search criteria', 'button,a,[role=button]'); if (mod) { nv(item, 'search panel collapsed, expanding'); try { safeClick(mod); } catch (_) {} } box = await waitFor(roomBox, 6000); }
+        if (!box) { const mod = findExact('modify search criteria', 'button,a,[role=button]'); if (mod) { nv(item, 'search panel collapsed, expanding'); try { safeClick(mod); } catch (_) {} } box = await waitFor(roomBox, 15000); }
         if (!box) return 'Room ' + item.room + ': the Room box disappeared. Page shows: ' + labelsNow().slice(0, 150);
         box.focus(); setNative(box, ''); box.dispatchEvent(new Event('input', { bubbles: true }));
         setNative(box, fmt); box.dispatchEvent(new Event('input', { bubbles: true })); box.dispatchEvent(new Event('change', { bubbles: true })); box.dispatchEvent(new Event('blur', { bubbles: true }));
         nv(item, 'typed Room ' + fmt.length + ' digits, pressing Search');
         safeClick(findExact('search', 'button,a,[role=button]') || sb);
-        await sleep(300); await waitFor(() => !busy(), 8000);
-        rows = await waitFor(() => { const r = roomRows(item); return r.length ? r : null; }, 4000);
-        nv(item, 'rows found: ' + (rows ? rows.length : 0));
+        // wait on the real state: results arrive late on some rooms. Act the instant the row shows; give up only after the page has been idle with no row (or says no data) for a while, cap 25 s
+        const TS = Date.now(); let idleSince = 0, sawBusy = false, roomOnlyAt = 0;
+        rows = await waitFor(() => {
+          const b = busy(); if (b) { sawBusy = true; idleSince = 0; return null; }
+          const r = roomRows(item); if (r.length) return r;
+          if (!idleSince) idleSince = Date.now();
+          if (roomRows(item, true).length) { if (!roomOnlyAt) roomOnlyAt = Date.now(); if (Date.now() - roomOnlyAt > 2500) return 'room'; } else roomOnlyAt = 0;
+          if (Date.now() - idleSince > (sawBusy ? 2000 : 3500) && (noData() || Date.now() - idleSince > 8000)) return 'none';
+          return null;
+        }, 25000);
+        const waited = Date.now() - TS;
+        if (rows === 'none' || rows === null) rows = null; 
+        const roomMode = rows === 'room'; if (roomMode) rows = null;
+        nv(item, 'rows found: ' + (rows ? rows.length : 0) + ' after ' + waited + ' ms' + (sawBusy ? '' : ' (no spinner seen)'));
         if (!rows) {
-          const ro = await waitFor(() => { const r = roomRows(item, true); return r.length ? r : null; }, 3000);
-          nv(item, 'rows by room only: ' + (ro ? ro.length : 0));
-          if (ro) { rows = ro; byRoom = true; }
+          const ro = roomRows(item, true); const roo = ro.length ? ro : null;
+          nv(item, 'rows by room only: ' + (roo ? roo.length : 0));
+          if (roo) { rows = roo; byRoom = true; }
           else { const all = [...document.querySelectorAll('tr,[role=row]')].filter(vis).length; nv(item, 'table rows on screen: ' + all + (noData() ? ', page says no data' : '') + '; links: ' + [...document.querySelectorAll('a')].filter(vis).filter(a => /^\d{5,}$/.test(own(a))).slice(0, 4).map(dsc).join(' ; ')); }
         }
         if (rows) break;
@@ -382,9 +393,9 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       const conf = [...rows[tryN].querySelectorAll('a,[role=link]')].find(a => vis(a) && /^\d{5,}$/.test(own(a)));
       if (!conf) return 'Room ' + item.room + ': no confirmation number link in the row.';
       nv(item, 'clicking Confirmation Number ' + dsc(conf).slice(0, 30)); safeClick(conf);
-      if (!await waitFor(resReady, 30000)) { nv(item, 'reservation did not load; page shows: ' + labelsNow().slice(0, 200)); return 'Room ' + item.room + ': the reservation page did not load.'; }
+      if (!await waitFor(resReady, 40000)) { nv(item, 'reservation did not load; page shows: ' + labelsNow().slice(0, 200)); return 'Room ' + item.room + ': the reservation page did not load.'; }
       nv(item, 'reservation page loaded');
-      const nl = await waitFor(() => nameLink(item), 8000);
+      const nl = await waitFor(() => nameLink(item), 20000);
       if (!nl && byRoom && tryN + 1 < rows.length) { nv(item, 'name not on reservation ' + (tryN + 1) + ' of ' + rows.length + ' (shared room), trying the next'); item._try = tryN + 1; const w = await ensureInHouse(); if (w) return w; const r2 = await goToGuest(item); item._try = 0; return r2; }
       if (!nl) { item._try = 0; nv(item, 'reservation page shows: ' + labelsNow().slice(0, 200)); return 'Room ' + item.room + ': the reservation did not open or the guest name was not found.'; }
       nv(item, 'name candidates: ' + nameCands(item).slice(0, 4).map(dsc).join(' ; ').slice(0, 160)); nv(item, 'clicking guest name ' + dsc(nl).slice(0, 20)); safeClick(nl);
@@ -405,7 +416,13 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     const btn = [...document.querySelectorAll('button,a,[role=button],oj-button')].find(b => vis(b) && /^save$/i.test((b.getAttribute('aria-label') || own(b)).trim()));
     if (!btn) return { ok: false, why: 'no Save button found' };
     logIt(item, 'save', '', 'pressing Save ' + dsc(btn)); btn.click();   // the one deliberate Save, profile fields only
-    await sleep(400); await waitFor(() => !busy(), 15000); await sleep(400);
+    {
+      const tS = Date.now(); let sawBusy = false, idle = 0;
+      const dlgNow = () => [...document.querySelectorAll('[role=dialog],[role=alertdialog],oj-dialog,.oj-dialog')].some(vis);
+      const saveGone = () => !btn.isConnected || !vis(btn);
+      await waitFor(() => { if (busy()) { sawBusy = true; idle = 0; return null; } if (dlgNow() || saveGone()) return true; if (!idle) idle = Date.now(); return sawBusy && Date.now() - idle > 1000 ? true : (Date.now() - idle > 6000 ? true : null); }, 25000);
+      logIt(item, 'save', '', 'save settled after ' + (Date.now() - tS) + ' ms'); await sleep(200);
+    }
     const dlg = [...document.querySelectorAll('[role=dialog],[role=alertdialog],oj-dialog,.oj-dialog,[class*=messages],[class*=error-message]')].filter(vis).map(own).join(' ').replace(/\s+/g, ' ').trim();
     if (dlg) { logIt(item, 'save', '', 'Opera message: ' + dlg.slice(0, 200)); return { ok: false, why: dlg, dialog: true }; }
     const miss = [];
@@ -413,7 +430,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     if (miss.length) return { ok: false, why: 'saved but could not confirm: ' + miss.join(', ') };
     return { ok: true, why: '' };
   }
-  const CODE_V = 'v641';
+  const CODE_V = 'v642';
   async function autoRun(from) {
     if (st.auto || !st.plan) return; st.auto = true; st.stop = false; setBtns();
     logIt({}, 'version', '', 'fixer code ' + CODE_V + ', helper ' + (window.__hoFxVer || 'unknown'));
