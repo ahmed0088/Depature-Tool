@@ -239,14 +239,18 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
   const dialogText = () => { const d = [...document.querySelectorAll('[role=dialog],[role=alertdialog],.oj-dialog,[class*=popup]')].find(vis); return d ? own(d).slice(0, 80) : ''; };
   const labelsNow = () => { const seen = new Set(); [...document.querySelectorAll('a,button,[role=menuitem],[role=option],[role=tab],li')].filter(vis).forEach(n => { const t = own(n); if (t && t.length < 40 && seen.size < 30) seen.add(t); }); return [...seen].join(' | ').slice(0, 500); };
   const setVal = (el, v) => { el.focus(); setNative(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: v.slice(-1) })); el.dispatchEvent(new Event('change', { bubbles: true })); };
-  const inHouseItem = () => findExact('in house', 'a,[role=menuitem],[role=option],[role=link],li,span')
-    || [...document.querySelectorAll('a,[role=option],[role=menuitem],li')].find(n => vis(n) && n.children.length <= 3 && /^in house\b/.test(fold(own(n))) && own(n).length < 30 && !/arrival|departure|report/.test(fold(own(n)))) || null;
+  const inHouseAll = () => [...document.querySelectorAll('a,[role=menuitem],[role=option],[role=link],li,span')].filter(n => vis(n) && n.children.length <= 3 && own(n).length < 30 && (fold(own(n)) === 'in house' || (/^in house\b/.test(fold(own(n))) && !/arrival|departure|report/.test(fold(own(n))))))
+    .map(n => n.matches('a,button,[role=link],[role=menuitem]') ? n : (n.querySelector('a,[role=link],[role=menuitem]') || n.closest('a,[role=link],[role=menuitem]') || n))
+    .filter((n, i, arr) => arr.indexOf(n) === i);
+  let exclude = new Set();
+  const inHouseItem = () => inHouseAll().find(n => !exclude.has(n)) || null;
   // Proven manual path: hamburger > search box (type "In House") or Site Map > click "In House". Returns the element to click, or null.
   async function viaHamburger(round) {
     const cand = [...document.querySelectorAll('a,button,[role=button],oj-button')].filter(n => { if (!vis(n)) return false; const r = n.getBoundingClientRect(); return r.left < 140 && r.top < 100; });
     const ham = cand.find(n => /menu|navigat|hamburger/i.test((n.getAttribute('aria-label') || n.title || n.id || '') + ' ' + n.className)) || cand[0];
     logIt(st.cur || {}, 'nav', '', 'round ' + round + ': hamburger ' + (ham ? '<' + ham.tagName.toLowerCase() + (ham.id ? '#' + String(ham.id).slice(0, 25) : '') + '> ' + (ham.getAttribute('aria-label') || '').slice(0, 25) : 'not found'));
     if (!ham) return null;
+    exclude = new Set(inHouseAll());   // the breadcrumb already on the page is not the menu result
     try { safeClick(ham); } catch (_) { return null; }
     await sleep(1200);
     const sbox = await waitFor(() => [...document.querySelectorAll('input')].find(i => vis(i) && /search/i.test((i.getAttribute('aria-label') || '') + ' ' + (i.placeholder || '') + ' ' + (i.id || ''))), 5000);
@@ -265,12 +269,14 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       if (roomBox()) return '';
       const modify = findExact('modify search criteria', 'button,a,[role=button]');
       if (modify && /in house/i.test(document.body.innerText || '')) { last = 'expand'; try { safeClick(modify); } catch (_) {} if (await waitFor(roomBox, 4000)) return ''; }
-      const crumb = findExact('in house', 'a,[role=link]');
+      const crumb = round === 1 && !/Manage (Profile|Reservation)/i.test(document.body.innerText || '') ? findExact('in house', 'a,[role=link]') : null;
       if (crumb) { last = 'breadcrumb'; logIt(st.cur || {}, 'nav', '', 'round ' + round + ': breadcrumb In House <' + crumb.tagName.toLowerCase() + (crumb.id ? '#' + String(crumb.id).slice(0, 25) : '') + '>'); try { safeClick(crumb); } catch (_) {} }
       else {
-        let item = findExact('in house', 'a,[role=menuitem],[role=link],li,span');
+        const deep = round > 1 || /Manage (Profile|Reservation)/i.test(document.body.innerText || '');
+        exclude = new Set();
+        let item = deep ? null : inHouseItem();
         if (!item) {
-          const fd = findExact('front desk', 'a,button,[role=button],[role=link],[role=menuitem],[role=tab],li,span');
+          const fd = deep ? null : findExact('front desk', 'a,button,[role=button],[role=link],[role=menuitem],[role=tab],li,span');
           if (fd) { last = 'menu:Front Desk'; logIt(st.cur || {}, 'nav', '', 'round ' + round + ': opening Front Desk menu'); try { safeClick(fd); } catch (_) {}
             item = await waitFor(inHouseItem, 3500); }
           if (!item) { last = 'menu:In House not shown, hamburger'; item = await viaHamburger(round); }
@@ -298,25 +304,38 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
   function nameLink(item) {
     return [...document.querySelectorAll('a,[role=link],h1,h2,h3,span')].filter(vis).find(n => n.children.length <= 2 && own(n).length < 90 && nameOk(item.name, own(n)) && !FORBIDDEN.test(own(n)));
   }
+  const dsc = el => el ? '<' + el.tagName.toLowerCase() + (el.id ? '#' + String(el.id).slice(0, 28) : '') + '> ' + own(el).slice(0, 24) : 'none';
+  const nv = (item, m) => logIt(item, 'nav', '', m);
+  const IDTAGS = 'a,[role=link],[role=tab],[role=menuitem],[role=treeitem],[role=button],li,span,div,td';
+  const findIdent = () => findExact('identification', IDTAGS);
   async function goToGuest(item) {
     if (!hasText(/Personal Details/) || !nameOnScreen(item.name)) {
-      if (!roomBox()) { const why = await ensureInHouse(); if (why) return why; }
-      const box = roomBox(); box.focus(); setNative(box, String(item.room).replace(/\D/g, '').padStart(4, '0')); box.dispatchEvent(new Event('input', { bubbles: true })); box.dispatchEvent(new Event('change', { bubbles: true })); box.dispatchEvent(new Event('blur', { bubbles: true }));
-      const sb = findExact('search', 'button,a,[role=button]'); if (!sb) return 'No Search button found.';
-      safeClick(sb);
-      const rows = await waitFor(() => { const r = roomRows(item); return r.length ? r : null; }, 15000);
+      if (!roomBox()) { nv(item, 'no Room box, returning to In House'); const why = await ensureInHouse(); if (why) return why; }
+      const sb = findExact('search', 'button,a,[role=button]'); if (!sb) return 'No Search button found. ' + 'Page shows: ' + labelsNow().slice(0, 150);
+      let rows = null;
+      for (const fmt of [String(item.room).replace(/\D/g, '').padStart(4, '0'), String(item.room).replace(/\D/g, '').replace(/^0+/, '')]) {
+        const box = roomBox(); if (!box) return 'Room ' + item.room + ': the Room box disappeared.';
+        box.focus(); setNative(box, ''); box.dispatchEvent(new Event('input', { bubbles: true }));
+        setNative(box, fmt); box.dispatchEvent(new Event('input', { bubbles: true })); box.dispatchEvent(new Event('change', { bubbles: true })); box.dispatchEvent(new Event('blur', { bubbles: true }));
+        nv(item, 'typed Room ' + fmt.length + ' digits, pressing Search');
+        safeClick(findExact('search', 'button,a,[role=button]') || sb);
+        rows = await waitFor(() => { const r = roomRows(item); return r.length ? r : null; }, 12000);
+        nv(item, 'rows found: ' + (rows ? rows.length : 0));
+        if (rows) break;
+      }
       if (!rows) return 'Room ' + item.room + ': no row with this guest\'s name was found.';
       if (rows.length > 1) return 'Room ' + item.room + ': more than one row matches. Open it yourself.';
       const conf = [...rows[0].querySelectorAll('a,[role=link]')].find(a => vis(a) && /^\d{5,}$/.test(own(a)));
       if (!conf) return 'Room ' + item.room + ': no confirmation number link in the row.';
-      safeClick(conf);
-      const nl = await waitFor(() => nameLink(item), 20000); if (!nl) return 'Room ' + item.room + ': the reservation did not open or the guest name was not found.';
-      safeClick(nl);
-      if (!await waitFor(() => hasText(/Identification/) && (findExact('identification', 'a,[role=link],[role=tab],[role=menuitem],li') || hasText(/Personal Details/)), 20000)) return 'Room ' + item.room + ': the profile did not open.';
+      nv(item, 'clicking Confirmation Number ' + dsc(conf).slice(0, 30)); safeClick(conf);
+      const nl = await waitFor(() => nameLink(item), 25000); if (!nl) { nv(item, 'reservation page shows: ' + labelsNow().slice(0, 200)); return 'Room ' + item.room + ': the reservation did not open or the guest name was not found.'; }
+      nv(item, 'clicking guest name ' + dsc(nl).slice(0, 20)); safeClick(nl);
+      if (!await waitFor(() => hasText(/Identification/) && (findIdent() || hasText(/Personal Details/)), 25000)) { nv(item, 'profile page shows: ' + labelsNow().slice(0, 250)); return 'Room ' + item.room + ': the profile did not open.'; }
+      nv(item, 'profile opened');
     }
     if (!hasText(/Personal Details/)) {
-      const idm = findExact('identification', 'a,[role=link],[role=tab],[role=menuitem],li'); if (!idm) return 'The Identification page was not found.';
-      safeClick(idm);
+      const idm = findIdent(); if (!idm) { nv(item, 'no Identification item; page shows: ' + labelsNow().slice(0, 250)); return 'The Identification page was not found.'; }
+      nv(item, 'clicking Identification ' + dsc(idm).slice(0, 30)); safeClick(idm);
       if (!await waitFor(() => hasText(/Personal Details/), 20000)) return 'The Identification page did not open.';
     }
     await sleep(600);
