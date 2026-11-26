@@ -248,25 +248,26 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
   const ms = t0 => ' (' + (Date.now() - t0) + ' ms)';
   const elTag = el => '<' + el.tagName.toLowerCase() + (el.id ? '#' + String(el.id).slice(0, 25) : '') + '>';
   // Proven manual path: hamburger > search box (type "In House") > click the result. Polls every 150 ms, clicks the moment the result shows.
+  const smNow = () => findExact('site map', 'a,button,[role=button],[role=menuitem],li,span');
   async function viaHamburger(round) {
     const T = Date.now();
-    let sbox = () => [...document.querySelectorAll('input')].find(i => vis(i) && /search/i.test((i.getAttribute('aria-label') || '') + ' ' + (i.placeholder || '') + ' ' + (i.id || '')) && !roomBoxIs(i));
-    exclude = new Set(inHouseAll());   // the breadcrumb already on the page is not the menu result
-    if (!sbox()) {
-      const cand = [...document.querySelectorAll('a,button,[role=button],oj-button')].filter(n => { if (!vis(n)) return false; const r = n.getBoundingClientRect(); return r.left < 140 && r.top < 100; });
-      const ham = cand.find(n => /menu|navigat|hamburger/i.test((n.getAttribute('aria-label') || n.title || n.id || '') + ' ' + n.className)) || cand[0];
-      logIt(st.cur || {}, 'nav', '', 'round ' + round + ': hamburger ' + (ham ? elTag(ham) + ' ' + (ham.getAttribute('aria-label') || '').slice(0, 25) : 'not found') + ms(T));
+    { const sm0 = smNow(); const inMenu = n => { let e = n; for (let i = 0; i < 6 && e && e !== document.body && e !== document.documentElement; i++, e = e.parentElement) if (sm0 && e.contains(sm0) && e.querySelectorAll("a,li").length < 400 && !e.querySelector("#app,h1,h2,[role=main]")) return true; return false; };
+      exclude = new Set(inHouseAll().filter(n => !inMenu(n))); }   // the breadcrumb already on the page is not the menu result
+    // 1. always open the real menu first ("Show Menu" button); the page's own Search/Go box (dashboard) is not the menu
+    if (!smNow()) {
+      const cand = [...document.querySelectorAll('a,button,[role=button],oj-button')].filter(n => vis(n) && !/clear search|^go$/i.test(own(n)));
+      const pick = n => (n.getAttribute('aria-label') || '') + ' ' + (n.title || '') + ' ' + (n.id || '') + ' ' + own(n);
+      const ham = cand.find(n => /show menu|ode_pg_sdbr/i.test(pick(n))) || cand.find(n => { const r = n.getBoundingClientRect(); return r.left < 140 && r.top < 100 && /menu|navigat|hamburger/i.test(pick(n) + ' ' + n.className); }) || cand.find(n => { const r = n.getBoundingClientRect(); return r.left < 100 && r.top < 80; });
+      logIt(st.cur || {}, 'nav', '', 'round ' + round + ': hamburger ' + (ham ? elTag(ham) + ' ' + (ham.getAttribute('aria-label') || own(ham)).slice(0, 25) : 'not found') + ms(T));
       if (!ham) return null;
       try { safeClick(ham); } catch (_) { return null; }
+      if (!await waitFor(smNow, 4000)) { logIt(st.cur || {}, 'nav', '', 'menu did not open; page shows: ' + labelsNow().slice(0, 200)); return null; }
     }
-    const box = await waitFor(sbox, 4000);
-    if (box) {
-      setVal(box, 'In House'); logIt(st.cur || {}, 'nav', '', 'typed In House in the menu search' + ms(T));
-      const hit = await waitFor(inHouseItem, 6000); if (hit) { logIt(st.cur || {}, 'nav', '', 'result shown' + ms(T)); return hit; }
-    }
-    const sm = findExact('site map', 'a,button,[role=button],[role=menuitem],li,span');
-    if (sm) { logIt(st.cur || {}, 'nav', '', 'no search result, trying Site Map' + ms(T)); try { safeClick(sm); } catch (_) {} const hit = await waitFor(inHouseItem, 8000); if (hit) return hit;
-      const alpha = findExact('alphabetical', 'a,button,[role=tab],[role=button],li,span'); if (alpha) { try { safeClick(alpha); } catch (_) {} return await waitFor(inHouseItem, 5000); } }
+    logIt(st.cur || {}, 'nav', '', 'menu open' + ms(T));
+    // 2. Site Map straight away (the menu search result was not clickable on his Opera; Site Map worked)
+    const sm = smNow();
+    if (sm) { logIt(st.cur || {}, 'nav', '', 'Site Map' + ms(T)); try { safeClick(sm); } catch (_) {} const hit = await waitFor(inHouseItem, 10000); if (hit) { logIt(st.cur || {}, 'nav', '', 'In House found in Site Map' + ms(T)); return hit; }
+      const alpha = findExact('alphabetical', 'a,button,[role=tab],[role=button],li,span'); if (alpha) { try { safeClick(alpha); } catch (_) {} const h2 = await waitFor(inHouseItem, 5000); if (h2) return h2; } }
     logIt(st.cur || {}, 'nav', '', 'menu shows: ' + labelsNow());
     return null;
   }
@@ -360,7 +361,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     await sleep(200);
     return '';
   }
-  const CODE_V = 'v639';
+  const CODE_V = 'v640';
   async function autoRun(from) {
     if (st.auto || !st.plan) return; st.auto = true; st.stop = false; setBtns();
     logIt({}, 'version', '', 'fixer code ' + CODE_V + ', helper ' + (window.__hoFxVer || 'unknown'));
