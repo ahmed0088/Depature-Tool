@@ -30,7 +30,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
   const last4 = v => { const s = String(v || '').replace(/\s+/g, ''); return s ? (s.length > 4 ? '••••' + s.slice(-4) : '••••') : ''; };
   const FIELDS = { gender: 'Gender', nationality: 'Nationality', idType: 'ID Type', idNumber: 'ID Number' };
   const VALID_NAT = /^[A-Z]{2}$/;
-  const st = { plan: null, cur: null, dry: true, log: [], busy: false, auto: false, stop: false, paused: false, idx: 0 };
+  const st = { hook: null, plan: null, cur: null, dry: true, log: [], busy: false, auto: false, stop: false, paused: false, idx: 0 };
   try { st.log = JSON.parse(sessionStorage.getItem('hoFixerLog') || '[]'); } catch (_) {}
   const saveLog = () => { try { sessionStorage.setItem('hoFixerLog', JSON.stringify(st.log.slice(-300))); } catch (_) {} };
 
@@ -157,10 +157,10 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     await sleep(200);
     return true;
   }
-  const say = (m, bad) => { if (UI.msg) { UI.msg.textContent = m; UI.msg.style.color = bad ? '#c0392b' : '#1b6b3a'; } };
+  const say = (m, bad) => { if (UI.msg) { UI.msg.textContent = m; UI.msg.style.color = bad ? '#c0392b' : '#1b6b3a'; } try { if (st.hook) st.hook('say', m, !!bad); } catch (_) {} };
   function logIt(item, field, value, result) {
     const e = { t: new Date().toISOString(), hotel: (st.plan && st.plan.hotel) || '', room: item.room, arrival: item.arrival || '', field, to: field === 'idNumber' ? last4(value) : value, result, dry: st.dry };
-    st.log.push(e); saveLog(); renderLog();
+    st.log.push(e); saveLog(); renderLog(); try { if (st.hook) st.hook('log', e); } catch (_) {}
   }
 
   /** read-only check: is the right guest open, and which approved fields are empty */
@@ -322,5 +322,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
   sh.getElementById('copyl').onclick = () => { const t = st.log.map(e => JSON.stringify(e)).join('\n'); try { navigator.clipboard.writeText(t); say('Log copied. Paste it in HotelOps → Fix in Opera → Save log.', false); } catch (_) { say('Could not copy the log.', true); } };
   sh.getElementById('x').onclick = () => { const b = sh.getElementById('body'); b.style.display = b.style.display === 'none' ? '' : 'none'; };
   document.documentElement.appendChild(host); renderLog();
-  window.__hoFixer = { open() { host.style.display = ''; }, _test: { decode, check, fill, st, nameOk, profileName, safeClick, setPlan(p) { st.plan = p; renderList(); setBtns(); }, autoRun, goToGuest, setDry(v) { st.dry = v; } } };
+  // helper mode (the Chrome extension sets __hoFixerLazy): the window stays hidden until HotelOps hands it a list
+  if (window.__hoFixerLazy) host.style.display = 'none';
+  window.__hoFixer = { open() { host.style.display = ''; }, setHook(f) { st.hook = f; }, loadCode(code) { st.plan = decode(code); st.cur = null; st.paused = false; renderList(); setBtns(); host.style.display = ''; sh.getElementById('plan').value = ''; say('List loaded: ' + st.plan.items.length + ' room(s). Dry run is on. Press Start.', false); return st.plan.items.length; }, _test: { decode, check, fill, st, nameOk, profileName, safeClick, setPlan(p) { st.plan = p; renderList(); setBtns(); }, autoRun, goToGuest, setDry(v) { st.dry = v; } } };
 })();
