@@ -51,6 +51,11 @@ try{
  const why=await page.evaluate(()=>window.__hoFixer._test.goToGuest({room:'0301',name:'Zed Fakeperson'}));assert.equal(why,'',why);
  const cl=await page.evaluate(()=>window.__clicks);assert(cl.indexOf('CONF')>=0&&cl.indexOf('NAME')>cl.indexOf('CONF'),JSON.stringify(cl));
  assert.deepEqual(await page.evaluate(()=>window.__opened),['0301']);await page.close();}
+ // Opera collapses the Search panel after a search: a room with no row must expand it again for the 2nd try, and the run goes on
+ {const page=await browser.newPage();await page.setContent(html.replace("document.getElementById('sb').onclick=()=>{","document.getElementById('sb').onclick=()=>{setTimeout(()=>{const sp=document.getElementById('sp');if(sp){sp.style.display='none';if(!document.getElementById('mod')){const b=document.createElement('button');b.id='mod';b.textContent='Modify Search Criteria';b.onclick=()=>{sp.style.display='';b.remove()};document.body.prepend(b)}}},50);"));await page.addScriptTag({content:fixer});
+ const why=await page.evaluate(()=>window.__hoFixer._test.goToGuest({room:'0106',name:'Nobody Here'}));
+ assert(/not found in the In House list/.test(why),why);
+ const logs=await page.evaluate(()=>window.__hoFixer._test.st.log.map(e=>e.result).join('\n'));assert(/expanding/.test(logs)&&/no row; filters:/.test(logs),logs);await page.close();}
  // from the dashboard (no In House breadcrumb): opens the Front Desk menu, then In House, by itself
  {const page=await browser.newPage();await page.setContent(html.replace('<div id="crumb"><a href="#" id="bc" onclick="go(\'list\');return false">In House</a></div>','<nav><a href="#" id="fd" role="button" onclick="document.getElementById(\'dd\').style.display=\'block\';return false">Front Desk</a><ul id="dd" style="display:none"><li><a href="#" role="menuitem" onclick="setTimeout(()=>go(\'list\'),600);return false">Arrivals</a></li><li><a href="#" role="menuitem" onclick="setTimeout(()=>go(\'list\'),600);return false">In House</a></li></ul></nav>').replace("go('list');\n</script>","document.getElementById('app').innerHTML='<h2>Dashboard</h2>';\n</script>"));
  await page.addScriptTag({content:fixer});
