@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v630';
+const CACHE_NAME = 'ibis-ops-shell-v631';
 
 const SHELL_FILES = [
   './',
@@ -54,6 +54,7 @@ const SHELL_FILES = [
   './monthly-reports.js',
   './checklist.js',
   './opera-auto-core.js',
+  './immig-page.css',
   './immig-fixer-core.js',
   './reconcile-core.js',
   './reconcile-card.js',
