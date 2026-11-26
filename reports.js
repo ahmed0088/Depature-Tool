@@ -604,6 +604,8 @@ let _immigNatMap      = {};
 let _immigPassportMap = {};
 let _immigGenderMap   = {};
 let _immigInhouseRoomGuests = {};
+let _immigInhouseList = [];   // every Inhouse guest {room,name,nat,doc,arrival}: used only by Fix in Opera (room + name matching)
+let _immigMeta = { hotel: '', biz: '' };
 
 // Title prefix → gender, as seen in Opera's "LASTNAME, FIRSTNAME, Title" name format.
 const _IMMIG_TITLE_GENDER = {
@@ -646,9 +648,10 @@ function _immigParseInhouseXML(xmlText) {
   const natMap = {};
   const docMap = {};
   const roomMap = {}; // normRoom -> [{ name, key }]
+  const list = [];
   try {
     const doc = (new DOMParser()).parseFromString(xmlText, 'text/xml');
-    if (doc.querySelector('parsererror')) return { natMap, docMap, roomMap };
+    if (doc.querySelector('parsererror')) return { natMap, docMap, roomMap, list };
 
     const blocks = doc.querySelectorAll('Details[Level="2"]');
     blocks.forEach(b => {
@@ -662,6 +665,7 @@ function _immigParseInhouseXML(xmlText) {
       const doc_   = field('DocumentNumber1');
       const room   = field('RoomNumber1');
       if (!given && !family) return;
+      list.push({ room: room.replace(/^0+/, '') || '0', name: (given + ' ' + family).trim(), nat, doc: doc_, arrival: field('ArrivalDate2') });
 
       const name = (given + ' ' + family).trim();
       const key = _normName(name);
@@ -676,7 +680,7 @@ function _immigParseInhouseXML(xmlText) {
   } catch (e) {
     console.warn('[Immigration] _immigParseInhouseXML failed:', e);
   }
-  return { natMap, docMap, roomMap };
+  return { natMap, docMap, roomMap, list };
 }
 
 // Load Inhouse.xml — provides Nationality + Passport/Doc Number for guests missing them on the immigration report.
@@ -685,7 +689,8 @@ function immigLoadInhouseXml(input) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const { natMap, docMap, roomMap } = _immigParseInhouseXML(e.target.result);
+    const { natMap, docMap, roomMap, list } = _immigParseInhouseXML(e.target.result);
+    _immigInhouseList = list || [];
     _immigNatMap         = natMap || {};
     _immigPassportMap    = docMap || {};
     _immigInhouseRoomGuests = roomMap || {};
@@ -954,7 +959,7 @@ function processImmig2(silent) {
   // Auto-fill Nationality / Gender from optional recovery sources (Inhouse XML / arrivals export)
   _immigApplyRecovery(rows);
   rows.sort((a,b)=>{if(a.critical&&!b.critical)return-1;if(!a.critical&&b.critical)return 1;return(a.room||'ZZZ').localeCompare(b.room||'ZZZ');});
-  immigAllRows2=rows; immigFilter2_='all';
+  immigAllRows2=rows; immigFilter2_='all'; _immigMeta={hotel,biz:bizStr};
   const noNatC=rows.filter(r=>r.noNat).length,noSexC=rows.filter(r=>r.noSex).length,noPassC=rows.filter(r=>r.noPass).length,noFnameC=rows.filter(r=>r.noFname).length,noEmailC=rows.filter(r=>r.noEmail).length,crit=rows.filter(r=>r.critical).length;
   const sugNatC=rows.filter(r=>r.suggestedNat).length, sugSexC=rows.filter(r=>r.suggestedSex).length, sugPassC=rows.filter(r=>r.suggestedPassport).length;
   const guessSexC=rows.filter(r=>r.guessedSex).length;
@@ -975,6 +980,7 @@ function processImmig2(silent) {
   const allBtn=document.querySelector('#immigFilters2 [data-if="all"]'); if(allBtn)allBtn.classList.add('on');
   immigRender2(rows);
   document.getElementById('immigResults2').style.display='block';
+  if(typeof immigFixerRender==='function'){try{immigFixerRender();}catch(e){console.warn('[Fix in Opera]',e);}}
   if(!silent && sugTotal) showToast(`✦ Found ${sugTotal} suggested value(s) to enter in Opera (${sugNatC} nationality, ${sugSexC} gender, ${sugPassC} passport)`, 'ok');
 }
 
@@ -1041,7 +1047,7 @@ function immigRenderMissingProfiles() {
   }).join('');
 }
 
-function clearImmig(){document.getElementById('immigPasteInput2').value='';document.getElementById('immigResults2').style.display='none';document.getElementById('immigError2').classList.remove('show');document.getElementById('immigTabCount').textContent='Upload';document.getElementById('immigFileInput2').value='';immigAllRows2=[];immigMissingProfiles=[];_immigResRooms={};_immigNatMap={};_immigPassportMap={};_immigGenderMap={};_immigInhouseRoomGuests={};const ihl=document.getElementById('immigInhouseXmlLabel');if(ihl)ihl.textContent='Not loaded';const ihi=document.getElementById('immigInhouseXmlInput');if(ihi)ihi.value='';const arl=document.getElementById('immigArrivalsLabel');if(arl)arl.textContent='Not loaded';const ari=document.getElementById('immigArrivalsInput');if(ari)ari.value='';const rdl=document.getElementById('immigResDetailLabel');if(rdl)rdl.textContent='Not loaded';const rdi=document.getElementById('immigResDetailInput');if(rdi)rdi.value='';const mw=document.getElementById('immigMissingWrap');if(mw)mw.style.display='none';}
+function clearImmig(){document.getElementById('immigPasteInput2').value='';document.getElementById('immigResults2').style.display='none';document.getElementById('immigError2').classList.remove('show');document.getElementById('immigTabCount').textContent='Upload';document.getElementById('immigFileInput2').value='';immigAllRows2=[];immigMissingProfiles=[];_immigResRooms={};_immigNatMap={};_immigPassportMap={};_immigGenderMap={};_immigInhouseRoomGuests={};_immigInhouseList=[];const ihl=document.getElementById('immigInhouseXmlLabel');if(ihl)ihl.textContent='Not loaded';const ihi=document.getElementById('immigInhouseXmlInput');if(ihi)ihi.value='';const arl=document.getElementById('immigArrivalsLabel');if(arl)arl.textContent='Not loaded';const ari=document.getElementById('immigArrivalsInput');if(ari)ari.value='';const rdl=document.getElementById('immigResDetailLabel');if(rdl)rdl.textContent='Not loaded';const rdi=document.getElementById('immigResDetailInput');if(rdi)rdi.value='';const mw=document.getElementById('immigMissingWrap');if(mw)mw.style.display='none';}
 
 // ── FEEDBACK ──────────────────────────────────────────────
 function openFeedback(){['fb-text','fb-name'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('feedbackModal').classList.add('open');}
