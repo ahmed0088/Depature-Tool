@@ -7,7 +7,7 @@ const page_html=(name,filled)=>`<!doctype html><body style="font:14px sans-serif
 <section id="pd"><h3>Personal Details</h3><a href="#" id="edit" onclick="return false">Edit</a>
  <div class="f"><label class="l" for="gin">Gender</label><span class="v" id="gv">${filled.gender||'—'}</span></div>
  <div class="f"><label class="l" for="nin">Nationality</label><span class="v" id="nv">${filled.nat||'—'}</span></div></section>
-<section id="id"><h3>Identification</h3>
+<section id="id"><h3>Identification</h3><button id="showm" onclick="const v=document.getElementById('iv');if(/^X/.test(v.textContent))v.textContent='ZZ0099887766'">Show Masked Information</button>
  <div class="f"><label class="l" for="tin">ID Type</label><span class="v" id="tv">${filled.type||'—'}</span></div>
  <div class="f"><label class="l" for="iin">ID Number</label><span class="v" id="iv">${filled.num||'—'}</span></div></section>
 <a href="#" id="cancel" onclick="return false">Cancel</a> <button id="save">Save</button><ul id="opts" style="display:none"></ul>
@@ -42,11 +42,13 @@ try{
   const log=await page.evaluate(()=>JSON.stringify(window.__hoFixer._test.st.log));assert(!/784199012345678/.test(log),'log must keep ID numbers as last 4 only');assert(/••••5678/.test(log));assert(!/Fakeperson/.test(log),'log must not hold names');});
  // 3 already filled fields are never touched
  await run('Mr. Zed Fakeperson',{gender:'M',nat:'OM Oman',type:'PAS',num:'XXXXXXX69'},false,async page=>{await page.evaluate(()=>window.__hoFixer._test.fill(window.__hoFixer._test.st.cur));
-  assert.equal(await page.locator('#gv').textContent(),'M');assert.equal(await page.locator('#nv').textContent(),'OM Oman');assert.equal(await page.locator('#iv').textContent(),'XXXXXXX69');assert.equal(await page.locator('#nin').count(),0);assert.equal(await page.evaluate(()=>window.__saved),false);});
+  assert.equal(await page.locator('#gv').textContent(),'M');assert.equal(await page.locator('#nv').textContent(),'OM Oman');assert.equal(await page.locator('#iv').textContent(),'ZZ0099887766','Show Masked Information was pressed and the real number was already there: untouched');const c3=await page.evaluate(()=>window.__clicks);assert(c3.some(x=>/^Show Masked/.test(x)),'reveal pressed');assert(!c3.includes('Save')&&!c3.includes('Edit')&&!c3.includes('Cancel'),'nothing else pressed');const l3=await page.evaluate(()=>JSON.stringify(window.__hoFixer._test.st.log));assert(!/ZZ0099887766/.test(l3),'revealed number never logged');assert(/Show Masked/.test(l3));assert.equal(await page.locator('#nin').count(),0);assert.equal(await page.evaluate(()=>window.__saved),false);});
+ // 3b dry run never opens Show Masked Information
+ await run('Mr. Zed Fakeperson',{gender:'M',nat:'OM Oman',type:'PAS',num:'XXXXXXX69'},true,async page=>{await page.evaluate(()=>window.__hoFixer._test.fill(window.__hoFixer._test.st.cur));assert.equal(await page.evaluate(()=>window.__clicks.length),0);assert.equal(await page.locator('#iv').textContent(),'XXXXXXX69');});
  // 4 wrong guest on screen: refused, nothing changed
  await run('Mr. Someone Else',{},false,async page=>{await page.evaluate(()=>window.__hoFixer._test.fill(window.__hoFixer._test.st.cur));
   assert.equal(await page.evaluate(()=>window.__clicks.length),0);assert.equal(await page.locator('#nin').count(),0);assert((await page.evaluate(()=>window.__hoFixer._test.st.log.map(e=>e.result))).every(r=>/refused/.test(r)));});
  // 5 the hard click refusal
  await run('Mr. Zed Fakeperson',{},false,async page=>{const r=await page.evaluate(()=>{try{window.__hoFixer._test.safeClick(document.getElementById('save'));return 'clicked'}catch(e){return e.message}});assert(/Refused/.test(r));assert.equal(await page.evaluate(()=>window.__saved),false);});
- console.log('Opera fixer passed on a mock profile: dry run types nothing, fills only empty gender/nationality/ID, keeps filled fields, refuses the wrong guest, never presses Save, logs last 4 only and no names.');
+ console.log('Opera fixer passed on a mock profile: dry run types nothing, fills only empty gender/nationality/ID, keeps filled fields, refuses the wrong guest, opens Show Masked Information only to look (not in dry run), never presses Save, logs last 4 only and no names.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
