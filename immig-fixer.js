@@ -145,9 +145,9 @@
       const ok = S.ok[it.id] || {}, f = {};
       it.fields.forEach(x => { if (ok[x.field] && x.value) f[x.field] = x; });
       if (!Object.keys(f).length) return;
-      rows.push([it.room, it.arrival || '', f.gender ? f.gender.value : '', f.nationality ? f.nationality.value : '', f.idType ? f.idType.value : '', f.idNumber ? f.idNumber.display : ''].join('|'));
+      rows.push([it.room, it.arrival || '', f.gender ? f.gender.value : '-', f.nationality ? f.nationality.value : '-', f.idType ? f.idType.value : '-', f.idNumber ? f.idNumber.display : '-'].join('|'));
     });
-    return rows.length ? 'CLOUD OPERA CHECK (read-only, change nothing in Opera)\nroom|arrival|gender|nationality|id type|id number last 4\n' + rows.join('\n') : '';
+    return rows.length ? 'CLOUD OPERA CHECK (read-only, change nothing in Opera)\nroom|arrival|gender|nationality|id type|id number last 4  (- = already filled in Opera, nothing to do)\n' + rows.join('\n') : '';
   }
   // the authenticator code for the GitHub cloud run: written once to a private path, the run reads it and deletes it
   async function sendCloudCode() {
