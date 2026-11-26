@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 631, items: ['Immigration Check has a new look: four clear steps, the Fix in Opera box with the hotel\'s Opera link now at the top (visible before any report is loaded), and only two inputs: Vicas Inhouse XML and Opera Immigration XML. The Arrivals Export and Res. Detail inputs are gone; gender comes from the Mr/Mrs/Ms title or your tap.'] },
   { v: 630, items: ['Immigration Check: new "In House vs Vicas" card. With the Vicas Inhouse file added, it compares the two lists room by room and shows who is only in the Opera report, who is only in Vicas, and rooms where the names differ. Read only.'] },
   { v: 629, items: ['Fix in Opera can now open "Show Masked Information" on the Identification page (never in a dry run) to see whether an ID number is already there. It still never saves, never logs the full number and only types an ID number together with its type.'] },
   { v: 628, items: ['Fix in Opera: save each hotel\'s Opera Cloud link once (link only, never a login). The team shares it, an Open Opera button appears, and the fixer refuses to run on a different Opera link.'] },
