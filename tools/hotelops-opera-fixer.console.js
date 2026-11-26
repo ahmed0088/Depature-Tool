@@ -307,7 +307,11 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       if (roomBox()) return '';
       const modify = findExact('modify search criteria', 'button,a,[role=button]');
       if (modify && /in house/i.test(document.body.innerText || '')) { last = 'expand'; try { safeClick(modify); } catch (_) {} if (await waitFor(roomBox, 3000)) return done('expand'); }
-      const back = findExact('back to in house', 'a,button,[role=button],[role=link]');
+      let back = findExact('back to in house', 'a,button,[role=button],[role=link]');
+      if (!back || !enabled(back)) {   // on a profile: Back to Manage Reservation first (the breadcrumbs are dead there), then Back to In House
+        const bm = findExact('back to manage reservation', 'a,button,[role=button],[role=link]');
+        if (bm && enabled(bm) && round === 1) { logIt(st.cur || {}, 'nav', '', 'Back to Manage Reservation ' + dsc(bm)); try { safeClick(bm); } catch (_) {} back = await waitFor(() => { const x = findExact('back to in house', 'a,button,[role=button],[role=link]'); return x && enabled(x) ? x : null; }, 25000); }
+      }
       if (back && round === 1) { last = 'back'; logIt(st.cur || {}, 'nav', '', 'Back to In House ' + dsc(back)); try { safeClick(back); } catch (_) {} if (await waitFor(roomBox, 25000)) return done('back'); }
       const deep = /Manage (Profile|Reservation)/i.test(document.body.innerText || '');
       const order = round === 1 && route && route !== 'hamburger' && !deep ? [route, 'hamburger', 'front', 'crumb'] : ['hamburger', 'front', 'crumb'];
@@ -318,7 +322,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
           exclude = new Set(); const fd = findExact('front desk', 'a,button,[role=button],[role=link],[role=menuitem],[role=tab],li,span');
           if (fd) { last = 'front'; try { safeClick(fd); } catch (_) {} const item = await waitFor(inHouseItem, 1500); if (item) { try { safeClick(item); clicked = true; } catch (_) {} } }
         } else if (r === 'crumb' && !deep && round === 1) {
-          const crumb = findExact('in house', 'a,[role=link]'); if (crumb) { last = 'breadcrumb'; try { safeClick(crumb); clicked = true; } catch (_) {} }
+          const crumb = findExact('in house', 'a,[role=link]'); if (crumb && enabled(crumb)) { last = 'breadcrumb'; try { safeClick(crumb); clicked = true; } catch (_) {} }
         }
         if (clicked) { logIt(st.cur || {}, 'nav', '', 'round ' + round + ': clicked In House via ' + r); await sleep(150); await waitFor(() => !busy(), 6000); if (await waitFor(roomBox, 25000)) return done(r); const d = dialogText(); if (d) return 'The In House list did not open: Opera shows a question ("' + d + '"). Answer it yourself, then press Next guest.'; clicked = false; }
       }
@@ -326,16 +330,22 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     const where = (location.hash || location.pathname || '').slice(0, 50);
     return 'The In House list did not open (step: ' + last + '; page: ' + where + '). Open Front Desk > In House yourself, then press Next guest.';
   }
+  // The In House grid is nested tables: take the innermost <tr> that holds the room cell (textContent of an outer row holds every inner row)
+  const roomCellOf = (tr, room) => [...tr.querySelectorAll('td,th,[role=gridcell],[role=cell]')].some(c => !c.querySelector('td,th') && /^\d{3,4}$/.test(own(c)) && norm(own(c)) === norm(room));
   function roomRows(item, roomOnly) {
     const want = words(item.name);
-    return [...document.querySelectorAll('tr')].filter(vis).filter(tr => {   // exactly as v640: real table rows only
-      const cells = [...tr.children].map(own);
-      if (!cells.some(c => c && norm(c) === norm(item.room) && /^\d{3,4}$/.test(c.trim()))) return false;
-      if (roomOnly) return true;
-      const rw = new Set(words(cells.join(" ")));
-      return want.length > 0 && want.every(w => rw.has(w));
-    });
+    const cands = [...document.querySelectorAll('tr')].filter(vis).filter(tr => roomCellOf(tr, item.room));
+    const inner = cands.filter(tr => !cands.some(o => o !== tr && tr.contains(o)));
+    return inner.filter(tr => { if (roomOnly) return true; const rw = new Set(words([...tr.querySelectorAll('td,th,[role=gridcell]')].filter(c => !c.querySelector('td,th')).map(own).join(' '))); return want.length > 0 && want.every(w => rw.has(w)); });
   }
+  // the Confirmation Number link of one result row: id ends ":l1" or digits-only text; the link must sit in a row that has the room cell
+  function confLinks(item, row) {
+    const ok = a => vis(a) && !/AFDisabled/.test(a.className || '') && (/:l1$/.test(a.id || '') || /^\d{5,}$/.test(own(a)));
+    const inRow = row ? [...row.querySelectorAll('a,[role=link]')].filter(ok) : [];
+    if (inRow.length) return inRow;
+    return [...document.querySelectorAll('a,[role=link]')].filter(ok).filter(a => { const tr = a.closest('tr'); return tr && roomCellOf(tr, item.room); });
+  }
+  const enabled = el => !!el && !/AFDisabled/.test(el.className || '') && !el.closest('.p_AFDisabled');
   const noData = () => /no data|no results|no records|nothing to display/i.test(document.body.innerText || '');
   function nameCands(item) {
     return [...document.querySelectorAll('a,[role=link],h1,h2,h3,span')].filter(vis).filter(n => n.children.length <= 2 && own(n).length < 90 && nameOk(item.name, own(n)) && !FORBIDDEN.test(own(n)));
@@ -369,8 +379,8 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
           const b = busy(); if (b) { sawBusy = true; idleSince = 0; return null; }
           const r = roomRows(item); if (r.length) return r;
           if (!idleSince) idleSince = Date.now();
-          if (roomRows(item, true).length) { if (!roomOnlyAt) roomOnlyAt = Date.now(); if (Date.now() - roomOnlyAt > 1200 && roomRows(item, true).some(tr => [...tr.querySelectorAll('a,[role=link]')].some(a => vis(a) && /^\d{5,}$/.test(own(a))))) return 'room'; } else roomOnlyAt = 0;
-          if (Date.now() - idleSince > (sawBusy ? 2000 : 3500) && (noData() || Date.now() - idleSince > 8000)) return 'none';
+          if (roomRows(item, true).length) { if (!roomOnlyAt) roomOnlyAt = Date.now(); if (Date.now() - roomOnlyAt > 1200 && roomRows(item, true).some(tr => confLinks(item, tr).length)) return 'room'; } else roomOnlyAt = 0;
+          if (Date.now() - idleSince > (sawBusy ? 2000 : 3500) && (noData() || Date.now() - idleSince > 5000)) return 'none';
           return null;
         }, 25000);
         const waited = Date.now() - TS;
@@ -389,7 +399,8 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       const tryN = item._try || 0;
       if (rows.length > 1 && !byRoom) return 'Room ' + item.room + ': more than one row matches. Open it yourself.';
       if (tryN >= rows.length) return 'Room ' + item.room + ': reservation found but this guest\'s name is not on it.';
-      const conf = [...rows[tryN].querySelectorAll('a,[role=link]')].find(a => vis(a) && /^\d{5,}$/.test(own(a)));
+      const cl = confLinks(item, rows[tryN]); const conf = cl[0] || (byRoom ? confLinks(item, null)[tryN] : null);
+      if (!conf) nv(item, 'row has no confirmation link; row ids: ' + [...rows[tryN].querySelectorAll('a')].slice(0, 4).map(dsc).join(' ; '));
       if (!conf) return 'Room ' + item.room + ': no confirmation number link in the row.';
       nv(item, 'clicking Confirmation Number ' + dsc(conf).slice(0, 30)); safeClick(conf);
       if (!await waitFor(resReady, 40000)) { nv(item, 'reservation did not load; page shows: ' + labelsNow().slice(0, 200)); return 'Room ' + item.room + ': the reservation page did not load.'; }
@@ -429,7 +440,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     if (miss.length) return { ok: false, why: 'saved but could not confirm: ' + miss.join(', ') };
     return { ok: true, why: '' };
   }
-  const CODE_V = 'v643';
+  const CODE_V = 'v644';
   async function autoRun(from) {
     if (st.auto || !st.plan) return; st.auto = true; st.stop = false; setBtns();
     logIt({}, 'version', '', 'fixer code ' + CODE_V + ', helper ' + (window.__hoFxVer || 'unknown'));
