@@ -3,25 +3,25 @@
 // never press Save, refuse the wrong guest, and do nothing in dry run.
 const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=require('playwright-core'),C=require('../immig-fixer-core.js');
 const fixer=fs.readFileSync(__dirname+'/../tools/hotelops-opera-fixer.console.js','utf8');
-const page_html=(name,filled)=>`<!doctype html><body style="font:14px sans-serif"><h2>${name}</h2>
-<section id="pd"><h3>Personal Details</h3><button id="edit">Edit</button>
- <div class="f"><span class="l">Gender</span><span class="v" id="gv">${filled.gender||'—'}</span></div>
- <div class="f"><span class="l">Nationality</span><span class="v" id="nv">${filled.nat||'—'}</span></div></section>
+const page_html=(name,filled)=>`<!doctype html><body style="font:14px sans-serif"><h2>${name}</h2><div class="f"><span class="l">Nationality</span><span id="hn">${filled.nat||'—'}</span></div>
+<section id="pd"><h3>Personal Details</h3><a href="#" id="edit" onclick="return false">Edit</a>
+ <div class="f"><label class="l" for="gin">Gender</label><span class="v" id="gv">${filled.gender||'—'}</span></div>
+ <div class="f"><label class="l" for="nin">Nationality</label><span class="v" id="nv">${filled.nat||'—'}</span></div></section>
 <section id="id"><h3>Identification</h3>
- <div class="f"><span class="l">ID Type</span><span class="v" id="tv">${filled.type||'—'}</span></div>
- <div class="f"><span class="l">ID Number</span><span class="v" id="iv">${filled.num||'—'}</span></div></section>
-<button id="save">Save</button><ul id="opts" style="display:none"></ul>
+ <div class="f"><label class="l" for="tin">ID Type</label><span class="v" id="tv">${filled.type||'—'}</span></div>
+ <div class="f"><label class="l" for="iin">ID Number</label><span class="v" id="iv">${filled.num||'—'}</span></div></section>
+<a href="#" id="cancel" onclick="return false">Cancel</a> <button id="save">Save</button><ul id="opts" style="display:none"></ul>
 <script>window.__saved=false;window.__clicks=[];
 document.getElementById('save').onclick=()=>{window.__saved=true};
 document.addEventListener('click',e=>window.__clicks.push((e.target.textContent||'').trim().slice(0,12)),true);
 const countries={ET:'ET Ethiopia',OM:'OM Oman'};
 document.getElementById('edit').onclick=()=>{
  const mk=(id,html)=>{const s=document.getElementById(id);if(s.textContent.trim()==='—')s.innerHTML=html;};
- mk('gv','<select><option value=""></option><option value="M">M</option><option value="F">F</option></select>');
+ mk('gv','<select id="gin"><option value=""></option><option value="M">M</option><option value="F">F</option></select>');
  mk('nv','<input id="nin">');mk('tv','<input id="tin">');mk('iv','<input id="iin">');
  const n=document.getElementById('nin');if(n)n.addEventListener('input',()=>{const o=document.getElementById('opts');o.innerHTML='';Object.values(countries).filter(c=>n.value&&c.toLowerCase().startsWith(n.value.toLowerCase())).forEach(c=>{const li=document.createElement('li');li.setAttribute('role','option');li.textContent=c;li.onclick=()=>{n.value=c;o.style.display='none'};o.appendChild(li)});o.style.display='block'});
 };</script></body>`;
-const plan=()=>{const rows=[{room:'0415',name:'Zed Fakeperson',arrival:'11/24/2026',noNat:true,noSex:true,noPass:true,suggestedSex:'F'}],list=[{room:'415',name:'Zed Fakeperson',nat:'Ethiopia',doc:'ZZ7654321'}];const p=C.buildPlan(rows,list,{hotel:'Test Hotel'}),a={};a[p.items[0].id]={gender:true,nationality:true,idType:true,idNumber:true};return C.encodePlan(p,a);};
+const plan=()=>{const rows=[{room:'0415',name:'Zed Fakeperson',arrival:'11/24/2026',noNat:true,noSex:true,noPass:true,suggestedSex:'F'}],list=[{room:'415',name:'Zed Fakeperson',nat:'Ethiopia',doc:'784199012345678'}];const p=C.buildPlan(rows,list,{hotel:'Test Hotel',uaeIdType:'RES'}),a={};a[p.items[0].id]={gender:true,nationality:true,idType:true,idNumber:true};return C.encodePlan(p,a);};
 (async()=>{const executablePath=[process.env.CHROME_PATH,'/usr/bin/google-chrome','/usr/bin/chromium'].find(p=>p&&fs.existsSync(p)),browser=await chromium.launch({executablePath,headless:true,args:['--no-sandbox']});
 try{
  const run=async(name,filled,dry,body)=>{const page=await browser.newPage({viewport:{width:1200,height:800}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -36,10 +36,10 @@ try{
  // 2 real fill: Edit pressed, empty fields filled, Save never pressed
  await run('Mr. Zed Fakeperson',{},false,async page=>{await page.evaluate(()=>window.__hoFixer._test.fill(window.__hoFixer._test.st.cur));
   assert.equal(await page.locator('#gv select').inputValue(),'F');assert.equal(await page.locator('#nin').inputValue(),'ET Ethiopia');
-  assert.equal(await page.locator('#tin').inputValue(),'PAS');assert.equal(await page.locator('#iin').inputValue(),'ZZ7654321');
+  assert.equal(await page.locator('#tin').inputValue(),'RES');assert.equal(await page.locator('#iin').inputValue(),'784199012345678');
   assert.equal(await page.evaluate(()=>window.__saved),false,'Save must never be pressed');
-  const clicks=await page.evaluate(()=>window.__clicks);assert(!clicks.includes('Save'));
-  const log=await page.evaluate(()=>JSON.stringify(window.__hoFixer._test.st.log));assert(!/ZZ7654321/.test(log),'log must keep ID numbers as last 4 only');assert(/••••4321/.test(log));assert(!/Fakeperson/.test(log),'log must not hold names');});
+  const clicks=await page.evaluate(()=>window.__clicks);assert(!clicks.includes('Save')&&!clicks.includes('Cancel'));assert.equal(await page.locator('#hn').textContent(),'—','the header copy of Nationality is never edited');
+  const log=await page.evaluate(()=>JSON.stringify(window.__hoFixer._test.st.log));assert(!/784199012345678/.test(log),'log must keep ID numbers as last 4 only');assert(/••••5678/.test(log));assert(!/Fakeperson/.test(log),'log must not hold names');});
  // 3 already filled fields are never touched
  await run('Mr. Zed Fakeperson',{gender:'M',nat:'OM Oman',type:'PAS',num:'XXXXXXX69'},false,async page=>{await page.evaluate(()=>window.__hoFixer._test.fill(window.__hoFixer._test.st.cur));
   assert.equal(await page.locator('#gv').textContent(),'M');assert.equal(await page.locator('#nv').textContent(),'OM Oman');assert.equal(await page.locator('#iv').textContent(),'XXXXXXX69');assert.equal(await page.locator('#nin').count(),0);assert.equal(await page.evaluate(()=>window.__saved),false);});
