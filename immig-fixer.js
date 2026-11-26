@@ -96,6 +96,7 @@
       (skipped.length ? '<details class="imm-more"><summary>Why ' + skipped.length + ' cannot be fixed</summary><div class="imm-small">' + skipped.map(it => 'Room ' + esc(it.room) + ' · ' + esc(it.name) + ' · ' + esc(it.notes.join(' · ') || 'nothing to fill')).join('<br>') + '</div></details>' : '') +
       (!items.length ? '<div class="imm-sub">Nothing to fix. All good.</div>' : '') +
       '<div class="imm-go"><button class="btn gold imm-big" id="immigFixCopy">▶ Start fixing (<span id="immigFixN">' + approvedCount() + '</span> ticked fields)</button> <button class="btn imm-big" id="immigFixCloud">☁ Run in cloud (check only)</button></div>' +
+      '<details class="imm-more" id="immigCloudBox"><summary>Cloud run code</summary><div class="imm-small" id="immigCloudWant" style="margin:6px 0">When the GitHub cloud run asks for your authenticator code, type the 6 digits here and press Send. It is used once and deleted.</div><div style="display:flex;gap:8px"><input id="immigCloudCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code" style="width:130px"><button class="btn" id="immigCloudSend">Send code</button></div></details>' +
       '<div class="imm-small" id="immigFixStatus" style="margin:6px 0">' + esc(S.fxNote || '') + '</div>' + extState() +
       (helperFx() ? '<ol class="imm-3"><li>Press <b>Start fixing</b>. The list goes to your Opera tab.</li><li>In the fixer window there, press <b>Start</b>. It opens each guest and fills the empty boxes.</li><li>Check the guest, press Save in Opera yourself, then press <b>Next guest</b>.</li></ol>' : '<ol class="imm-3"><li>Press <b>Start fixing</b>. It copies the list.</li><li>In Opera: open the fixer window, paste the list, press <b>Load</b>.</li><li>Press <b>Start</b> in the window. It opens each guest and fills the empty boxes. You press Save in Opera.</li></ol>') +
       '<details class="imm-more"><summary>More</summary><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="immigFixSave">Remember gender and nationality</button></div>' +
@@ -112,6 +113,8 @@
     };
     document.getElementById('immigFixCopy').onclick = copyPlan;
     document.getElementById('immigFixCloud').onclick = copyCloudRequest;
+    document.getElementById('immigCloudSend').onclick = sendCloudCode;
+    watchCloudWant();
     document.getElementById('immigFixSave').onclick = saveShared;
     document.getElementById('immigFixLogSave').onclick = saveLog;
     showLog();
@@ -145,6 +148,22 @@
       rows.push([it.room, it.arrival || '', f.gender ? f.gender.value : '', f.nationality ? f.nationality.value : '', f.idType ? f.idType.value : '', f.idNumber ? f.idNumber.display : ''].join('|'));
     });
     return rows.length ? 'CLOUD OPERA CHECK (read-only, change nothing in Opera)\nroom|arrival|gender|nationality|id type|id number last 4\n' + rows.join('\n') : '';
+  }
+  // the authenticator code for the GitHub cloud run: written once to a private path, the run reads it and deletes it
+  async function sendCloudCode() {
+    const el = document.getElementById('immigCloudCode'), v = String(el && el.value || '').replace(/\D/g, ''), d = db();
+    if (!/^\d{6}$/.test(v)) return toast('Type the 6 digits from your authenticator app.', 'err');
+    if (!d) return toast('Not connected to the database.', 'err');
+    try { await d.ref('hotels/' + HOTEL_ID + '/operaCloudCode').set({ code: v, at: Date.now() }); el.value = ''; toast('Code sent. The cloud run uses it once.', 'ok'); } catch (_) { toast('Could not send the code.', 'err'); }
+  }
+  let wantRef = null;
+  function watchCloudWant() {
+    const d = db(); if (!d || wantRef) return;
+    try { wantRef = d.ref('hotels/' + HOTEL_ID + '/operaCloudWant'); wantRef.on('value', snap => {
+      const v = snap.val(), el = document.getElementById('immigCloudWant'), box = document.getElementById('immigCloudBox'); if (!el) return;
+      if (v && Date.now() - Number(v.at || 0) < 200000) { el.textContent = 'The cloud run is waiting for your authenticator code now. Type it and press Send.'; el.style.color = 'var(--red,#c0392b)'; if (box) box.open = true; }
+      else { el.style.color = ''; el.textContent = 'When the GitHub cloud run asks for your authenticator code, type the 6 digits here and press Send. It is used once and deleted.'; }
+    }); } catch (_) { wantRef = null; }
   }
   async function copyCloudRequest() {
     const t = cloudRequestText(); if (!t) return toast('Tick at least one fix first.', 'err');
