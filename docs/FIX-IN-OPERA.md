@@ -16,3 +16,10 @@ Not done (v2): opening each room by itself and auto-save.
 ID type (matches the real Opera list): UAE documents are `RES` or `IDC`. Opera has no Emirates ID code, so the plan shows a RES/IDC choice on each Emirates ID row (default none) and remembers your pick for the hotel. Other documents get `PAS` (passport). `GCC ID` is for other GCC nationals' cards and is never chosen for you. An ID number is only typed together with its ID type. Opera shows ID numbers masked, so a masked number counts as already filled; nothing is typed over it.
 
 On the Opera page: Manage Profile > Identification. Nationality is a 2-letter code, gender is M or F. Fields are matched by their label text. The fixer clicks Edit but never Save, Cancel, New or the red X on a document tab.
+
+
+Opera link per hotel: paste the hotel's Opera Cloud link in the Fix in Opera card and press Save link. Only the link is stored (a link with a username, password or token is refused), shared for the hotel. The plan you copy is tied to that link's address: the fixer refuses to run on any other Opera address.
+
+Shared rules for all Opera automation live in `opera-auto-core.js` (link check, buttons that may never be pressed, name matching). `tests/opera-auto.test.js` checks the pasted fixer follows them.
+
+Still pending: pressing "Show Masked Information" is not done. The fixer does not press it, so ID numbers stay uneditable while masked, until the user says yes.
