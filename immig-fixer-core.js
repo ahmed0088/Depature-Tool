@@ -99,7 +99,7 @@
   const b64 = s => typeof Buffer !== 'undefined' ? Buffer.from(s, 'utf8').toString('base64') : btoa(unescape(encodeURIComponent(s)));
   const unb64 = s => typeof Buffer !== 'undefined' ? Buffer.from(s, 'base64').toString('utf8') : decodeURIComponent(escape(atob(s)));
   /** the text he copies to the Opera fixer: only the APPROVED fields. Approvals: { itemId: { fieldName: true } } */
-  function encodePlan(plan, approved) {
+  function encodePlan(plan, approved, opts) {
     const items = [];
     (plan.items || []).forEach(it => {
       const ok = it.fields.filter(f => f.value && approved && approved[it.id] && approved[it.id][f.field]);
@@ -109,7 +109,7 @@
       const f2 = ok.filter(f => f.field === 'idType' ? hasNum : f.field === 'idNumber' ? hasType : true);
       if (f2.length) items.push({ id: it.id, room: it.room, name: it.name, arrival: it.arrival, fields: f2.map(f => ({ field: f.field, value: f.value })) });
     });
-    const body = JSON.stringify({ v: 1, hotel: plan.hotel, bd: plan.businessDate, items });
+    const body = JSON.stringify(Object.assign({ v: 1, hotel: plan.hotel, bd: plan.businessDate, items }, opts && /^https:\/\/[a-z0-9.-]+$/i.test(opts.origin || '') ? { origin: opts.origin } : {}));
     return 'HOFIX1.' + hash(body) + '.' + b64(body);
   }
   function decodePlan(text) {
