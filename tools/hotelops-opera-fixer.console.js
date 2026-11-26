@@ -140,14 +140,21 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       const o = [...el.options].find(o => fold(o.value) === fold(text) || fold(o.textContent) === fold(text) || fold(o.textContent).startsWith(fold(text) + ' '));
       if (!o) return false; setNative(el, o.value); el.dispatchEvent(new Event('change', { bubbles: true })); return true;
     }
-    setNative(el, text); el.dispatchEvent(new Event('input', { bubbles: true }));
+    // key by key, like typing (Opera's boxes commit on key events plus leaving the box)
+    for (const ch of String(text)) {
+      const kc = { key: ch, code: /^[a-z]$/i.test(ch) ? 'Key' + ch.toUpperCase() : /^\d$/.test(ch) ? 'Digit' + ch : '', bubbles: true, cancelable: true };
+      el.dispatchEvent(new KeyboardEvent('keydown', kc)); el.dispatchEvent(new KeyboardEvent('keypress', kc));
+      setNative(el, el.value + ch); el.dispatchEvent(new InputEvent('input', { bubbles: true, data: ch, inputType: 'insertText' }));
+      el.dispatchEvent(new KeyboardEvent('keyup', kc)); await sleep(40);
+    }
     await sleep(250);
     // a list that opens under the box (Oracle JET combobox): pick the one row that starts with the value
     const opts = [...document.querySelectorAll('[role=option],li[role=option],.oj-listbox-result,.oj-listbox-result-label')].filter(vis).filter(o => !FORBIDDEN.test(own(o)));
     const want = fold(text), pick = opts.filter(o => { const t = fold(own(o)); return t === want || t.startsWith(want + ' ') || t.startsWith(want); });
     if (pick.length === 1) { pick[0].click(); await sleep(150); }
     else if (pick.length > 1) return false;
-    el.dispatchEvent(new Event('change', { bubbles: true })); el.dispatchEvent(new Event('blur', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true })); el.dispatchEvent(new Event('blur', { bubbles: true })); try { el.blur(); } catch (_) {}
+    await sleep(200);
     return true;
   }
   const say = (m, bad) => { if (UI.msg) { UI.msg.textContent = m; UI.msg.style.color = bad ? '#c0392b' : '#1b6b3a'; } };
@@ -246,7 +253,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
         safeClick(crumb);
         if (!await waitFor(roomBox, 15000)) return 'The In House list did not open. If Opera asks a question, answer it, then press Next guest.';
       }
-      const box = roomBox(); box.focus(); setNative(box, item.room); box.dispatchEvent(new Event('input', { bubbles: true })); box.dispatchEvent(new Event('change', { bubbles: true })); box.dispatchEvent(new Event('blur', { bubbles: true }));
+      const box = roomBox(); box.focus(); setNative(box, String(item.room).replace(/\D/g, '').padStart(4, '0')); box.dispatchEvent(new Event('input', { bubbles: true })); box.dispatchEvent(new Event('change', { bubbles: true })); box.dispatchEvent(new Event('blur', { bubbles: true }));
       const sb = findExact('search', 'button,a,[role=button]'); if (!sb) return 'No Search button found.';
       safeClick(sb);
       const rows = await waitFor(() => { const r = roomRows(item); return r.length ? r : null; }, 15000);
