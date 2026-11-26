@@ -16,7 +16,7 @@
 Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > Manage Reservation > click the guest name =
  * Manage Profile > left menu Identification. Read mode shows Personal Details (Nationality "NG Nigeria", Gender "M") and the ID
  * table (ID Type / ID Number masked / Issued Country...). After "Edit" these become text boxes (with a magnifier list) that take
- * codes: Nationality AE/NG..., Gender M/F, ID Type PAS... It does not open rooms, press the magnifier, "New" or the red X, and an
+ * codes: Nationality AE/NG..., Gender M/F, ID Type PAS... Start (auto mode) opens each guest itself by clicking only the In House breadcrumb, Search, a confirmation number, the guest name and the Identification menu. It never presses the magnifier, "New" or the red X, and an
  * ID Number that shows as masked counts as already filled.
  * Use: Opera Cloud tab → F12 → Console → paste → Enter. Paste the plan into the small window and press Load.
  */
@@ -30,7 +30,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
   const last4 = v => { const s = String(v || '').replace(/\s+/g, ''); return s ? (s.length > 4 ? '••••' + s.slice(-4) : '••••') : ''; };
   const FIELDS = { gender: 'Gender', nationality: 'Nationality', idType: 'ID Type', idNumber: 'ID Number' };
   const VALID_NAT = /^[A-Z]{2}$/;
-  const st = { plan: null, cur: null, dry: true, log: [], busy: false };
+  const st = { plan: null, cur: null, dry: true, log: [], busy: false, auto: false, stop: false, paused: false, idx: 0 };
   try { st.log = JSON.parse(sessionStorage.getItem('hoFixerLog') || '[]'); } catch (_) {}
   const saveLog = () => { try { sessionStorage.setItem('hoFixerLog', JSON.stringify(st.log.slice(-300))); } catch (_) {} };
 
@@ -209,6 +209,81 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     finally { st.busy = false; }
   }
 
+  // ── auto mode: opens each guest's Identification page by itself (In House > room > reservation > guest name > Identification) ──
+  // Only read-style clicks: breadcrumb "In House", the Search button, a confirmation-number link, the guest name, the "Identification" menu item.
+  // The same hard refusal list applies, and the fill step never presses Save: he does.
+  const norm = r => String(r || '').replace(/\D/g, '').replace(/^0+/, '');
+  const waitFor = async (fn, ms) => { const t0 = Date.now(); while (Date.now() - t0 < (ms || 20000)) { let r = null; try { r = fn(); } catch (_) {} if (r) return r; await sleep(300); } return null; };
+  const hasText = re => re.test(document.body.innerText || '');
+  function findExact(text, tags) {
+    const t = text.toLowerCase();
+    const all = [...document.querySelectorAll(tags || 'a,button,[role=button],[role=link],[role=tab],[role=menuitem],li,span')].filter(n => vis(n) && n.children.length <= 2 && own(n).toLowerCase() === t);
+    const link = all.find(n => n.matches('a,button,[role=button],[role=link],[role=tab],[role=menuitem]'));
+    const found = link || all.find(n => n.closest('a,button,[role=link],[role=menuitem]')) || all[0] || null;
+    return found && (found.closest('a,button,[role=button],[role=link],[role=tab],[role=menuitem]') || found);
+  }
+  function roomBox() {
+    const lab = [...document.querySelectorAll('label[for]')].find(l => vis(l) && fold(own(l)) === 'room');
+    const el = lab && document.getElementById(lab.htmlFor); return el && vis(el) ? el : null;
+  }
+  function roomRows(item) {
+    const want = words(item.name);
+    return [...document.querySelectorAll('tr')].filter(vis).filter(tr => {
+      const cells = [...tr.children].map(own);
+      if (!cells.some(c => c && norm(c) === norm(item.room) && /^\d{3,4}$/.test(c.trim()))) return false;
+      const rw = new Set(words(cells.join(" ")));
+      return want.length > 0 && want.every(w => rw.has(w));
+    });
+  }
+  function nameLink(item) {
+    return [...document.querySelectorAll('a,[role=link],h1,h2,h3,span')].filter(vis).find(n => n.children.length <= 2 && own(n).length < 90 && nameOk(item.name, own(n)) && !FORBIDDEN.test(own(n)));
+  }
+  async function goToGuest(item) {
+    if (!hasText(/Personal Details/) || !nameOnScreen(item.name)) {
+      if (!roomBox()) {
+        const crumb = findExact('in house', 'a,[role=link]');
+        if (!crumb) return 'Open Front Desk > In House first.';
+        safeClick(crumb);
+        if (!await waitFor(roomBox, 15000)) return 'The In House list did not open. If Opera asks a question, answer it, then press Next guest.';
+      }
+      const box = roomBox(); box.focus(); setNative(box, item.room); box.dispatchEvent(new Event('input', { bubbles: true })); box.dispatchEvent(new Event('change', { bubbles: true })); box.dispatchEvent(new Event('blur', { bubbles: true }));
+      const sb = findExact('search', 'button,a,[role=button]'); if (!sb) return 'No Search button found.';
+      safeClick(sb);
+      const rows = await waitFor(() => { const r = roomRows(item); return r.length ? r : null; }, 15000);
+      if (!rows) return 'Room ' + item.room + ': no row with this guest\'s name was found.';
+      if (rows.length > 1) return 'Room ' + item.room + ': more than one row matches. Open it yourself.';
+      const conf = [...rows[0].querySelectorAll('a,[role=link]')].find(a => vis(a) && /^\d{5,}$/.test(own(a)));
+      if (!conf) return 'Room ' + item.room + ': no confirmation number link in the row.';
+      safeClick(conf);
+      const nl = await waitFor(() => nameLink(item), 20000); if (!nl) return 'Room ' + item.room + ': the reservation did not open or the guest name was not found.';
+      safeClick(nl);
+      if (!await waitFor(() => hasText(/Identification/) && (findExact('identification', 'a,[role=link],[role=tab],[role=menuitem],li') || hasText(/Personal Details/)), 20000)) return 'Room ' + item.room + ': the profile did not open.';
+    }
+    if (!hasText(/Personal Details/)) {
+      const idm = findExact('identification', 'a,[role=link],[role=tab],[role=menuitem],li'); if (!idm) return 'The Identification page was not found.';
+      safeClick(idm);
+      if (!await waitFor(() => hasText(/Personal Details/), 20000)) return 'The Identification page did not open.';
+    }
+    await sleep(600);
+    return '';
+  }
+  async function autoRun(from) {
+    if (st.auto || !st.plan) return; st.auto = true; st.stop = false; setBtns();
+    try {
+      const items = st.plan.items;
+      for (st.idx = from; st.idx < items.length; st.idx++) {
+        if (st.stop) { say('Stopped.', false); return; }
+        const it = items[st.idx]; st.cur = it; renderList();
+        say('Room ' + it.room + ' (' + (st.idx + 1) + ' of ' + items.length + '): opening the guest…', false);
+        const why = await goToGuest(it);
+        if (why) { logIt(it, 'nav', '', 'could not open: ' + why.slice(0, 60)); say(why, true); if (/In House|Open Front/.test(why)) return; continue; }
+        await fill(it);
+        if (!st.dry) { st.paused = true; say('Room ' + it.room + ' is filled. Check it, press Save in Opera, then press Next guest.', false); return; }
+      }
+      say('Done. ' + (st.dry ? 'Dry run only: nothing was typed.' : 'All rooms visited.'), false);
+    } finally { st.auto = false; setBtns(); }
+  }
+
   // ── the small window (Shadow DOM, so Opera's styles cannot touch it) ──
   const UI = {};
   const host = document.createElement('div'); host.setAttribute('data-hotelops', 'fixer');
@@ -216,7 +291,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
   const sh = host.attachShadow({ mode: 'closed' });
   sh.innerHTML = '<style>*{box-sizing:border-box}.w{background:#fff;color:#1d2433;border:1px solid #c9d1e0;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.25);overflow:hidden}.h{background:#243b6b;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;cursor:move}.b{padding:10px;max-height:60vh;overflow:auto}textarea{width:100%;height:46px;font:11px monospace}button{font:inherit;padding:5px 9px;border-radius:7px;border:1px solid #9aa6bf;background:#f3f6fc;cursor:pointer}button.p{background:#243b6b;color:#fff;border-color:#243b6b}.r{border:1px solid #dde3ef;border-radius:8px;padding:6px 8px;margin:6px 0;cursor:pointer}.r.on{border-color:#243b6b;background:#eef3ff}small{color:#5b6680}.m{margin:6px 0;min-height:16px}.g{font:10px monospace;color:#5b6680;max-height:80px;overflow:auto;white-space:pre-wrap}</style>' +
     '<div class="w"><div class="h"><b>Opera profile fixer</b><span id="x" style="cursor:pointer">–</span></div><div class="b" id="body"><small>Fills empty fields only. Never saves: you press Save.</small>' +
-    '<textarea id="plan" placeholder="Paste the plan from HotelOps"></textarea><div><button id="load" class="p">Load plan</button> <label><input type="checkbox" id="dry" checked> Dry run</label></div><div class="m" id="msg"></div><div id="list"></div><div style="margin-top:6px"><button id="fillb" class="p" disabled>Check &amp; fill the selected room</button></div><div style="margin-top:8px"><small>Change log</small> <button id="copyl">Copy log</button><div class="g" id="log"></div></div></div></div>';
+    '<textarea id="plan" placeholder="Paste the plan from HotelOps"></textarea><div><button id="load" class="p">Load plan</button> <label><input type="checkbox" id="dry" checked> Dry run</label></div><div class="m" id="msg"></div><div id="list"></div><div style="margin-top:6px"><button id="startb" class="p" disabled>▶ Start (all guests)</button> <button id="nextb" class="p" style="display:none">Next guest ▶</button> <button id="stopb">Stop</button></div><details style="margin-top:6px"><summary><small>One room by hand</small></summary><button id="fillb" class="p" disabled>Check &amp; fill the selected room</button></details><div style="margin-top:8px"><small>Change log</small> <button id="copyl">Copy log</button><div class="g" id="log"></div></div></div></div>';
   UI.msg = sh.getElementById('msg');
   function renderList() {
     const l = sh.getElementById('list'); l.textContent = '';
@@ -230,11 +305,15 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     });
   }
   function renderLog() { sh.getElementById('log').textContent = st.log.slice(-12).map(e => e.t.slice(11, 19) + ' r' + e.room + ' ' + e.field + ' ' + e.to + ' ' + e.result + (e.dry ? ' (dry)' : '')).join('\n'); }
-  sh.getElementById('load').onclick = () => { try { st.plan = decode(sh.getElementById('plan').value); st.cur = null; renderList(); say('Plan loaded: ' + st.plan.items.length + ' room(s). Pick a room.', false); } catch (e) { say(e.message, true); } };
+  sh.getElementById('load').onclick = () => { try { st.plan = decode(sh.getElementById('plan').value); st.cur = null; renderList(); setBtns(); say('Plan loaded: ' + st.plan.items.length + ' room(s). Pick a room.', false); } catch (e) { say(e.message, true); } };
   sh.getElementById('dry').onchange = e => { st.dry = e.target.checked; say(st.dry ? 'Dry run: nothing will be typed.' : 'Dry run off: it will fill empty fields (never Save).', false); };
+  function setBtns() { const sb = sh.getElementById('startb'), nb = sh.getElementById('nextb'); if (!sb) return; sb.disabled = !st.plan || st.auto; nb.style.display = st.paused ? '' : 'none'; nb.disabled = st.auto; }
+  sh.getElementById('startb').onclick = () => { st.paused = false; autoRun(0); };
+  sh.getElementById('nextb').onclick = () => { st.paused = false; autoRun(st.idx + 1); };
+  sh.getElementById('stopb').onclick = () => { st.stop = true; say('Stopping after this step.', false); };
   sh.getElementById('fillb').onclick = () => { if (st.cur) fill(st.cur); };
   sh.getElementById('copyl').onclick = () => { const t = st.log.map(e => JSON.stringify(e)).join('\n'); try { navigator.clipboard.writeText(t); say('Log copied. Paste it in HotelOps → Fix in Opera → Save log.', false); } catch (_) { say('Could not copy the log.', true); } };
   sh.getElementById('x').onclick = () => { const b = sh.getElementById('body'); b.style.display = b.style.display === 'none' ? '' : 'none'; };
   document.documentElement.appendChild(host); renderLog();
-  window.__hoFixer = { open() { host.style.display = ''; }, _test: { decode, check, fill, st, nameOk, profileName, safeClick, setPlan(p) { st.plan = p; renderList(); }, setDry(v) { st.dry = v; } } };
+  window.__hoFixer = { open() { host.style.display = ''; }, _test: { decode, check, fill, st, nameOk, profileName, safeClick, setPlan(p) { st.plan = p; renderList(); setBtns(); }, autoRun, goToGuest, setDry(v) { st.dry = v; } } };
 })();
