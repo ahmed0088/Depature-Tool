@@ -23,7 +23,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
 (function () {
   'use strict';
   if (window.__hoFixer && window.__hoFixer.open) { window.__hoFixer.open(); return; }
-  const FORBIDDEN = /\b(save|ok|submit|apply|confirm|done|yes|delete|remove|cancel|check ?in|check ?out|post|settle|finish|close|discard)\b/i;
+  const FORBIDDEN = /\b(save|ok|submit|apply|confirm|done|yes|delete|remove|cancel|check ?in|check ?out|post|settle|finish|close|discard|new|create|enroll|merge|pay)\b/i;
   const TITLES = new Set(['mr', 'mrs', 'ms', 'miss', 'dr', 'prof', 'mstr', 'master', 'sir', 'madam']);
   const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
   const words = s => fold(s).split(' ').filter(t => t && !TITLES.has(t));
@@ -42,6 +42,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     let body, plan; try { body = decodeURIComponent(escape(atob(m[2]))); plan = JSON.parse(body); } catch (_) { throw new Error('The plan could not be read.'); }
     if (hash(body) !== m[1]) throw new Error('The plan was changed or cut short. Copy it again.');
     if (!plan || plan.v !== 1 || !Array.isArray(plan.items)) throw new Error('Unsupported plan.');
+    if (plan.origin && plan.origin !== location.origin) throw new Error('This plan was made for a different Opera link than this page. Open the hotel\'s own Opera link from HotelOps.');
     plan.items.forEach(it => it.fields.forEach(f => {
       if (!FIELDS[f.field] || typeof f.value !== 'string' || !f.value) throw new Error('A plan field is not allowed.');
       if (f.field === 'gender' && !/^[MF]$/.test(f.value)) throw new Error('Gender must be M or F.');
