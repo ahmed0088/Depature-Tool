@@ -8,7 +8,9 @@
 //  MODE=signin only signs in and opens In House. MODE=save fills empty fields and presses Save (only when asked).
 //  The repo is public: the log shows steps and counts only. Never printed: names, passwords, codes, ID numbers (last 4 at most).
 //
-//  Secrets: OPERA_URL (the hotel's Opera Cloud link), OPERA_USER, OPERA_PASS, OPERA_TOTP (authenticator key).
+//  Secrets: OPERA_URL (the hotel's Opera Cloud link), OPERA_USER, OPERA_PASS, HOTELOPS_EMAIL, HOTELOPS_PASS (already used by Neorcha).
+//  The 6-digit authenticator code is typed by him in HotelOps each run (private path hotels/<hotel>/operaCloudCode, used once, deleted at once).
+//  OPERA_TOTP (an authenticator key) is optional: when it exists the code is made here and nobody types it.
 //  Plan: PLAN_FILE (a plan code from HotelOps, tests only) or the private HotelOps path (USE_JOB=1, with HOTELOPS_EMAIL/PASS).
 // ═══════════════════════════════════════════════════════════
 'use strict';
@@ -28,7 +30,7 @@ function totp(key, nowMs) {
 const okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' && /(^|\.)oraclecloud\.com$/i.test(x.hostname); } catch (_) { return false; } };
 
 // ── Microsoft sign-in, step by step; on a surprise it logs only the page's title and button labels ──
-async function msSignIn(page, user, pass, key) {
+async function msSignIn(page, user, pass, getCode) {
   const seen = async () => { const t = await page.title().catch(() => ''); const b = await page.$$eval('button,input[type=submit],a[role=button],[role=button]', n => n.map(x => (x.value || x.textContent || '').trim()).filter(Boolean).slice(0, 8)).catch(() => []); return 'title "' + t.slice(0, 60) + '"; buttons: ' + b.join(' | ').slice(0, 160); };
   let usedCode = '';
   for (let step = 0; step < 24; step++) {
@@ -40,8 +42,7 @@ async function msSignIn(page, user, pass, key) {
     if ((e = await vis('input[name="loginfmt"]'))) { say('step: Microsoft email'); await e.fill(user); await (await vis('#idSIButton9') || e).press('Enter').catch(() => {}); continue; }
     if ((e = await vis('input[name="passwd"]'))) { say('step: Microsoft password'); await e.fill(pass); await (await vis('#idSIButton9') || e).press('Enter').catch(() => {}); continue; }
     if ((e = await vis('input[name="otc"]'))) {
-      const code = totp(key); if (code === usedCode) { await page.waitForTimeout(31000); continue; }
-      say('step: authenticator code'); usedCode = code; await e.fill(code); await (await vis('#idSubmit_SAOTCC_Continue') || await vis('#idSIButton9') || e).press('Enter').catch(() => {}); continue;
+      say('step: authenticator code needed'); const code = await getCode(usedCode); if (!code) fail('No authenticator code arrived within 3 minutes. Run again and type the code in HotelOps when asked.'); usedCode = code; say('step: typing the code'); await e.fill(code); await (await vis('#idSubmit_SAOTCC_Continue') || await vis('#idSIButton9') || e).press('Enter').catch(() => {}); continue;
     }
     const other = await vis('#signInAnotherWay, a:has-text("Sign in another way"), a:has-text("I can\'t use my Microsoft Authenticator app right now")');
     if (other) { say('step: choose another sign-in way'); await other.click(); continue; }
@@ -54,12 +55,49 @@ async function msSignIn(page, user, pass, key) {
   fail('Microsoft sign-in did not finish. Last page: ' + await seen());
 }
 
+// ── the code path: HotelOps writes {code, at}; the runner reads it once and deletes it ──
+function fbConfig() {
+  const src = fs.readFileSync(path.join(ROOT, 'firebase-config.js'), 'utf8');
+  const g = k => { const m = src.match(new RegExp(k + '\\s*:\\s*"([^"]+)"')); return m ? m[1] : ''; };
+  return { apiKey: g('apiKey'), databaseURL: g('databaseURL') };
+}
+async function fbOpen() {
+  if (!E.HOTELOPS_EMAIL || !E.HOTELOPS_PASS) fail('The HOTELOPS_EMAIL / HOTELOPS_PASS secrets are missing (needed to receive the code)');
+  const C = fbConfig(), authUrl = E.FB_AUTH_URL || 'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword', db = (E.FB_DB_URL || C.databaseURL).replace(/\/$/, '');
+  const r = await fetch(authUrl + '?key=' + encodeURIComponent(C.apiKey), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: String(E.HOTELOPS_EMAIL).trim(), password: E.HOTELOPS_PASS, returnSecureToken: true }) });
+  const a = await r.json().catch(() => ({}));
+  if (!r.ok || !a.idToken) fail('HotelOps sign-in refused (' + ((a.error && a.error.message) || r.status) + ')');
+  let hid = String(E.HOTELOPS_HOTEL || '').trim();
+  if (!hid) { const u = await (await fetch(db + '/userHotels/' + a.localId + '.json?auth=' + a.idToken)).json().catch(() => null); hid = typeof u === 'string' ? u : u && typeof u === 'object' ? String(u.hotelId || u.id || Object.keys(u)[0] || '') : ''; }
+  if (!/^[\w-]{1,80}$/.test(hid)) fail('No hotel found for the HotelOps account (add the HOTELOPS_HOTEL secret)');
+  const at = p => db + '/hotels/' + hid + '/' + p + '.json?auth=' + a.idToken;
+  return {
+    get: async p => (await fetch(at(p))).json().catch(() => null),
+    put: async (p, v) => { await fetch(at(p), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(v) }).catch(() => {}); },
+    del: async p => { await fetch(at(p), { method: 'DELETE' }).catch(() => {}); },
+  };
+}
+// waits up to 3 minutes for a code typed within the last 2 minutes; reads it once and deletes it at once
+async function codeFromHotelOps(FB, notThis) {
+  await FB.put('operaCloudWant', { at: Date.now(), state: 'waiting' });
+  const t0 = Date.now();
+  while (Date.now() - t0 < 180000) {
+    const v = await FB.get('operaCloudCode');
+    if (v && /^\d{6}$/.test(String(v.code || '')) && Date.now() - Number(v.at || 0) < 120000 && String(v.code) !== notThis) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); return String(v.code); }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  await FB.del('operaCloudWant'); return '';
+}
+
 async function main() {
   const MODE = String(E.MODE || 'audit').toLowerCase();
   if (!['signin', 'audit', 'save'].includes(MODE)) fail('MODE must be signin, audit or save');
   const url = String(E.OPERA_URL || '').trim();
   if (!okUrl(url)) fail('OPERA_URL is missing or is not an https oraclecloud.com link');
-  for (const k of ['OPERA_USER', 'OPERA_PASS', 'OPERA_TOTP']) if (!E[k]) fail('The ' + k + ' secret is missing');
+  for (const k of ['OPERA_USER', 'OPERA_PASS']) if (!E[k]) fail('The ' + k + ' secret is missing');
+  const FB = E.OPERA_TOTP ? null : await fbOpen();
+  if (FB) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); }   // never use an old code
+  const getCode = async notThis => E.OPERA_TOTP ? totp(E.OPERA_TOTP) : codeFromHotelOps(FB, notThis);
   const { chromium } = require('playwright-core');
   const executablePath = [E.CHROME_PATH, '/usr/bin/google-chrome', '/usr/bin/chromium'].find(p => p && fs.existsSync(p));
   const browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox'] });
@@ -69,7 +107,7 @@ async function main() {
   try {
     say('mode ' + MODE + (limit ? ', first ' + limit + ' room(s)' : '') + ': opening Opera');
     await page.goto(url, { waitUntil: 'domcontentloaded' });
-    await msSignIn(page, E.OPERA_USER, E.OPERA_PASS, E.OPERA_TOTP);
+    await msSignIn(page, E.OPERA_USER, E.OPERA_PASS, getCode);
     await page.waitForTimeout(4000);
     await page.addScriptTag({ content: fs.readFileSync(path.join(ROOT, 'tools/hotelops-opera-fixer.console.js'), 'utf8') });
     const counts = { total: 0 }; 
@@ -88,7 +126,7 @@ async function main() {
       await page.evaluate(() => window.__hoFixer._test.autoRun(0));
       say('finished: ' + counts.total + ' log lines');
     }
-  } finally { await browser.close(); }
+  } finally { try { if (FB) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); } } catch (_) {} await browser.close(); }
 }
 if (require.main === module) main().catch(e => fail('Runner stopped: ' + (e && e.message || e)));
-module.exports = { totp, b32, okUrl };
+module.exports = { totp, b32, okUrl, codeFromHotelOps };
