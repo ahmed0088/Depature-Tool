@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 630, items: ['Immigration Check: new "In House vs Vicas" card. With the Vicas Inhouse file added, it compares the two lists room by room and shows who is only in the Opera report, who is only in Vicas, and rooms where the names differ. Read only.'] },
   { v: 629, items: ['Fix in Opera can now open "Show Masked Information" on the Identification page (never in a dry run) to see whether an ID number is already there. It still never saves, never logs the full number and only types an ID number together with its type.'] },
   { v: 628, items: ['Fix in Opera: save each hotel\'s Opera Cloud link once (link only, never a login). The team shares it, an Open Opera button appears, and the fixer refuses to run on a different Opera link.'] },
   { v: 627, items: ['Enrol guests: the Review details panel no longer squeezes the guest name or runs off the right edge on narrower windows. It now sits under the guest at every width.', 'Fix in Opera now follows the real Opera profile: nationality and gender are typed as codes, ID type is chosen from Opera\'s own list (RES or IDC for UAE, PAS for passports, GCC ID for GCC cards), an ID number is only typed with its type, and masked numbers count as already filled.'] },
