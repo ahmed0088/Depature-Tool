@@ -13,15 +13,21 @@ test('only EMPTY fields are proposed; guesses and ID numbers need a tap',()=>{
  const list=[{room:'102',name:'Ann Fakeone',nat:'Oman',doc:'784199012345678'}];
  const p=C.buildPlan(rows,list,{hotel:'T'}),f=Object.fromEntries(p.items[0].fields.map(x=>[x.field,x]));
  assert.equal(f.nationality.value,'OM');assert.equal(f.nationality.needsTap,false);assert.equal(f.gender.needsTap,true);
- assert.equal(f.idType.value,'EID');assert.equal(f.idNumber.needsTap,true);assert.equal(f.idNumber.display,'••••5678');
+ assert.equal(f.idType.value,'','Emirates ID: no Opera code, he chooses');assert.equal(f.idType.idKind,'EID');assert.equal(f.idNumber.needsTap,true);assert.equal(f.idNumber.display,'••••5678');
  assert.deepEqual(p.items[1].fields.map(x=>x.field),['gender'],'row 2 only lacks gender');assert.equal(p.items[1].fields[0].value,'','nothing to suggest: blank for him to choose');});
 test('the copied plan holds only approved fields and survives a round trip; tampering is refused',()=>{
  const rows=[{room:'102',name:'Ann Fakeone',arrival:'11/23/2026',noNat:true,noSex:false,noPass:true}],list=[{room:'102',name:'Ann Fakeone',nat:'Oman',doc:'AA1111111'}];
  const p=C.buildPlan(rows,list,{}),id=p.items[0].id,ok={};ok[id]={nationality:true,idType:true};
  let plan=C.decodePlan(C.encodePlan(p,ok));assert.deepEqual(plan.items[0].fields.map(x=>x.field),['nationality'],'an ID type never travels without its number');
+ ok[id]={idNumber:true};plan=C.decodePlan(C.encodePlan(p,ok));assert.equal(plan.items.length,0,'an ID number never travels without its type');
  ok[id]={idType:true,idNumber:true};plan=C.decodePlan(C.encodePlan(p,ok));assert.deepEqual(plan.items[0].fields.map(x=>x.field),['idType','idNumber']);
  const code=C.encodePlan(p,ok);assert.throws(()=>C.decodePlan(code.replace(/.$/,'A').slice(0,-2)+'=='));assert.throws(()=>C.decodePlan('hello'));
  const bad=Buffer.from(JSON.stringify({v:1,items:[{room:'1',name:'x',fields:[{field:'save',value:'1'}]}]})).toString('base64');assert.throws(()=>C.decodePlan('HOFIX1.zz.'+bad));});
 test('log rows keep ID numbers as last 4 and never carry names',()=>{
  const e=C.logEntry({room:'0102',field:'idNumber',value:'AA1111111',result:'filled',name:'Ann Fakeone'});assert.equal(e.to,'••••1111');assert.equal(e.room,'102');assert(!JSON.stringify(e).includes('Ann'));});
 test('empty value rules match the Immigration Check page',()=>{assert(C.isEmptyValue('—'));assert(C.isEmptyValue(''));assert(!C.isEmptyValue('XXXXXXX69'));assert(C.isMasked('XXXXXXX69'));});
+test('only known Opera ID type codes are accepted',()=>{
+ const p=C.buildPlan([{room:'1',name:'Ann Fakeone',noPass:true}],[{room:'1',name:'Ann Fakeone',doc:'AA1111111'}],{}),it=p.items[0],ok={};ok[it.id]={idType:true,idNumber:true};
+ assert.doesNotThrow(()=>C.decodePlan(C.encodePlan(p,ok)));
+ it.fields.find(f=>f.field==='idType').value='EID';assert.throws(()=>C.decodePlan(C.encodePlan(p,ok)),/ID type/);
+ assert(C.ID_TYPES.includes('PAS')&&C.ID_TYPES.includes('RES')&&!C.ID_TYPES.includes('EID'));});
