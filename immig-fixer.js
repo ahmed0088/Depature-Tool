@@ -10,7 +10,7 @@
 (function () {
   'use strict';
   const C = window.hoImmigFix; if (!C) return;
-  const S = { plan: null, ok: {}, shared: {} };   // ok: { itemId: { field: true } }
+  const S = { plan: null, ok: {}, shared: {}, uaeType: '' };   // ok: { itemId: { field: true } }
   const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])));
   const db = () => { try { return typeof firebase !== 'undefined' && typeof HOTEL_ID !== 'undefined' && HOTEL_ID ? firebase.database() : null; } catch (_) { return null; } };
   const key = it => (it.room + '_' + String(it.arrival || '').replace(/[^0-9]/g, '')).replace(/[.#$\[\]\/]/g, '');
@@ -20,7 +20,7 @@
     const rows = typeof immigAllRows2 !== 'undefined' ? immigAllRows2 : [];
     const list = typeof _immigInhouseList !== 'undefined' ? _immigInhouseList : [];
     const meta = typeof _immigMeta !== 'undefined' ? _immigMeta : {};
-    S.plan = C.buildPlan(rows, list, { hotel: meta.hotel, businessDate: meta.biz });
+    S.plan = C.buildPlan(rows, list, { hotel: meta.hotel, businessDate: meta.biz, uaeIdType: S.uaeType });
     S.ok = {};
     S.plan.items.forEach(it => {
       const sh = S.shared[key(it)] || {};
@@ -34,13 +34,15 @@
   }
   async function loadShared() {
     const d = db(); if (!d || !S.plan) return;
+    try { const ps = await d.ref('hotels/' + HOTEL_ID + '/immigFixPrefs/uaeIdType').once('value'); S.uaeType = C.UAE_ID_TYPES.includes(ps.val()) ? ps.val() : ''; } catch (_) {}
     try { const bd = String((typeof _immigMeta !== 'undefined' && _immigMeta.biz) || '').slice(0, 10) || 'today'; const snap = await d.ref('hotels/' + HOTEL_ID + '/immigFix/' + bd).once('value'); S.shared = snap.val() || {}; } catch (_) { S.shared = {}; }
   }
   function chip(it, f) {
-    const on = !!S.ok[it.id][f.field], dis = !f.value;
+    const typeSet = !!((it.fields.find(x => x.field === 'idType') || {}).value), on = !!S.ok[it.id][f.field] && (f.field !== 'idNumber' || typeSet), dis = f.field === 'idNumber' ? !typeSet : (f.field === 'idType' ? false : !f.value);
     let val;
     if (f.field === 'gender') val = '<select data-edit="' + esc(it.id) + '|gender"><option value="">choose…</option><option' + (f.value === 'M' ? ' selected' : '') + ' value="M">M</option><option' + (f.value === 'F' ? ' selected' : '') + ' value="F">F</option></select>';
     else if (f.field === 'nationality') val = '<select data-edit="' + esc(it.id) + '|nationality"><option value="">choose…</option>' + C.countryList().map(c => '<option value="' + c.code + '"' + (c.code === f.value ? ' selected' : '') + '>' + esc(c.code + ' · ' + c.name) + '</option>').join('') + '</select>';
+    else if (f.field === 'idType') val = '<select data-edit="' + esc(it.id) + '|idType"><option value="">choose…</option>' + (f.idKind === 'EID' ? C.UAE_ID_TYPES : C.ID_TYPES).map(c => '<option value="' + c + '"' + (c === f.value ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>';
     else val = '<b>' + esc(f.display) + '</b>';
     const guess = f.needsTap && f.value && f.field !== 'idType' && f.field !== 'idNumber' ? ' <small style="color:var(--amber)">tap to accept</small>' : '';
     return '<label style="display:flex;gap:6px;align-items:center;margin:2px 0;' + (dis ? 'opacity:.55' : '') + '"><input type="checkbox" data-ok="' + esc(it.id) + '|' + f.field + '"' + (on ? ' checked' : '') + (dis ? ' disabled' : '') + '> <span style="min-width:74px;color:var(--text3)">' + esc(f.label) + '</span> ' + val + ' <small style="color:var(--text3)">· ' + esc(f.source) + '</small>' + guess + '</label>';
@@ -58,7 +60,9 @@
       if (t.dataset && t.dataset.ok) { const [id, f] = t.dataset.ok.split('|'); S.ok[id][f] = t.checked; const n = document.getElementById('immigFixN'); if (n) n.textContent = approvedCount(); }
       else if (t.dataset && t.dataset.edit) {
         const [id, field] = t.dataset.edit.split('|'), it = S.plan.items.find(x => x.id === id), f = it && it.fields.find(x => x.field === field);
-        if (f) { f.value = t.value; f.display = field === 'nationality' && t.value ? t.value + ' · ' + t.selectedOptions[0].textContent.split(' · ')[1] : t.value; f.source = 'you chose'; S.ok[id][field] = !!t.value; paint(); }
+        if (f) { f.value = t.value; f.display = field === 'nationality' && t.value ? t.value + ' · ' + t.selectedOptions[0].textContent.split(' · ')[1] : t.value; f.source = 'you chose'; S.ok[id][field] = !!t.value; if (field === 'idType' && !t.value) S.ok[id].idNumber = false;
+          if (field === 'idType' && f.idKind === 'EID' && C.UAE_ID_TYPES.includes(t.value)) { S.uaeType = t.value; const d = db(); if (d) d.ref('hotels/' + HOTEL_ID + '/immigFixPrefs/uaeIdType').set(t.value).catch(() => {}); S.plan.items.forEach(o => o.fields.forEach(x => { if (x.field === 'idType' && x.idKind === 'EID' && !x.value) { x.value = t.value; x.display = t.value; x.source = 'your usual UAE type'; } })); }
+          paint(); }
       }
     };
     document.getElementById('immigFixCopy').onclick = copyPlan;
@@ -98,7 +102,7 @@
     const res = document.getElementById('immigResults2'); if (!res) return;
     let card = document.getElementById('immigFixerCard');
     if (!card) { card = document.createElement('div'); card.id = 'immigFixerCard'; card.style.cssText = 'margin:12px 0;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--r)'; const tw = res.querySelector('.tbl-wrap'); res.insertBefore(card, tw || null); }
-    build(); paint(); await loadShared(); if (Object.keys(S.shared).length) { build(); paint(); }
+    build(); paint(); await loadShared(); if (Object.keys(S.shared).length || S.uaeType) { build(); paint(); }
   };
   window.hoImmigFixerState = S;
 })();
