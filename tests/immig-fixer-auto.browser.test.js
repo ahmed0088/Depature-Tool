@@ -51,5 +51,10 @@ try{
  {const page=await browser.newPage();await page.setContent('<body><h2>Dashboard</h2></body>');await page.addScriptTag({content:fixer});
  const why=await page.evaluate(()=>window.__hoFixer._test.goToGuest({room:'0301',name:'Zed Fakeperson'}));
  assert(/In House list did not open \(step: /.test(why),why);await page.close();}
+ // nav hidden behind a hamburger with a search box (the real Ibis layout): types In House, waits, clicks the result
+ {const page=await browser.newPage();await page.setContent(html.replace('<div id="crumb"><a href="#" id="bc" onclick="go(\'list\');return false">In House</a></div>','<button id="hb" aria-label="Navigation menu" style="position:absolute;left:4px;top:4px;width:40px;height:30px" onclick="document.getElementById(\'pn\').style.display=\'block\'">=</button><div id="pn" style="display:none;margin-top:40px"><input id="ms" placeholder="Search" oninput="var v=this.value;setTimeout(function(){document.getElementById(\'rs\').innerHTML=/in house/i.test(v)?\'<li role=option><a href=# onclick=&quot;go(\\\'list\\\');return false&quot;>In House</a></li>\':\'\'},800)"><ul id="rs"></ul></div>').replace("go('list');\n</script>","document.getElementById('app').innerHTML='<h2>Dashboard</h2>';\n</script>"));
+ await page.addScriptTag({content:fixer});
+ const why=await page.evaluate(()=>window.__hoFixer._test.goToGuest({room:'0301',name:'Zed Fakeperson'}));
+ assert.equal(why,'','hamburger search navigation should open the guest: '+why);assert.deepEqual(await page.evaluate(()=>window.__opened),['0301']);assert.equal(await page.evaluate(()=>window.__saved),false);await page.close();}
  console.log('Auto fixer passed on a mock Opera: opens guests itself, fills only empty gender, never saves, refuses a wrong name.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
