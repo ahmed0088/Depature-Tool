@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v631"/>
+<meta name="ho-version" content="v632"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="immig-page.css"/>
@@ -1350,49 +1350,49 @@
 <div class="panel" id="panel-immig">
   <div style="max-width:1100px;">
     <div class="page-hd">
-      <div class="page-hd-left"><h1>Immigration Check</h1><p>Finds guests whose details immigration needs but Opera is missing — nationality, gender, passport, first name, email — and rooms with an unregistered guest</p></div>
-      <div class="page-hd-actions"><button class="btn rose" onclick="clearImmig()">✕ Clear</button></div>
+      <div class="page-hd-left"><h1>Immigration Check</h1><p>Find guests with details missing in Opera. Then fix them.</p></div>
+      
     </div>
-    <details class="howto"><summary>❔ How to use this</summary><ol><li>Export today's guest XML from Vicas</li><li>Paste it in, or upload the file</li><li>Press <b>🔍 Analyse</b> — guests are grouped by what immigration is missing, and rooms with an unregistered guest are flagged</li></ol></details>
-    <ol class="imm-steps"><li><div><b>Vicas Inhouse XML</b>Fills nationality and passport (by name)</div></li><li><div><b>Opera Immigration XML</b>Drop the file or paste it</div></li><li><div><b>Analyse</b>See who is missing nationality, gender or passport</div></li><li><div><b>Fix in Opera</b>Check the plan, then fill the profiles</div></li></ol>
-    <div class="card imm-inputs">
-      <div class="imm-h"><b>1 · Vicas Inhouse XML</b><span>Optional but recommended. Used to fill missing nationality and passport, to find guests booked but never registered, and to compare with the Opera report. Gender comes from the Mr/Mrs/Ms title or your tap.</span></div>
+    <div class="imm-next" id="immNext" role="status" aria-live="polite"></div>
+    <div class="card imm-inputs" data-step="1">
+      <div class="imm-h"><b>Step 1 · Upload the Vicas file</b><span>Vicas In-house guests (XML). Helps fill nationality and passport.</span></div>
       <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('immigInhouseXmlInput').click()">
         <div style="display:flex;flex-direction:column;align-items:center;padding:14px;text-align:center;gap:4px;">
           <div style="font-size:1.4rem;">🛏️</div>
-          <div style="font-size:0.78rem;font-weight:600;">Click to choose the Vicas Inhouse XML</div>
+          <div style="font-size:0.78rem;font-weight:600;">Tap to choose the Vicas file</div>
           <div id="immigInhouseXmlLabel" style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">Not loaded</div>
           <input type="file" id="immigInhouseXmlInput" accept=".xml,.XML" style="display:none;" onchange="immigLoadInhouseXml(this)"/>
         </div>
       </div>
     </div>
-    <div class="card">
-      <div class="imm-h"><b>2 · Opera Immigration XML</b><span>Opera → Front Desk → Immigration Report → Export XML</span></div>
+    <div class="card" data-step="2">
+      <div class="imm-h"><b>Step 2 · Upload the Opera file</b><span>Opera → Immigration Report → Export XML</span></div>
       <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('immigFileInput2').click()">
         <div style="display:flex;flex-direction:column;align-items:center;padding:24px;text-align:center;gap:8px;">
           <div style="font-size:2rem;">📋</div>
-          <div style="font-size:0.86rem;font-weight:600;">Drop XML or click to browse</div>
+          <div style="font-size:0.86rem;font-weight:600;">Tap to choose the Opera file</div>
             <input type="file" id="immigFileInput2" accept=".xml,.XML" style="display:none;" onchange="immigLoadFile2(this)"/>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:12px;margin:10px 0;"><div style="flex:1;height:1px;background:var(--border);"></div><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">OR PASTE XML</span><div style="flex:1;height:1px;background:var(--border);"></div></div>
-      <div class="upload-zone"><div class="upload-label-bar"><div class="upload-dot sky"></div><span class="upload-lbl">Paste XML</span></div><textarea id="immigPasteInput2" style="height:90px;" placeholder="Notepad → Ctrl+A → Ctrl+C → Paste here"></textarea></div>
+      <div style="display:flex;align-items:center;gap:12px;margin:10px 0;"><div style="flex:1;height:1px;background:var(--border);"></div><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">OR PASTE IT</span><div style="flex:1;height:1px;background:var(--border);"></div></div>
+      <div class="upload-zone"><div class="upload-label-bar"><div class="upload-dot sky"></div><span class="upload-lbl">Paste the Opera file text</span></div><textarea id="immigPasteInput2" style="height:90px;" placeholder="Open the file in Notepad. Ctrl+A, Ctrl+C. Paste here."></textarea></div>
       <div class="error-box" id="immigError2"><span>⚠</span><span id="immigErrorMsg2"></span></div>
-      <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn gold" onclick="processImmig2()">🔍 Analyse</button><button class="btn" onclick="clearImmig()">✕ Clear</button></div>
+      <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn gold" id="immigGo" data-step="3" onclick="processImmig2()">Step 3 · Check guests</button><button class="btn" onclick="clearImmig()">Start over</button></div>
     </div>
-    <div id="immigMissingWrap" style="display:none;margin-top:18px;">
+    <div id="immigStep4Slot"></div>
+    <div id="immigResults2" style="display:none;">
+      <details class="imm-more imm-all"><summary>See all guests and checks</summary><div id="immigMissingWrap" style="display:none;margin-top:18px;">
       <div class="card" style="border-color:rgba(240,107,122,0.3);">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
           <span style="font-size:1.1rem;">🧾</span>
-          <span style="font-size:0.8rem;font-weight:700;color:var(--rose);">Missing Guest Profiles</span>
+          <span style="font-size:0.8rem;font-weight:700;color:var(--rose);">Guests not registered</span>
           <span style="font-family:var(--mono);font-size:0.62rem;font-weight:700;color:var(--rose);background:rgba(240,107,122,0.1);border:1px solid rgba(240,107,122,0.3);border-radius:99px;padding:1px 8px;" id="immigMissingBadge">0</span>
-          <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">— rooms booked for more adults than are registered in today's immigration report</span>
+          <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">— more adults booked in the room than registered with immigration</span>
         </div>
         <div id="immigMissingBody" style="display:flex;flex-direction:column;gap:6px;"></div>
       </div>
     </div>
-    <div id="immigResults2" style="display:none;">
-      <div class="kpi-row c4" style="margin-top:18px;" id="immigKpis2"></div>
+    <div class="kpi-row c4" style="margin-top:10px;" id="immigKpis2"></div>
       <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text2);margin-bottom:9px;padding:9px 13px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);" id="immigMeta2"></div>
       <div style="display:flex;gap:7px;margin-bottom:11px;flex-wrap:wrap;" id="immigFilters2">
         <button class="fchip on" data-if="all"         onclick="immigFilter2('all',this)">All <span id="ifc-all">0</span></button>
@@ -1406,7 +1406,7 @@
       <div class="tbl-wrap"><table>
         <thead><tr><th>Room</th><th>Sex</th><th>Name</th><th>Nationality</th><th>Passport</th><th>Email</th><th>Arrival</th><th>Departure</th><th>Issues</th></tr></thead>
         <tbody id="immigTable2"></tbody>
-      </table></div>
+      </table></div></details>
     </div>
   </div>
 </div>
