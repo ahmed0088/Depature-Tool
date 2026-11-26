@@ -13,6 +13,11 @@
  * touches any other field, and never sends anything anywhere. The plan stays in this tab. The change log
  * keeps the room, the field and the new value (ID numbers as last 4 only), never a name.
  *
+Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > Manage Reservation > click the guest name =
+ * Manage Profile > left menu Identification. Read mode shows Personal Details (Nationality "NG Nigeria", Gender "M") and the ID
+ * table (ID Type / ID Number masked / Issued Country...). After "Edit" these become text boxes (with a magnifier list) that take
+ * codes: Nationality AE/NG..., Gender M/F, ID Type PAS... It does not open rooms, press the magnifier, "New" or the red X, and an
+ * ID Number that shows as masked counts as already filled.
  * Use: Opera Cloud tab → F12 → Console → paste → Enter. Paste the plan into the small window and press Load.
  */
 (function () {
@@ -59,6 +64,15 @@
     }
     return '';
   }
+  /** the visible heading/text that is exactly this guest's name (any order, titles ignored), or '' */
+  function nameOnScreen(planName) {
+    const nodes = [...document.body.querySelectorAll('h1,h2,h3,h4,a,[class*="title"],[class*="name"],[class*="Name"],span,div')].filter(vis).slice(0, 900);
+    for (const n of nodes) {
+      if (n.children.length > 2) continue;
+      const t = own(n); if (t && t.length < 90 && nameOk(planName, t)) return t;
+    }
+    return '';
+  }
   function nameOk(planName, shown) {
     const A = words(planName), B = words(shown);
     if (!A.length || A.length !== B.length) return false;
@@ -67,15 +81,17 @@
   /** the value box next to a label ("Gender", "Nationality", "ID Number"), as { el, value, kind } */
   function fieldFor(label, scope) {
     const lab = fold(label), root = scope || document.body;
-    const labels = [...root.querySelectorAll('label,span,div,th,td,oj-label')].filter(n => vis(n) && n.children.length === 0 && fold(own(n)) === lab);
+    const labels = [...root.querySelectorAll('label,span,div,th,td,oj-label,td span')].filter(n => vis(n) && n.children.length === 0 && fold(own(n)) === lab);
+    const INPUT = 'input:not([type=hidden]):not([type=checkbox]):not([type=password]):not([type=submit]),select,textarea,[role=combobox]';
+    // pass 1: an editable box (label for=, or a box in the label's own row); pass 2: read-only display text
     for (const l of labels) {
       let box = null;
       if (l.tagName === 'LABEL' && l.htmlFor) box = document.getElementById(l.htmlFor);
       let p = l.parentElement;
-      for (let i = 0; i < 4 && p && !box; i++, p = p.parentElement) {
-        box = p.querySelector('input:not([type=hidden]):not([type=checkbox]):not([type=password]),select,textarea,[role=combobox]');
-      }
-      if (box) return { el: box, value: 'value' in box ? box.value : own(box), editable: true, label: l };
+      for (let i = 0; i < 2 && p && !box; i++, p = p.parentElement) { const cand = p.querySelectorAll(INPUT); if (cand.length === 1) box = cand[0]; }
+      if (box && vis(box)) return { el: box, value: 'value' in box ? box.value : own(box), editable: true, label: l };
+    }
+    for (const l of labels) {
       // read-only display: the text right after the label
       const holder = l.parentElement; if (holder) {
         const txt = own(holder).replace(own(l), '').trim();
@@ -129,9 +145,9 @@
 
   /** read-only check: is the right guest open, and which approved fields are empty */
   function check(item) {
-    const shown = profileName();
-    if (!shown) return { ok: false, why: 'No guest profile found on this screen. Open the guest\'s profile first.' };
-    if (!nameOk(item.name, shown)) return { ok: false, why: 'The profile open is not room ' + item.room + '\'s guest. Nothing was changed.' };
+    const body = (document.body.innerText || '');
+    if (!/Personal Details|Identification/i.test(body)) return { ok: false, why: 'Open the guest\'s Manage Profile and its Identification page first (In House, the reservation, then the guest name).' };
+    if (!nameOnScreen(item.name)) return { ok: false, why: 'The profile open is not room ' + item.room + '\'s guest (name does not match). Nothing was changed.' };
     const rows = item.fields.map(f => {
       const r = readField(f.field);
       return { f, found: !!r, empty: r ? isEmpty(r.value) : false, editable: r ? r.editable : false, current: r ? r.value : '' };
@@ -143,7 +159,8 @@
     try {
       const c = check(item);
       if (!c.ok) { say(c.why, true); item.fields.forEach(f => logIt(item, f.field, f.value, 'refused: wrong or no profile')); return; }
-      const todo = c.rows.filter(r => r.found && r.empty);
+      let todo = c.rows.filter(r => r.found && r.empty);
+      // an ID number is only typed together with its ID type; Opera keeps masked numbers non-editable and they count as filled
       c.rows.filter(r => !r.found).forEach(r => logIt(item, r.f.field, r.f.value, 'field not found on screen'));
       c.rows.filter(r => r.found && !r.empty).forEach(r => logIt(item, r.f.field, r.f.value, 'skipped: already has a value'));
       if (!todo.length) { say('Nothing to fill: every approved field is already set or was not found.', false); return; }
@@ -152,7 +169,9 @@
         const btns = findEditButtons();
         if (!btns.length) { say('The fields are read-only and no Edit button was found. Open Edit yourself, then press Fill again.', true); return; }
         // the Edit of the panel that holds the first needed field (nearest ancestor that contains one)
-        const first = readField(todo[0].f.field), scopeBtn = (first && first.label && btns.find(b => { let p = first.label.parentElement; while (p) { if (p.contains(b)) return true; p = p.parentElement; } return false; })) || btns[0];
+        const first = readField(todo[0].f.field); let scopeBtn = null;
+        for (let p = first && first.label ? first.label.parentElement : null; p && !scopeBtn; p = p.parentElement) { const inside = btns.filter(b => p.contains(b)); if (inside.length) scopeBtn = inside[0]; }
+        if (!scopeBtn) scopeBtn = btns[0];
         safeClick(scopeBtn); await sleep(700);
       }
       const done = [];
