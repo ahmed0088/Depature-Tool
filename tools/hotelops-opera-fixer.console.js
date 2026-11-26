@@ -440,7 +440,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     if (miss.length) return { ok: false, why: 'saved but could not confirm: ' + miss.join(', ') };
     return { ok: true, why: '' };
   }
-  const CODE_V = 'v644';
+  const CODE_V = 'v645';
   async function autoRun(from) {
     if (st.auto || !st.plan) return; st.auto = true; st.stop = false; setBtns();
     logIt({}, 'version', '', 'fixer code ' + CODE_V + ', helper ' + (window.__hoFxVer || 'unknown'));
