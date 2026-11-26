@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 637, items: ['The Opera fixer is faster and safer: it waits for the reservation page before clicking the guest name, goes back with Back to In House, polls instead of fixed waits, and skips rooms that are not in the In House list. Update the helper zip to get it.'] },
   { v: 636, items: ['The Opera fixer now logs every step (typed room, Search, rows found, Confirmation Number, guest name, Identification), always returns to the In House list through the menu search before the next guest, and tries the room as 0301 and 301. Update the helper zip to get it.'] },
   { v: 635, items: ['The Opera fixer can now open In House through the menu search (hamburger, type In House) when the Front Desk menu does not show it, and the log lists what the menu shows. Update the helper zip to get it.'] },
   { v: 634, items: ['The Opera fixer now opens the In House list by itself: it uses the breadcrumb, or the Front Desk menu then In House, waits for Opera to load, retries, and names the step that failed. Update the helper zip to get it.'] },
