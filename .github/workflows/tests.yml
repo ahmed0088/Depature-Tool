@@ -45,6 +45,11 @@ jobs:
       - name: BackTrack appearance and touch controls
         run: node tests/backtrack.browser.test.js
 
+      - name: Fix in Opera plan, card and profile fixer
+        run: |
+          node --test tests/immig-fixer.test.js
+          node tests/immig-fixer-card.browser.test.js
+          node tests/immig-fixer.browser.test.js
       - name: Run history checks
         run: node tests/run-history.test.js
       - name: Run history on mobile
