@@ -50,6 +50,7 @@ jobs:
           node --test tests/immig-fixer.test.js tests/opera-auto.test.js tests/reconcile.test.js tests/immig-page.test.js
           node tests/immig-fixer-card.browser.test.js
           node tests/immig-fixer.browser.test.js
+          node tests/immig-fixer-auto.browser.test.js
           node tests/enrolment-quick-layout.browser.test.js
       - name: Run history checks
         run: node tests/run-history.test.js
