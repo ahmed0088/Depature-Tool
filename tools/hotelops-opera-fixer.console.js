@@ -220,7 +220,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
   // Only read-style clicks: breadcrumb "In House", the Search button, a confirmation-number link, the guest name, the "Identification" menu item.
   // The same hard refusal list applies, and the fill step never presses Save: he does.
   const norm = r => String(r || '').replace(/\D/g, '').replace(/^0+/, '');
-  const waitFor = async (fn, ms) => { const t0 = Date.now(); while (Date.now() - t0 < (ms || 20000)) { let r = null; try { r = fn(); } catch (_) {} if (r) return r; await sleep(300); } return null; };
+  const waitFor = async (fn, ms) => { const t0 = Date.now(); while (Date.now() - t0 < (ms || 20000)) { let r = null; try { r = fn(); } catch (_) {} if (r) return r; await sleep(150); } return null; };
   const hasText = re => re.test(document.body.innerText || '');
   function findExact(text, tags) {
     const t = text.toLowerCase();
@@ -269,6 +269,8 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       if (roomBox()) return '';
       const modify = findExact('modify search criteria', 'button,a,[role=button]');
       if (modify && /in house/i.test(document.body.innerText || '')) { last = 'expand'; try { safeClick(modify); } catch (_) {} if (await waitFor(roomBox, 4000)) return ''; }
+      const back = round === 1 ? findExact('back to in house', 'a,button,[role=button],[role=link]') : null;
+      if (back) { last = 'back'; logIt(st.cur || {}, 'nav', '', 'Back to In House ' + dsc(back)); try { safeClick(back); } catch (_) {} await sleep(300); await waitFor(() => !busy(), 8000); if (await waitFor(roomBox, 12000)) return ''; }
       const crumb = round === 1 && !/Manage (Profile|Reservation)/i.test(document.body.innerText || '') ? findExact('in house', 'a,[role=link]') : null;
       if (crumb) { last = 'breadcrumb'; logIt(st.cur || {}, 'nav', '', 'round ' + round + ': breadcrumb In House <' + crumb.tagName.toLowerCase() + (crumb.id ? '#' + String(crumb.id).slice(0, 25) : '') + '>'); try { safeClick(crumb); } catch (_) {} }
       else {
@@ -284,8 +286,8 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
         }
         last = 'menu:In House'; logIt(st.cur || {}, 'nav', '', 'round ' + round + ': menu In House'); try { safeClick(item); } catch (_) {}
       }
-      await sleep(1200);
-      for (let w = 0; w < 25 && busy(); w++) await sleep(400);
+      await sleep(300);
+      for (let w = 0; w < 40 && busy(); w++) await sleep(250);
       if (await waitFor(roomBox, 20000)) return '';
       const d = dialogText(); if (d) return 'The In House list did not open: Opera shows a question ("' + d + '"). Answer it yourself, then press Next guest.';
     }
@@ -301,9 +303,14 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       return want.length > 0 && want.every(w => rw.has(w));
     });
   }
-  function nameLink(item) {
-    return [...document.querySelectorAll('a,[role=link],h1,h2,h3,span')].filter(vis).find(n => n.children.length <= 2 && own(n).length < 90 && nameOk(item.name, own(n)) && !FORBIDDEN.test(own(n)));
+  function nameCands(item) {
+    return [...document.querySelectorAll('a,[role=link],h1,h2,h3,span')].filter(vis).filter(n => n.children.length <= 2 && own(n).length < 90 && nameOk(item.name, own(n)) && !FORBIDDEN.test(own(n)));
   }
+  function nameLink(item) {
+    const c = nameCands(item);
+    return c.find(n => n.closest('a,[role=link]')) ? c.find(n => n.closest('a,[role=link]')) : c[0] || null;
+  }
+  const resReady = () => /Reservation Overview|Manage Reservation/i.test(document.body.innerText || '') && !roomBox() && !busy() && hasText(/Overview/);
   const dsc = el => el ? '<' + el.tagName.toLowerCase() + (el.id ? '#' + String(el.id).slice(0, 28) : '') + '> ' + own(el).slice(0, 24) : 'none';
   const nv = (item, m) => logIt(item, 'nav', '', m);
   const IDTAGS = 'a,[role=link],[role=tab],[role=menuitem],[role=treeitem],[role=button],li,span,div,td';
@@ -314,23 +321,27 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       const sb = findExact('search', 'button,a,[role=button]'); if (!sb) return 'No Search button found. ' + 'Page shows: ' + labelsNow().slice(0, 150);
       let rows = null;
       for (const fmt of [String(item.room).replace(/\D/g, '').padStart(4, '0'), String(item.room).replace(/\D/g, '').replace(/^0+/, '')]) {
-        const box = roomBox(); if (!box) return 'Room ' + item.room + ': the Room box disappeared.';
+        const box = await waitFor(roomBox, 6000); if (!box) return 'Room ' + item.room + ': the Room box disappeared. Page shows: ' + labelsNow().slice(0, 150);
         box.focus(); setNative(box, ''); box.dispatchEvent(new Event('input', { bubbles: true }));
         setNative(box, fmt); box.dispatchEvent(new Event('input', { bubbles: true })); box.dispatchEvent(new Event('change', { bubbles: true })); box.dispatchEvent(new Event('blur', { bubbles: true }));
         nv(item, 'typed Room ' + fmt.length + ' digits, pressing Search');
         safeClick(findExact('search', 'button,a,[role=button]') || sb);
-        rows = await waitFor(() => { const r = roomRows(item); return r.length ? r : null; }, 12000);
+        await sleep(300); await waitFor(() => !busy(), 8000);
+        rows = await waitFor(() => { const r = roomRows(item); return r.length ? r : null; }, 4000);
         nv(item, 'rows found: ' + (rows ? rows.length : 0));
         if (rows) break;
       }
-      if (!rows) return 'Room ' + item.room + ': no row with this guest\'s name was found.';
+      if (!rows) { nv(item, 'no row; page shows: ' + labelsNow().slice(0, 250)); return 'Room ' + item.room + ': not found in the In House list (checked out or not arrived yet?), skipped.'; }
       if (rows.length > 1) return 'Room ' + item.room + ': more than one row matches. Open it yourself.';
       const conf = [...rows[0].querySelectorAll('a,[role=link]')].find(a => vis(a) && /^\d{5,}$/.test(own(a)));
       if (!conf) return 'Room ' + item.room + ': no confirmation number link in the row.';
       nv(item, 'clicking Confirmation Number ' + dsc(conf).slice(0, 30)); safeClick(conf);
-      const nl = await waitFor(() => nameLink(item), 25000); if (!nl) { nv(item, 'reservation page shows: ' + labelsNow().slice(0, 200)); return 'Room ' + item.room + ': the reservation did not open or the guest name was not found.'; }
-      nv(item, 'clicking guest name ' + dsc(nl).slice(0, 20)); safeClick(nl);
-      if (!await waitFor(() => hasText(/Identification/) && (findIdent() || hasText(/Personal Details/)), 25000)) { nv(item, 'profile page shows: ' + labelsNow().slice(0, 250)); return 'Room ' + item.room + ': the profile did not open.'; }
+      if (!await waitFor(resReady, 30000)) { nv(item, 'reservation did not load; page shows: ' + labelsNow().slice(0, 200)); return 'Room ' + item.room + ': the reservation page did not load.'; }
+      nv(item, 'reservation page loaded');
+      const nl = await waitFor(() => nameLink(item), 8000); if (!nl) { nv(item, 'reservation page shows: ' + labelsNow().slice(0, 200)); return 'Room ' + item.room + ': the reservation did not open or the guest name was not found.'; }
+      nv(item, 'name candidates: ' + nameCands(item).slice(0, 4).map(dsc).join(' ; ').slice(0, 160)); nv(item, 'clicking guest name ' + dsc(nl).slice(0, 20)); safeClick(nl);
+      await sleep(300);
+      if (!await waitFor(() => !busy() && /Manage Profile|Personal Details/i.test(document.body.innerText || '') && (findIdent() || hasText(/Personal Details/)), 30000)) { nv(item, 'profile page shows: ' + labelsNow().slice(0, 250)); return 'Room ' + item.room + ': the profile did not open.'; }
       nv(item, 'profile opened');
     }
     if (!hasText(/Personal Details/)) {
@@ -338,7 +349,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       nv(item, 'clicking Identification ' + dsc(idm).slice(0, 30)); safeClick(idm);
       if (!await waitFor(() => hasText(/Personal Details/), 20000)) return 'The Identification page did not open.';
     }
-    await sleep(600);
+    await sleep(200);
     return '';
   }
   async function autoRun(from) {
@@ -350,7 +361,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
         const it = items[st.idx]; st.cur = it; renderList();
         say('Room ' + it.room + ' (' + (st.idx + 1) + ' of ' + items.length + '): opening the guest…', false);
         const why = await goToGuest(it);
-        if (why) { logIt(it, 'nav', '', 'could not open: ' + why.slice(0, 60)); say(why, true); if (/In House/.test(why)) return; continue; }
+        if (why) { logIt(it, 'nav', '', 'could not open: ' + why.slice(0, 60)); say(why, true); if (/In House list did not open/.test(why)) return; continue; }
         await fill(it);
         if (!st.dry) { st.paused = true; say('Room ' + it.room + ' is filled. Check it, press Save in Opera, then press Next guest.', false); return; }
       }
