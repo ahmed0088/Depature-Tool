@@ -1,0 +1,26 @@
+name: Opera plan cleanup
+# Privacy: deletes a plan sent from HotelOps that no run picked up within 30 minutes. Logs only say whether something was removed.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cleanup:
+    if: github.repository == 'ahmed0088/Depature-Tool'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Cleanup
+        run: node scripts/opera-cloud.js
+        env:
+          MODE: cleanup
+          CLEANUP_MAX_MIN: '30'
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
+          HOTELOPS_HOTEL: ${{ secrets.HOTELOPS_HOTEL }}
