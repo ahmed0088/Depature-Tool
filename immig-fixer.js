@@ -96,7 +96,7 @@
       (skipped.length ? '<details class="imm-more"><summary>Why ' + skipped.length + ' cannot be fixed</summary><div class="imm-small">' + skipped.map(it => 'Room ' + esc(it.room) + ' · ' + esc(it.name) + ' · ' + esc(it.notes.join(' · ') || 'nothing to fill')).join('<br>') + '</div></details>' : '') +
       (!items.length ? '<div class="imm-sub">Nothing to fix. All good.</div>' : '') +
       '<div class="imm-go"><button class="btn gold imm-big" id="immigFixCopy">▶ Start fixing (<span id="immigFixN">' + approvedCount() + '</span> ticked fields)</button></div>' +
-      '<div class="imm-small" id="immigFixStatus" style="margin:6px 0">' + esc(S.fxNote || '') + '</div>' + (helperFx() ? '<div class="imm-small" style="opacity:.7">Helper version ' + esc(document.documentElement.dataset.hoWaHelper || '?') + (document.documentElement.dataset.hoWaHelper && parseInt(document.documentElement.dataset.hoWaHelper, 10) < 638 ? ' (old: download the new helper)' : '') + '</div>' : '') +
+      '<div class="imm-small" id="immigFixStatus" style="margin:6px 0">' + esc(S.fxNote || '') + '</div>' + extState() +
       (helperFx() ? '<ol class="imm-3"><li>Press <b>Start fixing</b>. The list goes to your Opera tab.</li><li>In the fixer window there, press <b>Start</b>. It opens each guest and fills the empty boxes.</li><li>Check the guest, press Save in Opera yourself, then press <b>Next guest</b>.</li></ol>' : '<ol class="imm-3"><li>Press <b>Start fixing</b>. It copies the list.</li><li>In Opera: open the fixer window, paste the list, press <b>Load</b>.</li><li>Press <b>Start</b> in the window. It opens each guest and fills the empty boxes. You press Save in Opera.</li></ol>') +
       '<details class="imm-more"><summary>More</summary><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="immigFixSave">Remember gender and nationality</button></div>' +
       '<div class="imm-small" style="margin-top:10px">What the fixer changed (paste its log here)</div><textarea id="immigFixLogIn" style="width:100%;height:46px;font:11px monospace"></textarea><div style="margin-top:4px"><button class="btn" id="immigFixLogSave">Save this log</button></div><div id="immigFixLogList" style="font:10px monospace;color:var(--text3);margin-top:6px;white-space:pre-wrap"></div></details>';
@@ -116,6 +116,18 @@
     showLog();
   }
   const helperFx = () => { try { return !!document.documentElement.dataset.hoFxHelper; } catch (_) { return false; } };
+  // one line: is the Chrome helper's fixer as new as this page?  (the helper takes new fixer code from this page by itself; only an old helper needs a download)
+  function extState() {
+    if (!helperFx()) return '';
+    const D = document.documentElement.dataset, app = parseFloat(String(typeof APP_VERSION !== 'undefined' ? APP_VERSION : '').replace(/^v/, '')) || 0, fx = parseFloat(D.hoFxCode || '0') || 0;
+    let t, c = '';
+    if (!D.hoFxCode) { t = '⚠ Old helper (' + (D.hoWaHelper || '?') + '): download the new helper once (Settings). After that, fixer updates need no reinstall.'; c = 'color:var(--red,#c0392b)'; }
+    else if (D.hoWaUs === '0' && fx < app) { t = '⚠ Turn on "Allow User Scripts" for the helper (chrome://extensions > Details) so it can update itself.'; c = 'color:var(--red,#c0392b)'; }
+    else if (fx >= app) t = '✓ Extension up to date (fixer v' + fx + ')';
+    else t = '⏳ Updating the helper fixer (v' + fx + ' to v' + app + '), keep this page open a few seconds.';
+    return '<div class="imm-small" id="immigExtState" style="opacity:.85;' + c + '">' + esc(t) + '</div>';
+  }
+  setInterval(() => { const el = document.getElementById('immigExtState'); if (!el) return; const h = document.createElement('div'); h.innerHTML = extState(); const n = h.firstChild; if (n) { el.textContent = n.textContent; el.style.cssText = n.style.cssText; } }, 2000);
   function setStatus(t, bad) { S.fxNote = String(t || ''); const el = document.getElementById('immigFixStatus'); if (el) { el.textContent = S.fxNote; el.style.color = bad ? 'var(--red,#c0392b)' : ''; } }
   window.addEventListener('message', e => {
     const d = e.source === window && e.data; if (!d || typeof d !== 'object') return;
