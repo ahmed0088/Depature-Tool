@@ -82,8 +82,8 @@
           const kind = docKind(mt.guest.doc);
           const pref = kind === 'EID' && meta && UAE_ID_TYPES.includes(meta.uaeIdType) ? meta.uaeIdType : '';
           const tv = kind === 'PAS' ? 'PAS' : pref;
-          fields.push({ field: 'idType', label: 'ID type', value: tv, display: tv, source: kind === 'PAS' ? 'Vicas Inhouse' : (pref ? 'Emirates ID: your usual UAE type' : 'Emirates ID: choose RES or IDC'), needsTap: true, idKind: kind });
-          fields.push({ field: 'idNumber', label: 'ID number', value: String(mt.guest.doc).replace(/\s+/g, ''), display: last4(mt.guest.doc), source: 'Vicas Inhouse', needsTap: true, idKind: kind, secret: true });
+          fields.push({ field: 'idType', label: 'ID type', value: tv, display: tv, source: kind === 'PAS' ? 'Vicas Inhouse' : (pref ? 'Emirates ID: your usual UAE type' : 'Emirates ID: choose RES or IDC'), needsTap: !(kind === 'PAS' && mt.strong), idKind: kind });
+          fields.push({ field: 'idNumber', label: 'ID number', value: String(mt.guest.doc).replace(/\s+/g, ''), display: last4(mt.guest.doc), source: 'Vicas Inhouse', needsTap: !(kind === 'PAS' && mt.strong), idKind: kind, secret: true });
         } else if (mt.why) notes.push('ID: ' + mt.why);
       }
       if (fields.length || notes.length) items.push({ id: 'i' + i + '-' + normRoom(r.room), room: normRoom(r.room), arrival: r.arrival || '', name: r.name || '', fields, notes });
