@@ -25,8 +25,6 @@ const FR_DEST = {
   xref:        { label: 'Arrivals × Departures check', panel: 'xref',         ico: '🔀', ext: /\.(txt|tsv|csv)$/i, sel: 'input[onchange*="xrefLoadFile"]' },
   immig:       { label: 'Immigration · report XML',   panel: 'immig',         ico: '🛂', ext: /\.xml$/i, sel: '#immigFileInput2' },
   immigIn:     { label: 'Immigration · Inhouse XML',  panel: 'immig',         ico: '🛂', ext: /\.xml$/i, sel: '#immigInhouseXmlInput' },
-  immigArr:    { label: 'Immigration · Arrivals export', panel: 'immig',      ico: '🛂', ext: /\.(xls|xlsx|html?|csv|txt)$/i, sel: '#immigArrivalsInput' },
-  immigRes:    { label: 'Immigration · Res. Detail',  panel: 'immig',         ico: '🛂', ext: /\.(txt|tsv)$/i, sel: '#immigResDetailInput' },
   itGiby:      { label: 'In-house tally · Guest In-House by Room', panel: 'inhouse-tally', ico: '🛏️', ext: /\.(txt|tsv|csv)$/i, sel: '#itGibyFileInput' },
   itXml:       { label: 'In-house tally · Guest Count XML', panel: 'inhouse-tally', ico: '🛏️', ext: /\.xml$/i, sel: '#itXmlFileInput' },
   pkgExcel:    { label: 'Package Audit · IN-Gauge Excel', panel: 'package-audit', ico: '🎁', ext: /\.(xlsx|xls)$/i, sel: '#pkgExcelFileInput' },
