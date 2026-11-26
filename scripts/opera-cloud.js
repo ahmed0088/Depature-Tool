@@ -95,9 +95,17 @@ async function main() {
   const url = String(E.OPERA_URL || '').trim();
   if (!okUrl(url)) fail('OPERA_URL is missing or is not an https oraclecloud.com link');
   for (const k of ['OPERA_USER', 'OPERA_PASS']) if (!E[k]) fail('The ' + k + ' secret is missing');
-  const FB = E.OPERA_TOTP ? null : await fbOpen();
+  const FB = E.OPERA_TOTP && MODE === 'signin' ? null : await fbOpen();   // the private path: the code, the plan, the results
   if (FB) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); }   // never use an old code
   const getCode = async notThis => E.OPERA_TOTP ? totp(E.OPERA_TOTP) : codeFromHotelOps(FB, notThis);
+  // the plan is read and deleted at once, before anything else, so it never outlives this run (a stale result is dropped after a day)
+  let job = null;
+  if (MODE !== 'signin' && !E.PLAN_FILE) {
+    job = await FB.get('operaCloudPlan'); await FB.del('operaCloudPlan');
+    if (!job || typeof job.code !== 'string') fail('No plan found. In HotelOps press "Send plan to cloud", then run this again.');
+    if (Date.now() - Number(job.at || 0) > 3 * 3600e3) fail('The plan is older than 3 hours and was deleted. Send it again from HotelOps.');
+  }
+  if (FB) { const old = await FB.get('operaCloudResult'); if (old && Date.now() - Number(old.at || 0) > 864e5) await FB.del('operaCloudResult'); }
   const { chromium } = require('playwright-core');
   const executablePath = [E.CHROME_PATH, '/usr/bin/google-chrome', '/usr/bin/chromium'].find(p => p && fs.existsSync(p));
   const browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox'] });
@@ -111,22 +119,26 @@ async function main() {
     await page.waitForTimeout(4000);
     await page.addScriptTag({ content: fs.readFileSync(path.join(ROOT, 'tools/hotelops-opera-fixer.console.js'), 'utf8') });
     const counts = { total: 0 }; 
-    await page.exposeFunction('__opLog', e => { counts.total++; say(['room', e.room, e.field, e.result].join(' · ').replace(/\s+/g, ' ')); });
+    const lines = []; let lastPush = 0;
+    const pushResult = async (state, extra) => { if (FB) await FB.put('operaCloudResult', Object.assign({ at: Date.now(), state, mode: MODE, lines: lines.slice(-400) }, extra || {})); };
+    await page.exposeFunction('__opLog', async e => { counts.total++; say(['room', e.room, e.field, e.result].join(' · ').replace(/\s+/g, ' ')); lines.push({ room: String(e.room || ''), field: String(e.field || ''), to: String(e.to || '').replace(/\d{5,}/g, d => '••••' + d.slice(-4)).slice(0, 40), result: mask(e.result).slice(0, 160), dry: !!e.dry }); if (FB && Date.now() - lastPush > 8000) { lastPush = Date.now(); await pushResult('running'); } });
     await page.evaluate(() => window.__hoFixer.setHook((k, a) => { if (k === 'log') window.__opLog(a); }));
     if (MODE === 'signin') {
       const why = await page.evaluate(() => window.__hoFixer._test.ensureInHouse());
       say(why ? 'In House did not open: ' + why : 'In House opened. Sign-in test passed.'); if (why) process.exitCode = 1;
     } else {
       let code = '';
+      let wantSave = MODE === 'save';
       if (E.PLAN_FILE) code = fs.readFileSync(E.PLAN_FILE, 'utf8').trim();
-      else fail('No plan: set PLAN_FILE (tests) or use the private HotelOps path (not enabled yet)');
-      const n = await page.evaluate(([c, dry, lim]) => { const f = window.__hoFixer; f.loadCode(c); f._test.setDry(dry); if (lim) f._test.st.plan.items = f._test.st.plan.items.slice(0, lim); return f._test.st.plan.items.length; }, [code, MODE !== 'save', limit]);
+      else { code = job.code; if (wantSave && job.mode !== 'save') { say('Save was not switched on in HotelOps: running read-only instead'); wantSave = false; } }
+      const n = await page.evaluate(([c, dry, lim]) => { const f = window.__hoFixer; f.loadCode(c); f._test.setDry(dry); if (lim) f._test.st.plan.items = f._test.st.plan.items.slice(0, lim); return f._test.st.plan.items.length; }, [code, !wantSave, limit]);
       await page.evaluate(() => window.__hoFixer.setHook((k, a) => { if (k === 'log') window.__opLog(a); }));
-      say(n + ' room(s) in the plan; ' + (MODE === 'save' ? 'WILL fill empty fields and Save' : 'read-only audit'));
+      say(n + ' room(s) in the plan; ' + (wantSave ? 'WILL fill empty fields and Save' : 'read-only audit'));
       await page.evaluate(() => window.__hoFixer._test.autoRun(0));
-      say('finished: ' + counts.total + ' log lines');
+      say('finished: ' + counts.total + ' log lines'); await pushResult('done', { rooms: n, saved: wantSave });
     }
-  } finally { try { if (FB) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); } } catch (_) {} await browser.close(); }
+  } catch (e) { try { if (FB) await FB.put('operaCloudResult', { at: Date.now(), state: 'failed', mode: MODE, error: mask(e && e.message || e).slice(0, 200), lines: [] }); } catch (_) {} throw e;
+  } finally { try { if (FB) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); await FB.del('operaCloudPlan'); } } catch (_) {} await browser.close(); }
 }
 if (require.main === module) main().catch(e => fail('Runner stopped: ' + (e && e.message || e)));
 module.exports = { totp, b32, okUrl, codeFromHotelOps };
