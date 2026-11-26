@@ -96,7 +96,8 @@
       (skipped.length ? '<details class="imm-more"><summary>Why ' + skipped.length + ' cannot be fixed</summary><div class="imm-small">' + skipped.map(it => 'Room ' + esc(it.room) + ' · ' + esc(it.name) + ' · ' + esc(it.notes.join(' · ') || 'nothing to fill')).join('<br>') + '</div></details>' : '') +
       (!items.length ? '<div class="imm-sub">Nothing to fix. All good.</div>' : '') +
       '<div class="imm-go"><button class="btn gold imm-big" id="immigFixCopy">▶ Start fixing (<span id="immigFixN">' + approvedCount() + '</span> ticked fields)</button></div>' +
-      '<ol class="imm-3"><li>Press <b>Start fixing</b>. It copies the list.</li><li>In Opera: open the fixer window, paste the list, press <b>Load</b>.</li><li>Press <b>Start</b> in the window. It opens each guest and fills the empty boxes. You press Save in Opera.</li></ol>' +
+      '<div class="imm-small" id="immigFixStatus" style="margin:6px 0">' + esc(S.fxNote || '') + '</div>' +
+      (helperFx() ? '<ol class="imm-3"><li>Press <b>Start fixing</b>. The list goes to your Opera tab.</li><li>In the fixer window there, press <b>Start</b>. It opens each guest and fills the empty boxes.</li><li>Check the guest, press Save in Opera yourself, then press <b>Next guest</b>.</li></ol>' : '<ol class="imm-3"><li>Press <b>Start fixing</b>. It copies the list.</li><li>In Opera: open the fixer window, paste the list, press <b>Load</b>.</li><li>Press <b>Start</b> in the window. It opens each guest and fills the empty boxes. You press Save in Opera.</li></ol>') +
       '<details class="imm-more"><summary>More</summary><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="immigFixSave">Remember gender and nationality</button></div>' +
       '<div class="imm-small" style="margin-top:10px">What the fixer changed (paste its log here)</div><textarea id="immigFixLogIn" style="width:100%;height:46px;font:11px monospace"></textarea><div style="margin-top:4px"><button class="btn" id="immigFixLogSave">Save this log</button></div><div id="immigFixLogList" style="font:10px monospace;color:var(--text3);margin-top:6px;white-space:pre-wrap"></div></details>';
     card.onchange = e => {
@@ -114,9 +115,18 @@
     document.getElementById('immigFixLogSave').onclick = saveLog;
     showLog();
   }
+  const helperFx = () => { try { return !!document.documentElement.dataset.hoFxHelper; } catch (_) { return false; } };
+  function setStatus(t, bad) { S.fxNote = String(t || ''); const el = document.getElementById('immigFixStatus'); if (el) { el.textContent = S.fxNote; el.style.color = bad ? 'var(--red,#c0392b)' : ''; } }
+  window.addEventListener('message', e => {
+    const d = e.source === window && e.data; if (!d || typeof d !== 'object') return;
+    if (d.source === 'ho-fx-progress') setStatus(d.note, d.bad);
+    else if (d.source === 'ho-fx-log' && d.entry) { const ta = document.getElementById('immigFixLogIn'); if (ta) ta.value += (ta.value ? '\n' : '') + JSON.stringify(d.entry); }
+  });
   async function copyPlan() {
-    if (!approvedCount()) return toast('Approve at least one field first.', 'err');
-    const code = C.encodePlan(S.plan, S.ok, { origin: S.opera && A.validateOperaUrl(S.opera).ok ? A.validateOperaUrl(S.opera).origin : '' });
+    if (!approvedCount()) return toast('Tick at least one fix first.', 'err');
+    const ov = S.opera ? A.validateOperaUrl(S.opera) : null;
+    const code = C.encodePlan(S.plan, S.ok, { origin: ov && ov.ok ? ov.origin : '' });
+    if (helperFx()) { setStatus('Sending to Opera…'); window.postMessage({ source: 'ho-fx-job', code, url: ov && ov.ok ? ov.url : '' }, location.origin); return; }
     try { await navigator.clipboard.writeText(code); toast('Copied. Now paste it in the fixer window in Opera. It has ID numbers: do not share it.', 'ok'); } catch (_) { window.prompt('Copy this plan:', code); }
   }
   async function saveShared() {
