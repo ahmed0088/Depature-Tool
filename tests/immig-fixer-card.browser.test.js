@@ -11,7 +11,7 @@ try{const page=await browser.newPage({viewport:{width:1200,height:900},serviceWo
  await page.setContent(`<!doctype html><body><textarea id="immigPasteInput2"></textarea><div id="immigError2"><span id="immigErrorMsg2"></span></div><span id="immigTabCount"></span><div id="immigMissingWrap"></div><div id="immigMissingBody"></div><span id="immigInhouseXmlLabel"></span><div id="immigResults2" style="display:none"><div id="immigKpis2"></div><div id="immigMeta2"></div><div id="immigFilters2"><button data-if="all" class="fchip"></button></div><input id="immigSearch2"><div class="tbl-wrap"><table><tbody id="immigTable2"></tbody></table></div></div>`);
  await page.evaluate(()=>{window.escapeHtml=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));window.toasts=[];window.showToast=(m,t)=>toasts.push(m);window.HOTEL_ID='h1';window.writes=[];
   const store={};window.firebase={database:()=>({ref:p=>({once:async()=>({val:()=>null}),update:async v=>{writes.push([p,JSON.stringify(v)])},push:async v=>{writes.push([p,JSON.stringify(v)])},limitToLast(){return this}})})};});
- for(const f of ['reports.js','immig-fixer-core.js','immig-fixer.js'])await page.addScriptTag({content:read(f)});
+ for(const f of ['reports.js','opera-auto-core.js','immig-fixer-core.js','immig-fixer.js'])await page.addScriptTag({content:read(f)});
  await page.evaluate(([imm,inh])=>{const p=_immigParseInhouseXML(inh);_immigInhouseList=p.list;_immigNatMap=p.natMap;_immigPassportMap=p.docMap;_immigInhouseRoomGuests=p.roomMap;document.getElementById('immigPasteInput2').value=imm;processImmig2(true);},[IMM,INH]);
  await page.waitForSelector('#immigFixerCard input[type=checkbox]');
  const text=await page.locator('#immigFixerCard').innerText();
@@ -23,6 +23,11 @@ try{const page=await browser.newPage({viewport:{width:1200,height:900},serviceWo
  await page.evaluate(()=>{window.copied='';Object.defineProperty(navigator,'clipboard',{value:{writeText:async t=>{window.copied=t}},configurable:true});});
  await page.locator('#immigFixCopy').click();const code=await page.evaluate(()=>window.copied);const plan=require('../immig-fixer-core.js').decodePlan(code);
  const fields=plan.items.find(i=>i.room==='102').fields.map(f=>f.field).sort();assert.deepEqual(fields,['gender','idNumber','idType','nationality']);
+ assert(await page.locator('#immigOperaOpen').count()===0,'no Open button before a link is saved');
+ await page.locator('#immigOperaUrl').fill('https://user:pw@evil.example/x');await page.locator('#immigOperaSave').click();assert(/never store a login|Remove the username|does not look/i.test(await page.locator('#immigOperaMsg').innerText()),'a link with a login or another site is refused');
+ await page.locator('#immigOperaUrl').fill('https://fake-hotel.oraclehospitality.eu-frankfurt-1.ocs.oraclecloud.com/FAKE/operacloud/faces/opera-cloud-index/OperaCloud');await page.locator('#immigOperaSave').click();await page.waitForSelector('#immigOperaOpen');
+ assert.equal(await page.locator('#immigOperaOpen').getAttribute('rel'),'noopener noreferrer');
+ await page.locator('#immigFixCopy').click();const code2=await page.evaluate(()=>window.copied);assert.equal(require('../immig-fixer-core.js').decodePlan(code2).origin,'https://fake-hotel.oraclehospitality.eu-frankfurt-1.ocs.oraclecloud.com','plan is tied to the hotel Opera link');
  await page.locator('#immigFixSave').click();await page.waitForFunction(()=>writes.length>0);const w=await page.evaluate(()=>JSON.stringify(writes));
  assert(!/ZZ7654321/.test(w),'shared record must never hold the full ID number');assert(/••••4321/.test(w)&&/gender/.test(w));
  await page.locator('#immigFixLogIn').fill(JSON.stringify({t:'2026-11-26T08:00:00Z',room:'102',field:'idNumber',to:'ZZ7654321',result:'filled, not saved'})+'\n'+JSON.stringify({t:'x',room:'102',field:'name',to:'Ann',result:'bad'}));
