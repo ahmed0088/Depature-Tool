@@ -14,7 +14,7 @@ const mkPort=(name,url)=>{const msgs=[],ls=[];return{name,sender:{url,tab:{id:7,
 const stores={local:{},session:{}};const calls=[];
 const area=n=>({get:async k=>{const o={};(Array.isArray(k)?k:[k]).forEach(x=>{if(x in stores[n])o[x]=stores[n][x]});return o},set:async o=>{Object.assign(stores[n],o)},remove:async k=>{(Array.isArray(k)?k:[k]).forEach(x=>delete stores[n][x])}});
 let onConnect;
-const chrome={runtime:{getManifest:()=>({version:'633'}),onConnect:{addListener:f=>{onConnect=f}},setUninstallURL(){},connect(){}},storage:{local:area('local'),session:area('session')},userScripts:{getScripts:async()=>[],configureWorld:async()=>{},register:async()=>{},update:async()=>{},unregister:async()=>{}},tabs:{create:async o=>{calls.push(['create',o.url]);return{id:1}},update:(id,o)=>calls.push(['tab',id,o.active]),remove(){}},windows:{update:(id,o)=>calls.push(['win',id,o.focused])}};
+const chrome={runtime:{getManifest:()=>({version:'633'}),onConnect:{addListener:f=>{onConnect=f}},setUninstallURL(){},connect(){}},storage:{local:area('local'),session:area('session')},userScripts:{getScripts:async()=>[],configureWorld:async()=>{},register:async d=>{calls.push(['register',d[0].id,d[0].matches.join(),!!d[0].allFrames,d[0].js[0].code.length])},update:async()=>{},unregister:async()=>{}},tabs:{reload:async id=>{calls.push(['reload',id])},create:async o=>{calls.push(['create',o.url]);return{id:1}},update:(id,o)=>calls.push(['tab',id,o.active]),remove(){}},windows:{update:(id,o)=>calls.push(['win',id,o.focused])}};
 vm.runInNewContext(F['relay.js'],{chrome,console,URL,setTimeout,Date,JSON,Promise});
 (async()=>{
  const app=mkPort('app','https://app.test/'),fix=mkPort('fixer','https://x.oraclehospitality.com/'),code=plan();
@@ -31,6 +31,16 @@ vm.runInNewContext(F['relay.js'],{chrome,console,URL,setTimeout,Date,JSON,Promis
  await fix.fire({source:'ho-fx-progress',note:'hi'});await fix.fire({source:'something-else'});assert(app.msgs.some(m=>m.source==='ho-fx-progress'));assert(!app.msgs.some(m=>m.source==='something-else'));
  // with the tab open, the job goes straight there and the tab is brought forward
  await app.fire({source:'ho-fx-job',code});assert(fix.msgs.filter(m=>m.source==='ho-fx-job').length>=2);assert.equal(fix.msgs[fix.msgs.length-1].code,code);assert(calls.some(c=>c[0]==='tab'&&c[1]===7&&c[2]===true));
+ // ── future fixer fixes without a reinstall: HotelOps hands the new fixer, the helper keeps it as a user script, an old tab is reloaded once ──
+ const newCode=W.hoWaHelper.fxSide(fixerSrc,'634',true);
+ assert(/hoFxUs/.test(newCode)&&/updated by itself/.test(newCode),'the self-updated copy marks itself');assert(/hoFxUs\) return/.test(F['fixer.js']),'the copy inside the helper steps aside when the newer one runs');
+ await app.fire({source:'ho-fx-ext-code',v:'634',code:newCode});
+ assert.equal(stores.local.fxReader.v,'634');assert(calls.some(c=>c[0]==='register'&&c[1]==='hotelops-fx'&&/oraclecloud/.test(c[2])&&c[3]===false),'registered for Opera hosts, top frame only');
+ assert(app.msgs.some(m=>m.source==='ho-wa-ext-info'&&m.fx==='634'),'the app is told the fixer version');
+ await app.fire({source:'ho-fx-ext-code',v:'634',code:'x'+newCode});assert.equal(stores.local.fxReader.code,newCode,'same version is not replaced');
+ await fix.fire({source:'ho-fx-ask',v:'633'});const rl=calls.filter(c=>c[0]==='reload').length;
+ await app.fire({source:'ho-fx-job',code});assert.equal(calls.filter(c=>c[0]==='reload').length,rl+1,'old fixer on the tab: reload once');
+ await fix.fire({source:'ho-fx-ask',v:'634'});await app.fire({source:'ho-fx-job',code});assert.equal(calls.filter(c=>c[0]==='reload').length,rl+1,'current fixer: no reload');
  // ── the fixer script in a page with a fake chrome.runtime ──
  const executablePath=[process.env.CHROME_PATH,'/usr/bin/google-chrome','/usr/bin/chromium'].find(p=>p&&fs.existsSync(p)),browser=await chromium.launch({executablePath,headless:true,args:['--no-sandbox']});
  try{const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -44,6 +54,12 @@ vm.runInNewContext(F['relay.js'],{chrome,console,URL,setTimeout,Date,JSON,Promis
   assert.equal(await page.evaluate(()=>window.__hoFixer._test.st.dry),true,'dry run stays on');assert.equal(await page.evaluate(()=>window.__saved),false);
   await page.evaluate(c=>window.__ls.forEach(f=>f({source:'ho-fx-job',code:'HOFIX1.zz.AAAA'})),code);
   assert(await page.evaluate(()=>window.__sent.some(m=>m.source==='ho-fx-progress'&&m.bad)),'a broken list is reported, not loaded');
+  // the self-updated copy runs first and marks the page: the copy inside the helper then stays out; the fixer loads the list and says its version
+  const p2=await browser.newPage();await p2.setContent('<!doctype html><body><h2>Mr. Zed Fakeperson</h2><script>window.__sent=[];window.__ls=[];window.chrome={runtime:{connect:()=>({postMessage:m=>window.__sent.push(m),onMessage:{addListener:f=>window.__ls.push(f)},onDisconnect:{addListener(){}}})}};</script>');
+  await p2.addScriptTag({content:newCode});assert.equal(await p2.evaluate(()=>document.documentElement.dataset.hoFxUs),'634');
+  assert.equal(await p2.evaluate(()=>window.__sent.find(m=>m.source==='ho-fx-ask').v),'634','the ask carries the fixer version');
+  await p2.evaluate(()=>{window.__hoFxBridge=false;delete window.__hoFixer;document.querySelectorAll('[data-hotelops]').forEach(n=>n.remove());window.__sent=[]});
+  await p2.addScriptTag({content:F['fixer.js']});assert.equal(await p2.evaluate(()=>window.__sent.length+document.querySelectorAll('[data-hotelops=fixer]').length),0,'the helper copy steps aside');await p2.close();
   assert.deepEqual(errors,[]);
  }finally{await browser.close();}
  console.log('Fixer in the helper passed: list kept in memory only, Opera opens or comes forward, fixer loads it hidden until then with dry run on, bad lists refused.');
