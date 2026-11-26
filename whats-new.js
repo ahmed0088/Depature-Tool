@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 645, items: ['Immigration Check has a Run in cloud (check only) button. It copies a short list (room, arrival, gender, nationality, ID type, last 4 of the ID number, no names) to paste into your Instinct chat. The cloud run then checks those rooms in Opera and replies. It changes nothing.'] },
   { v: 644, items: ['The Opera fixer now picks the innermost result row with the confirmation link, goes back via Back to Manage Reservation then Back to In House (the breadcrumbs are dead there), and ignores disabled links.'] },
   { v: 643, items: ['Fixes the Opera fixer finding the room row again (v642 broke it). Row and confirmation link detection is back to the v640 way, with a test for it.'] },
   { v: 642, items: ['The Opera fixer now waits for real states instead of short timers: it acts the moment the room row appears (up to 25 s), and waits for Edit mode and Save to finish. The log shows how long each wait took.'] },
