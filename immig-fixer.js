@@ -36,14 +36,34 @@
   }
   function operaRow() {
     const ok = S.opera ? A.validateOperaUrl(S.opera) : null;
-    return '<div style="border:1px solid var(--border);border-radius:9px;padding:7px 10px;margin:6px 0"><div style="font-size:0.66rem;color:var(--text3);margin-bottom:4px">🔗 This hotel\'s Opera Cloud link (the link only, never a username or password)</div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input id="immigOperaUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://…oraclecloud.com/…/OperaCloud" value="' + esc(S.opera) + '" style="flex:1 1 220px;min-width:0"><button class="btn" id="immigOperaSave">Save link</button>' + (ok && ok.ok ? '<a class="btn" id="immigOperaOpen" href="' + esc(ok.url) + '" target="_blank" rel="noopener noreferrer">Open Opera ↗</a>' : '') + '</div><div id="immigOperaMsg" style="font-size:0.64rem;margin-top:4px;color:var(--text3)">' + (ok && ok.ok ? 'Saved for the team. The fixer only runs on this Opera link.' : 'No link saved yet. The fixer then runs on any Opera page.') + '</div></div>';
+    return '<div class="imm-h"><b>🛠 Fix in Opera</b><span>Fills empty gender, nationality and ID fields in a guest\'s Opera profile. It never saves: you press Save.</span></div>' +
+      '<label class="imm-lbl" for="immigOperaUrl">This hotel\'s Opera Cloud link <small>(the link only, never a username or password)</small></label>' +
+      '<div class="imm-row"><input id="immigOperaUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://…oraclecloud.com/…/OperaCloud" value="' + esc(S.opera) + '"><button class="btn gold" id="immigOperaSave">Save link</button>' + (ok && ok.ok ? '<a class="btn" id="immigOperaOpen" href="' + esc(ok.url) + '" target="_blank" rel="noopener noreferrer">Open Opera ↗</a>' : '') + '</div>' +
+      '<div class="imm-msg" id="immigOperaMsg">' + (ok && ok.ok ? 'Saved for the team. The fixer only runs on this Opera link.' : 'No link saved yet. Until you save one, the fixer runs on any Opera page.') + '</div>' +
+      '<div class="imm-hint">After you press <b>Analyse</b>, the list of fixes appears under the results, above the guest table.</div>';
+  }
+  function renderShell() {
+    let el = document.getElementById('immigOperaSetup');
+    if (!el) {
+      const panel = document.getElementById('panel-immig'), anchor = panel && (panel.querySelector('.imm-steps') || panel.querySelector('.howto'));
+      el = document.createElement('div'); el.id = 'immigOperaSetup'; el.className = 'card imm-opera';
+      if (anchor) anchor.after(el); else { const res = document.getElementById('immigResults2'); if (!res) return; res.insertBefore(el, res.firstChild); }
+    }
+    const typing = document.activeElement && document.activeElement.id === 'immigOperaUrl';
+    if (!typing) el.innerHTML = operaRow();
+    const b = document.getElementById('immigOperaSave'); if (b) b.onclick = saveOperaLink;
+  }
+  async function loadOperaLink() {
+    try { const l = localStorage.getItem(lsKey()); if (l && A.validateOperaUrl(l).ok) S.opera = l; } catch (_) {}
+    const d = db(); if (d) { try { const o = await d.ref('hotels/' + HOTEL_ID + '/operaUrl').once('value'); if (o.val() && A.validateOperaUrl(o.val()).ok) S.opera = o.val(); } catch (_) {} }
+    renderShell();
   }
   async function saveOperaLink() {
     const el = document.getElementById('immigOperaUrl'), msg = document.getElementById('immigOperaMsg'), v = A.validateOperaUrl(el && el.value);
     if (!v.ok) { if (msg) { msg.textContent = v.reason; msg.style.color = 'var(--red,#c0392b)'; } return; }
     S.opera = v.url; try { localStorage.setItem(lsKey(), v.url); } catch (_) {}
     const d = db(); if (d) { try { await d.ref('hotels/' + HOTEL_ID + '/operaUrl').set(v.url); } catch (_) { toast('Saved on this device only (no database access).', 'err'); } }
-    toast('Opera link saved.', 'ok'); paint();
+    toast('Opera link saved.', 'ok'); renderShell();
   }
   async function loadShared() {
     try { const l = localStorage.getItem(lsKey()); if (l && A.validateOperaUrl(l).ok) S.opera = l; } catch (_) {}
@@ -67,7 +87,6 @@
     const card = document.getElementById('immigFixerCard'); if (!card || !S.plan) return;
     const items = S.plan.items;
     card.innerHTML = '<div style="font-family:var(--mono);font-size:0.72rem;margin-bottom:8px"><b>🛠 Fix in Opera</b> · fills only EMPTY fields in a guest\'s Opera profile, never saves (you press Save). ID numbers stay on this screen only, never stored or logged in full.</div>' +
-      operaRow() +
       (items.length ? '<div style="max-height:46vh;overflow:auto">' + items.map(it => '<div style="border:1px solid var(--border);border-radius:9px;padding:7px 10px;margin:6px 0"><b style="color:var(--sky)">Room ' + esc(it.room) + '</b> · ' + esc(it.name) + (it.notes.length ? '<div style="font-size:0.62rem;color:var(--amber)">' + it.notes.map(esc).join(' · ') + '</div>' : '') + '<div style="font-size:0.7rem;margin-top:4px">' + it.fields.map(f => chip(it, f)).join('') + '</div></div>').join('') + '</div>' : '<div style="font-size:0.72rem;color:var(--text3)">Nothing to fix from these files.</div>') +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px"><button class="btn" id="immigFixCopy">Copy plan for the Opera fixer (<span id="immigFixN">' + approvedCount() + '</span> approved)</button><button class="btn" id="immigFixSave">Save gender/nationality for the team</button></div>' +
       '<div style="margin-top:12px;font-family:var(--mono);font-size:0.66rem;color:var(--text3)">Fixer change log (paste what "Copy log" gave you in Opera)</div><textarea id="immigFixLogIn" style="width:100%;height:46px;font:11px monospace"></textarea><div style="display:flex;gap:8px;margin-top:4px"><button class="btn" id="immigFixLogSave">Save log for the team</button></div><div id="immigFixLogList" style="font:10px monospace;color:var(--text3);margin-top:6px;white-space:pre-wrap"></div>';
@@ -82,7 +101,6 @@
       }
     };
     document.getElementById('immigFixCopy').onclick = copyPlan;
-    document.getElementById('immigOperaSave').onclick = saveOperaLink;
     document.getElementById('immigFixSave').onclick = saveShared;
     document.getElementById('immigFixLogSave').onclick = saveLog;
     showLog();
@@ -119,8 +137,13 @@
     const res = document.getElementById('immigResults2'); if (!res) return;
     let card = document.getElementById('immigFixerCard');
     if (!card) { card = document.createElement('div'); card.id = 'immigFixerCard'; card.style.cssText = 'margin:12px 0;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--r)'; const tw = res.querySelector('.tbl-wrap'); res.insertBefore(card, tw || null); }
+    renderShell();
     try { if (typeof window.immigReconcileRender === 'function') window.immigReconcileRender(); } catch (_) {}
     build(); paint(); await loadShared(); if (Object.keys(S.shared).length || S.uaeType) { build(); paint(); }
   };
   window.hoImmigFixerState = S;
+  // the Opera link box is on the page from the start, before any report is loaded
+  const boot = () => { try { renderShell(); loadOperaLink(); } catch (_) {} };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+  setTimeout(boot, 2500); setTimeout(boot, 7000);
 })();
