@@ -34,5 +34,9 @@ try{const page=await browser.newPage({viewport:{width:1200,height:900},serviceWo
  await page.locator('#immigFixLogIn').fill(JSON.stringify({t:'2026-11-26T08:00:00Z',room:'102',field:'idNumber',to:'ZZ7654321',result:'filled, not saved'})+'\n'+JSON.stringify({t:'x',room:'102',field:'name',to:'Ann',result:'bad'}));
  await page.evaluate(()=>{writes.length=0});await page.locator('#immigFixLogSave').click();await page.waitForFunction(()=>writes.length>0);const lw=await page.evaluate(()=>JSON.stringify(writes));
  assert(!/ZZ7654321/.test(lw)&&/••••4321/.test(lw),'a pasted log with a full number is masked before saving');assert.equal(JSON.parse(lw).length,1,'a line with a field outside the allowed list is dropped');
+ // with the Chrome helper present, Start fixing hands the list to it (not the clipboard) together with the saved Opera link
+ await page.evaluate(()=>{document.documentElement.dataset.hoFxHelper='633';window.__fx=[];window.postMessage=(m)=>{if(m&&m.source==='ho-fx-job')window.__fx.push(m)};window.copied='';});
+ await page.locator('#immigFixCopy').click();await page.waitForFunction(()=>window.__fx.length>0);const fx=await page.evaluate(()=>window.__fx[0]);
+ assert(/^HOFIX1\./.test(fx.code)&&/oraclecloud\.com/.test(fx.url),'job carries the list and the saved Opera link');assert.equal(await page.evaluate(()=>window.copied),'','nothing is put on the clipboard in helper mode');
  assert.deepEqual(errors,[]);console.log('Fix in Opera card passed with fake guests: plan from both reports by room and name, ID numbers never stored or shown in full, only approved fields copied, shared saves hold gender/nationality and last 4 only.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
