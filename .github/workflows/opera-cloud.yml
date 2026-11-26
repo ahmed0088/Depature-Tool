@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'signin (test), audit (read-only) or save'
+        description: 'signin (test), audit (read-only, uses the plan sent from HotelOps) or save (fills empty fields and Saves, only if Save was switched on in HotelOps)'
         required: false
         default: 'signin'
       url:
