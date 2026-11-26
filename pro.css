@@ -3768,7 +3768,7 @@ html, body { background: var(--bg); }
 .gp-cloud-set{margin-top:10px;font-size:.82rem;color:var(--text3)}.gp-cloud-set summary{cursor:pointer}
 .gp-agent-st{margin-top:10px;display:inline-block;padding:4px 10px;border-radius:99px;font-size:.78rem;border:1px solid var(--border);background:var(--card)}.gp-agent-st.on{border-color:color-mix(in srgb,#10b981 55%,var(--border));color:var(--text)}
 .gp-agent-on{display:flex;gap:8px;align-items:center;margin:10px 0 6px;font-size:.88rem;color:var(--text);cursor:pointer}
-:root { --ho-css: "v626"; }
+:root { --ho-css: "v627"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
@@ -4044,6 +4044,8 @@ select option, select optgroup { background: var(--input-bg,var(--card)); color:
 #gpQuick .gq-missing{flex:1 0 100%;margin:0;color:var(--warning,#b37510);font-size:.75rem;line-height:1.5}
 #gpQuick .gq-edit summary:focus-visible,#gpQuick .gq-edit input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(max-width:600px){#gpQuick .gq-edit-fields{grid-template-columns:1fr}#gpQuick .gq-edit .btn{width:100%}#gpQuick .gq-edit{margin-top:0}}
+/* Enrol guests: above 600px the row stayed on one line, so the full-width Review details squeezed the guest name to nothing and pushed the fields off the right edge. It now wraps at every width. */
+@media(min-width:601px){#gpQuick .gq-row{flex-wrap:wrap}#gpQuick .gq-who{flex:1 1 160px}#gpQuick .gq-edit{max-width:100%}}
 
 /* Saved named hotel links for the enrolment sheet and workbench. */
 .gp-portal-picker{margin:0 0 15px;padding:14px;border:1px solid var(--border);border-radius:13px;background:var(--bg2)}
