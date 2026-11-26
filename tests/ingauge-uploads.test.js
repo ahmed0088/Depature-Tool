@@ -17,10 +17,12 @@ test('an unsuccessful second PDF remains an error rather than claiming both are 
  const h=harness(),a=file('new-reservation.pdf','NEW',1);await assert.rejects(h.upload('changes',[a,{name:'unreadable.pdf',bad:true}]),/unreadable.pdf/);assert.equal(h.ctx.pkgEvents['12345678'].length,1);assert.match(h.labels['igFile-changes'].textContent,/1 log loaded/);assert(!h.labels['igFile-changes'].textContent.includes('unreadable.pdf'));
 });
 
-test('the supplied Opera reports parse without unsupported values',()=>{
+const OPERA_JOURNAL='/home/ubuntu/upload/finjrnlbytrans_1916245210.txt',OPERA_RESERVATIONS='/home/ubuntu/upload/res_detail_1916245048.txt';
+// The supplied reports live only on the dev machine; CI and clones skip this check.
+test('the supplied Opera reports parse without unsupported values',{skip:!fs.existsSync(OPERA_JOURNAL)||!fs.existsSync(OPERA_RESERVATIONS)},()=>{
  const manual=require('../manual-upsells.js');
- const journal=manual.parseJournal(fs.readFileSync('/home/ubuntu/upload/finjrnlbytrans_1916245210.txt','utf8'));
- const reservations=manual.parseReservations(fs.readFileSync('/home/ubuntu/upload/res_detail_1916245048.txt','utf8'));
+ const journal=manual.parseJournal(fs.readFileSync(OPERA_JOURNAL,'utf8'));
+ const reservations=manual.parseReservations(fs.readFileSync(OPERA_RESERVATIONS,'utf8'));
  assert.equal(journal.rows.length,801);
  assert.equal(reservations.rows.length,2074);
  assert.equal(reservations.warnings.length,0);
