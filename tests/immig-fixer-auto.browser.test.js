@@ -42,5 +42,14 @@ try{
  const page=await browser.newPage();await page.setContent(html);await page.addScriptTag({content:fixer});
  const why=await page.evaluate(()=>window.__hoFixer._test.goToGuest({room:'0301',name:'Somebody Else'}));
  assert(/no row with this guest/.test(why),why);assert.deepEqual(await page.evaluate(()=>window.__opened),[]);await page.close();
+ // from the dashboard (no In House breadcrumb): opens the Front Desk menu, then In House, by itself
+ {const page=await browser.newPage();await page.setContent(html.replace('<div id="crumb"><a href="#" id="bc" onclick="go(\'list\');return false">In House</a></div>','<nav><a href="#" id="fd" role="button" onclick="document.getElementById(\'dd\').style.display=\'block\';return false">Front Desk</a><ul id="dd" style="display:none"><li><a href="#" role="menuitem" onclick="setTimeout(()=>go(\'list\'),600);return false">Arrivals</a></li><li><a href="#" role="menuitem" onclick="setTimeout(()=>go(\'list\'),600);return false">In House</a></li></ul></nav>').replace("go('list');\n</script>","document.getElementById('app').innerHTML='<h2>Dashboard</h2>';\n</script>"));
+ await page.addScriptTag({content:fixer});
+ const why=await page.evaluate(()=>window.__hoFixer._test.goToGuest({room:'0301',name:'Zed Fakeperson'}));
+ assert.equal(why,'','menu navigation should open the guest: '+why);assert.deepEqual(await page.evaluate(()=>window.__opened),['0301']);assert.equal(await page.evaluate(()=>window.__saved),false);await page.close();}
+ // nowhere to go: the message names the failed step
+ {const page=await browser.newPage();await page.setContent('<body><h2>Dashboard</h2></body>');await page.addScriptTag({content:fixer});
+ const why=await page.evaluate(()=>window.__hoFixer._test.goToGuest({room:'0301',name:'Zed Fakeperson'}));
+ assert(/In House list did not open \(step: /.test(why),why);await page.close();}
  console.log('Auto fixer passed on a mock Opera: opens guests itself, fills only empty gender, never saves, refuses a wrong name.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
