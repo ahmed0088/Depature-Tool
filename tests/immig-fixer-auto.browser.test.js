@@ -79,5 +79,9 @@ try{
  assert.equal(why2,'','second guest from a profile page: '+why2);assert.deepEqual(await page.evaluate(()=>window.__opened),['0301','0302']);
  const logs=await page.evaluate(()=>window.__hoFixer._test.st.log.map(e=>e.result).join('\n'));assert(/rows found: 1/.test(logs)&&/clicking guest name/.test(logs)&&/profile opened/.test(logs),logs);
  await page.close();}
+ // regression (v642): a result row with role=row wrappers inside must still be found as the real <tr> that holds the confirmation link
+ {const page=await browser.newPage();await page.setContent('<table><tbody><tr role="row"><td><a href="#" id="cl">1234567</a></td><td><div role="row">0111</div></td><td>Zed Fakeperson</td></tr></tbody></table>');await page.addScriptTag({content:fixer});
+  const r=await page.evaluate(()=>{const t=window.__hoFixer._test;const a=t.roomRows({room:'0111',name:'Zed Fakeperson'}),b=t.roomRows({room:'0111',name:'Other Person'},true);return [a.length,!!a[0].querySelector('a'),b.length]});
+  assert.deepEqual(r,[1,true,1],'row detection must match the v640 behaviour: '+r);await page.close();}
  console.log('Auto fixer passed on a mock Opera: opens guests itself, fills only empty gender, never saves, refuses a wrong name.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
