@@ -96,7 +96,7 @@
       (skipped.length ? '<details class="imm-more"><summary>Why ' + skipped.length + ' cannot be fixed</summary><div class="imm-small">' + skipped.map(it => 'Room ' + esc(it.room) + ' · ' + esc(it.name) + ' · ' + esc(it.notes.join(' · ') || 'nothing to fill')).join('<br>') + '</div></details>' : '') +
       (!items.length ? '<div class="imm-sub">Nothing to fix. All good.</div>' : '') +
       '<div class="imm-go"><button class="btn gold imm-big" id="immigFixCopy">▶ Start fixing (<span id="immigFixN">' + approvedCount() + '</span> ticked fields)</button> <button class="btn imm-big" id="immigFixCloud">☁ Run in cloud (check only)</button></div>' +
-      '<details class="imm-more" id="immigCloudBox"><summary>Cloud run code</summary><div class="imm-small" id="immigCloudWant" style="margin:6px 0">When the GitHub cloud run asks for your authenticator code, type the 6 digits here and press Send. It is used once and deleted.</div><div style="display:flex;gap:8px"><input id="immigCloudCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code" style="width:130px"><button class="btn" id="immigCloudSend">Send code</button></div></details>' +
+      '<details class="imm-more" id="immigCloudBox"><summary>Cloud run (GitHub)</summary><div class="imm-small" style="margin:6px 0">1. Send the plan. 2. On GitHub run "Opera fixer (cloud)" with mode audit. 3. Type your code here when it asks. The plan is kept only until the run starts, then deleted.</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><button class="btn" id="immigCloudPlan">Send plan to cloud</button><label class="imm-small"><input type="checkbox" id="immigCloudSave"> Allow Save (fills empty fields and saves; full ID numbers are sent)</label></div><div class="imm-small" id="immigCloudRes" style="margin:6px 0"></div><div class="imm-small" id="immigCloudWant" style="margin:6px 0">When the GitHub cloud run asks for your authenticator code, type the 6 digits here and press Send. It is used once and deleted.</div><div style="display:flex;gap:8px"><input id="immigCloudCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code" style="width:130px"><button class="btn" id="immigCloudSend">Send code</button></div></details>' +
       '<div class="imm-small" id="immigFixStatus" style="margin:6px 0">' + esc(S.fxNote || '') + '</div>' + extState() +
       (helperFx() ? '<ol class="imm-3"><li>Press <b>Start fixing</b>. The list goes to your Opera tab.</li><li>In the fixer window there, press <b>Start</b>. It opens each guest and fills the empty boxes.</li><li>Check the guest, press Save in Opera yourself, then press <b>Next guest</b>.</li></ol>' : '<ol class="imm-3"><li>Press <b>Start fixing</b>. It copies the list.</li><li>In Opera: open the fixer window, paste the list, press <b>Load</b>.</li><li>Press <b>Start</b> in the window. It opens each guest and fills the empty boxes. You press Save in Opera.</li></ol>') +
       '<details class="imm-more"><summary>More</summary><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="immigFixSave">Remember gender and nationality</button></div>' +
@@ -114,7 +114,8 @@
     document.getElementById('immigFixCopy').onclick = copyPlan;
     document.getElementById('immigFixCloud').onclick = copyCloudRequest;
     document.getElementById('immigCloudSend').onclick = sendCloudCode;
-    watchCloudWant();
+    document.getElementById('immigCloudPlan').onclick = sendCloudPlan;
+    watchCloudWant(); watchCloudResult();
     document.getElementById('immigFixSave').onclick = saveShared;
     document.getElementById('immigFixLogSave').onclick = saveLog;
     showLog();
@@ -155,6 +156,29 @@
     if (!/^\d{6}$/.test(v)) return toast('Type the 6 digits from your authenticator app.', 'err');
     if (!d) return toast('Not connected to the database.', 'err');
     try { await d.ref('hotels/' + HOTEL_ID + '/operaCloudCode').set({ code: v, at: Date.now() }); el.value = ''; toast('Code sent. The cloud run uses it once.', 'ok'); } catch (_) { toast('Could not send the code.', 'err'); }
+  }
+  // the plan for the GitHub cloud run: a private temporary path, read and deleted by the run when it starts. Names are needed to find the guests; they never go in a log.
+  async function sendCloudPlan() {
+    const d = db(); if (!d) return toast('Not connected to the database.', 'err');
+    if (!approvedCount()) return toast('Tick at least one fix first.', 'err');
+    const save = !!(document.getElementById('immigCloudSave') || {}).checked;
+    const copy = JSON.parse(JSON.stringify(S.plan));
+    if (!save) copy.items.forEach(it => it.fields.forEach(f => { if (f.field === 'idNumber') f.value = String(f.display || '').replace(/\D/g, '').slice(-4).padStart(4, '0'); }));   // read-only: no full ID numbers leave the page
+    const ov = S.opera ? A.validateOperaUrl(S.opera) : null;
+    const code = C.encodePlan(copy, S.ok, { origin: ov && ov.ok ? ov.origin : '' });
+    try { await d.ref('hotels/' + HOTEL_ID + '/operaCloudPlan').set({ code, mode: save ? 'save' : 'audit', at: Date.now() }); await d.ref('hotels/' + HOTEL_ID + '/operaCloudResult').remove().catch(() => {}); toast('Plan sent. Now run "Opera fixer (cloud)" on GitHub (mode ' + (save ? 'save' : 'audit') + ').', 'ok'); } catch (_) { toast('Could not send the plan.', 'err'); }
+  }
+  let resRef = null;
+  function watchCloudResult() {
+    const d = db(); if (!d || resRef) return;
+    try { resRef = d.ref('hotels/' + HOTEL_ID + '/operaCloudResult'); resRef.on('value', snap => {
+      const v = snap.val(), el = document.getElementById('immigCloudRes'); if (!el) return;
+      if (!v) { el.innerHTML = ''; return; }
+      const L = Array.isArray(v.lines) ? v.lines : [], rooms = {}; L.forEach(l => { (rooms[l.room] = rooms[l.room] || []).push(l); });
+      const state = v.state === 'running' ? 'Running…' : v.state === 'failed' ? 'Failed: ' + esc(v.error || '') : 'Done';
+      el.innerHTML = '<b>Cloud run (' + esc(v.mode || '') + '): ' + state + '</b>' + (v.mode === 'save' && v.saved ? '' : ' · read-only') + '<br>' + Object.keys(rooms).map(r => 'Room ' + esc(r) + ': ' + rooms[r].filter(x => x.field !== 'nav').map(x => esc((x.field === 'guest' ? '' : x.field + ' ') + x.result)).join('; ')).join('<br>').slice(0, 4000) + ' <button class="btn" id="immigCloudClear">Clear</button>';
+      const b = document.getElementById('immigCloudClear'); if (b) b.onclick = () => resRef.remove().catch(() => {});
+    }); } catch (_) { resRef = null; }
   }
   let wantRef = null;
   function watchCloudWant() {
