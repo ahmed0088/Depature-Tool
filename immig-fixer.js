@@ -36,18 +36,18 @@
   }
   function operaRow() {
     const ok = S.opera ? A.validateOperaUrl(S.opera) : null;
-    return '<div class="imm-h"><b>🛠 Fix in Opera</b><span>Fills empty gender, nationality and ID fields in a guest\'s Opera profile. It never saves: you press Save.</span></div>' +
-      '<label class="imm-lbl" for="immigOperaUrl">This hotel\'s Opera Cloud link <small>(the link only, never a username or password)</small></label>' +
+    return '<div class="imm-h"><b>Your Opera link</b><span>Paste it once. The fixer only works on this link.</span></div>' +
+      '<label class="imm-lbl" for="immigOperaUrl">Paste your hotel\'s Opera link <small>(link only, no password)</small></label>' +
       '<div class="imm-row"><input id="immigOperaUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://…oraclecloud.com/…/OperaCloud" value="' + esc(S.opera) + '"><button class="btn gold" id="immigOperaSave">Save link</button>' + (ok && ok.ok ? '<a class="btn" id="immigOperaOpen" href="' + esc(ok.url) + '" target="_blank" rel="noopener noreferrer">Open Opera ↗</a>' : '') + '</div>' +
-      '<div class="imm-msg" id="immigOperaMsg">' + (ok && ok.ok ? 'Saved for the team. The fixer only runs on this Opera link.' : 'No link saved yet. Until you save one, the fixer runs on any Opera page.') + '</div>' +
-      '<div class="imm-hint">After you press <b>Analyse</b>, the list of fixes appears under the results, above the guest table.</div>';
+      '<div class="imm-msg" id="immigOperaMsg">' + (ok && ok.ok ? 'Saved.' : 'No link saved yet.') + '</div>' +
+      '';
   }
   function renderShell() {
     let el = document.getElementById('immigOperaSetup');
     if (!el) {
-      const panel = document.getElementById('panel-immig'), anchor = panel && (panel.querySelector('.imm-steps') || panel.querySelector('.howto'));
+      const panel = document.getElementById('panel-immig'), anchor = panel && (document.getElementById('immigStep4Slot') || panel.querySelector('.imm-steps') || panel.querySelector('.howto'));
       el = document.createElement('div'); el.id = 'immigOperaSetup'; el.className = 'card imm-opera';
-      if (anchor) anchor.after(el); else { const res = document.getElementById('immigResults2'); if (!res) return; res.insertBefore(el, res.firstChild); }
+      if (anchor && anchor.id === 'immigStep4Slot') anchor.appendChild(el); else if (anchor) anchor.after(el); else { const res = document.getElementById('immigResults2'); if (!res) return; res.insertBefore(el, res.firstChild); }
     }
     const typing = document.activeElement && document.activeElement.id === 'immigOperaUrl';
     if (!typing) el.innerHTML = operaRow();
@@ -86,13 +86,22 @@
   function paint() {
     const card = document.getElementById('immigFixerCard'); if (!card || !S.plan) return;
     const items = S.plan.items;
-    card.innerHTML = '<div style="font-family:var(--mono);font-size:0.72rem;margin-bottom:8px"><b>🛠 Fix in Opera</b> · fills only EMPTY fields in a guest\'s Opera profile, never saves (you press Save). ID numbers stay on this screen only, never stored or logged in full.</div>' +
-      (items.length ? '<div style="max-height:46vh;overflow:auto">' + items.map(it => '<div style="border:1px solid var(--border);border-radius:9px;padding:7px 10px;margin:6px 0"><b style="color:var(--sky)">Room ' + esc(it.room) + '</b> · ' + esc(it.name) + (it.notes.length ? '<div style="font-size:0.62rem;color:var(--amber)">' + it.notes.map(esc).join(' · ') + '</div>' : '') + '<div style="font-size:0.7rem;margin-top:4px">' + it.fields.map(f => chip(it, f)).join('') + '</div></div>').join('') + '</div>' : '<div style="font-size:0.72rem;color:var(--text3)">Nothing to fix from these files.</div>') +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px"><button class="btn" id="immigFixCopy">Copy plan for the Opera fixer (<span id="immigFixN">' + approvedCount() + '</span> approved)</button><button class="btn" id="immigFixSave">Save gender/nationality for the team</button></div>' +
-      '<div style="margin-top:12px;font-family:var(--mono);font-size:0.66rem;color:var(--text3)">Fixer change log (paste what "Copy log" gave you in Opera)</div><textarea id="immigFixLogIn" style="width:100%;height:46px;font:11px monospace"></textarea><div style="display:flex;gap:8px;margin-top:4px"><button class="btn" id="immigFixLogSave">Save log for the team</button></div><div id="immigFixLogList" style="font:10px monospace;color:var(--text3);margin-top:6px;white-space:pre-wrap"></div>';
+    const full = it => it.fields.length && it.fields.every(f => S.ok[it.id][f.field]);
+    const ready = items.filter(it => it.fields.length && full(it)), needs = items.filter(it => it.fields.length && !full(it)), skipped = items.filter(it => !it.fields.length);
+    const row = it => '<div style="border:1px solid var(--border);border-radius:9px;padding:7px 10px;margin:6px 0"><b style="color:var(--sky)">Room ' + esc(it.room) + '</b> · ' + esc(it.name) + (it.notes.length ? '<div style="font-size:0.62rem;color:var(--amber)">' + it.notes.map(esc).join(' · ') + '</div>' : '') + '<div style="font-size:0.7rem;margin-top:4px">' + it.fields.map(f => chip(it, f)).join('') + '</div></div>';
+    card.innerHTML = '<div class="imm-h"><b>Step 4 · Fix the guests</b></div>' +
+      '<div class="imm-sum"><span class="ok">✔ ' + ready.length + ' ready</span><span class="ask">✋ ' + needs.length + ' need your choice</span><span class="skip">' + skipped.length + ' cannot be fixed</span></div>' +
+      (needs.length ? '<div class="imm-sub">Choose these, then they are ready too:</div><div style="max-height:46vh;overflow:auto">' + needs.map(row).join('') + '</div>' : '') +
+      (ready.length ? '<details class="imm-more"><summary>See the ' + ready.length + ' ready guests</summary>' + ready.map(row).join('') + '</details>' : '') +
+      (skipped.length ? '<details class="imm-more"><summary>Why ' + skipped.length + ' cannot be fixed</summary><div class="imm-small">' + skipped.map(it => 'Room ' + esc(it.room) + ' · ' + esc(it.name) + ' · ' + esc(it.notes.join(' · ') || 'nothing to fill')).join('<br>') + '</div></details>' : '') +
+      (!items.length ? '<div class="imm-sub">Nothing to fix. All good.</div>' : '') +
+      '<div class="imm-go"><button class="btn gold imm-big" id="immigFixCopy">▶ Start fixing (<span id="immigFixN">' + approvedCount() + '</span> ticked fields)</button></div>' +
+      '<ol class="imm-3"><li>Press <b>Start fixing</b>. It copies the list.</li><li>In Opera: open the fixer window, paste the list, press <b>Load</b>.</li><li>Press <b>Start</b> in the window. It opens each guest and fills the empty boxes. You press Save in Opera.</li></ol>' +
+      '<details class="imm-more"><summary>More</summary><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="immigFixSave">Remember gender and nationality</button></div>' +
+      '<div class="imm-small" style="margin-top:10px">What the fixer changed (paste its log here)</div><textarea id="immigFixLogIn" style="width:100%;height:46px;font:11px monospace"></textarea><div style="margin-top:4px"><button class="btn" id="immigFixLogSave">Save this log</button></div><div id="immigFixLogList" style="font:10px monospace;color:var(--text3);margin-top:6px;white-space:pre-wrap"></div></details>';
     card.onchange = e => {
       const t = e.target;
-      if (t.dataset && t.dataset.ok) { const [id, f] = t.dataset.ok.split('|'); S.ok[id][f] = t.checked; const n = document.getElementById('immigFixN'); if (n) n.textContent = approvedCount(); }
+      if (t.dataset && t.dataset.ok) { const [id, f] = t.dataset.ok.split('|'); S.ok[id][f] = t.checked; paint(); }
       else if (t.dataset && t.dataset.edit) {
         const [id, field] = t.dataset.edit.split('|'), it = S.plan.items.find(x => x.id === id), f = it && it.fields.find(x => x.field === field);
         if (f) { f.value = t.value; f.display = field === 'nationality' && t.value ? t.value + ' · ' + t.selectedOptions[0].textContent.split(' · ')[1] : t.value; f.source = 'you chose'; S.ok[id][field] = !!t.value; if (field === 'idType' && !t.value) S.ok[id].idNumber = false;
@@ -108,7 +117,7 @@
   async function copyPlan() {
     if (!approvedCount()) return toast('Approve at least one field first.', 'err');
     const code = C.encodePlan(S.plan, S.ok, { origin: S.opera && A.validateOperaUrl(S.opera).ok ? A.validateOperaUrl(S.opera).origin : '' });
-    try { await navigator.clipboard.writeText(code); toast('Plan copied. Paste it in the Opera fixer window. ID numbers are inside it: do not share it.', 'ok'); } catch (_) { window.prompt('Copy this plan:', code); }
+    try { await navigator.clipboard.writeText(code); toast('Copied. Now paste it in the fixer window in Opera. It has ID numbers: do not share it.', 'ok'); } catch (_) { window.prompt('Copy this plan:', code); }
   }
   async function saveShared() {
     const d = db(); if (!d) return toast('Not connected to the database.', 'err');
@@ -136,11 +145,24 @@
   window.immigFixerRender = async function () {
     const res = document.getElementById('immigResults2'); if (!res) return;
     let card = document.getElementById('immigFixerCard');
-    if (!card) { card = document.createElement('div'); card.id = 'immigFixerCard'; card.style.cssText = 'margin:12px 0;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--r)'; const tw = res.querySelector('.tbl-wrap'); res.insertBefore(card, tw || null); }
+    if (!card) { card = document.createElement('div'); card.id = 'immigFixerCard'; card.style.cssText = 'margin:12px 0;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--r)'; res.insertBefore(card, res.firstChild); }
     renderShell();
     try { if (typeof window.immigReconcileRender === 'function') window.immigReconcileRender(); } catch (_) {}
     build(); paint(); await loadShared(); if (Object.keys(S.shared).length || S.uaeType) { build(); paint(); }
   };
+
+  // one clear next step at a time
+  function guide() {
+    const nx = document.getElementById('immigStep4Slot') && document.getElementById('immNext'); if (!nx) return;
+    const vic = document.getElementById('immigInhouseXmlLabel'), vOk = !!(vic && !/not loaded/i.test(vic.textContent || '')), res = document.getElementById('immigResults2'), shown = !!(res && res.style.display !== 'none' && S.plan);
+    const paste = document.getElementById('immigPasteInput2'), oOk = shown || !!(paste && paste.value.trim().length > 50);
+    const step = shown ? 4 : (!vOk ? 1 : (!oOk ? 2 : 3));
+    const txt = { 1: 'Next: Step 1. Choose the Vicas file.', 2: 'Next: Step 2. Choose the Opera file.', 3: 'Next: Step 3. Press Check guests.', 4: 'Next: Step 4. Press Start fixing.' }[step];
+    if (nx.textContent !== txt) nx.textContent = txt;
+    document.querySelectorAll('#panel-immig [data-step]').forEach(n => n.classList.toggle('imm-now', Number(n.dataset.step) === step));
+    const c = document.getElementById('immigFixerCard'); if (c) c.classList.toggle('imm-now', step === 4);
+  }
+  setInterval(guide, 700); setTimeout(guide, 300);
   window.hoImmigFixerState = S;
   // the Opera link box is on the page from the start, before any report is loaded
   const boot = () => { try { renderShell(); loadOperaLink(); } catch (_) {} };
