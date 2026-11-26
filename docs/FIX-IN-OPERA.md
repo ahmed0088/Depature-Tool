@@ -11,4 +11,8 @@ Immigration Check → **Fix in Opera** card. Upload the Opera immigration report
 
 Safety: the fixer never clicks Save, OK, Submit, Apply, Confirm, Done, Yes, Delete or Cancel. ID numbers live only in the browser tab (the copied plan contains them: do not share it). The shared record and the log keep gender and nationality codes and **only the last 4 of an ID number**, never names. Nothing real goes into the repo; tests use made-up guests and a mock Opera page.
 
-Not done (v2): opening each room by itself, auto-save, Emirates ID type code confirmation (the plan proposes `EID`; the fixer fills it only if Opera's list has it, otherwise type it yourself).
+Not done (v2): opening each room by itself and auto-save.
+
+ID type (matches the real Opera list): UAE documents are `RES` or `IDC`. Opera has no Emirates ID code, so the plan shows a RES/IDC choice on each Emirates ID row (default none) and remembers your pick for the hotel. Other documents get `PAS` (passport). `GCC ID` is for other GCC nationals' cards and is never chosen for you. An ID number is only typed together with its ID type. Opera shows ID numbers masked, so a masked number counts as already filled; nothing is typed over it.
+
+On the Opera page: Manage Profile > Identification. Nationality is a 2-letter code, gender is M or F. Fields are matched by their label text. The fixer clicks Edit but never Save, Cancel, New or the red X on a document tab.
