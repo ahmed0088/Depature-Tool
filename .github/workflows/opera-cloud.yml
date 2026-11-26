@@ -1,0 +1,44 @@
+name: Opera fixer (cloud)
+run-name: Opera fixer · ${{ inputs.mode || 'signin' }}
+# Signs in to Opera Cloud on GitHub's machine and runs the HotelOps profile fixer (scripts/opera-cloud.js).
+# mode signin = only sign in and open In House (no guest data touched). audit = read-only. save = fill empty fields and Save.
+# Needs the Secrets OPERA_URL, OPERA_USER, OPERA_PASS, OPERA_TOTP. Without them it stops with a clear message.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'signin (test), audit (read-only) or save'
+        required: false
+        default: 'signin'
+      limit:
+        description: 'Only the first N rooms (0 = all)'
+        required: false
+        default: '2'
+permissions:
+  contents: read
+concurrency:
+  group: opera-cloud
+  cancel-in-progress: false
+jobs:
+  run:
+    if: github.repository == 'ahmed0088/Depature-Tool'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Browser
+        run: |
+          npm install --no-save --no-audit --no-fund playwright-core@1.49.1
+          if [ -x /usr/bin/google-chrome ]; then echo "CHROME_PATH=/usr/bin/google-chrome" >> "$GITHUB_ENV"; else npx playwright-core install --with-deps chromium; fi
+      - name: Run
+        run: node scripts/opera-cloud.js
+        env:
+          MODE: ${{ inputs.mode }}
+          LIMIT: ${{ inputs.limit }}
+          OPERA_URL: ${{ secrets.OPERA_URL }}
+          OPERA_USER: ${{ secrets.OPERA_USER }}
+          OPERA_PASS: ${{ secrets.OPERA_PASS }}
+          OPERA_TOTP: ${{ secrets.OPERA_TOTP }}
