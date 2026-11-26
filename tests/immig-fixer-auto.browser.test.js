@@ -11,8 +11,8 @@ let cur=null;
 function go(v,room){const a=document.getElementById('app');
  if(v==='list'){a.innerHTML='<div id="sp"><label for="rin">Room</label><input id="rin"><button id="sb">Search</button></div><table id="t"><thead><tr><th>Confirmation Number</th><th>Room</th><th>Name</th></tr></thead><tbody id="tb"></tbody></table>';
   document.getElementById('sb').onclick=()=>{const q=document.getElementById('rin').value.replace(/^0+/,'');document.getElementById('tb').innerHTML=Object.keys(guests).filter(r=>!q||r.replace(/^0+/,'')===q).map(r=>'<tr><td><a href="#" class="cf" data-r="'+r+'">'+guests[r].conf+'</a></td><td>'+r+'</td><td>'+guests[r].name+'</td></tr>').join('');
-   document.querySelectorAll('.cf').forEach(l=>l.onclick=e=>{e.preventDefault();go('res',l.dataset.r)});};}
- if(v==='res'){cur=room;window.__opened.push(room);a.innerHTML='<h3>Manage Reservation</h3><a href="#" id="gn">'+guests[room].title+' '+guests[room].name+'</a>';document.getElementById('gn').onclick=e=>{e.preventDefault();go('prof',room)};}
+   document.querySelectorAll('.cf').forEach(l=>l.onclick=e=>{e.preventDefault();window.__clicks.push('CONF');setTimeout(()=>go('res',l.dataset.r),900)});};}
+ if(v==='res'){cur=room;window.__opened.push(room);a.innerHTML='<h3>Manage Reservation</h3><a href="#" id="bk" onclick="go(&quot;list&quot;);return false">Back to In House</a><div>Reservation Overview</div><a href="#" id="gn">'+guests[room].title+' '+guests[room].name+'</a>';document.getElementById('gn').onclick=e=>{e.preventDefault();window.__clicks.push('NAME');setTimeout(()=>go('prof',room),700)};}
  if(v==='prof'){a.innerHTML='<h3>Manage Profile</h3><ul><li><a href="#" id="ov">Overview</a></li><li><a href="#" id="idm">Identification</a></li></ul><h2>'+guests[room].title+' '+guests[room].name+'</h2><div id="pg"></div>';document.getElementById('idm').onclick=e=>{e.preventDefault();go('id',room)};}
  if(v==='id'){const g=guests[room];a.innerHTML='<h3>Manage Profile</h3><h2>'+g.title+' '+g.name+'</h2><section><h3>Personal Details</h3><a href="#" id="edit">Edit</a><div><label for="gin">Gender</label><span id="gv">'+(g.gender||'—')+'</span></div><div><label for="nin">Nationality</label><span>GH Ghana</span></div></section><button id="save">Save</button>';
   document.getElementById('save').onclick=()=>{window.__saved=true};
@@ -41,7 +41,16 @@ try{
  // wrong guest in the plan: nothing opens
  const page=await browser.newPage();await page.setContent(html);await page.addScriptTag({content:fixer});
  const why=await page.evaluate(()=>window.__hoFixer._test.goToGuest({room:'0301',name:'Somebody Else'}));
- assert(/no row with this guest/.test(why),why);assert.deepEqual(await page.evaluate(()=>window.__opened),[]);await page.close();
+ assert(/not found in the In House list/.test(why),why);assert.deepEqual(await page.evaluate(()=>window.__opened),[]);await page.close();
+ // room not in the In House list: skipped with a clear message, not a failure of the whole run
+ {const page=await browser.newPage();await page.setContent(html);await page.addScriptTag({content:fixer});
+ const why=await page.evaluate(()=>window.__hoFixer._test.goToGuest({room:'0106',name:'Nobody Here'}));
+ assert(/not found in the In House list/.test(why)&&!/In House list did not open/.test(why),why);await page.close();}
+ // the guest name is clicked only after the reservation page loaded (the reservation renders 900 ms after the click), and the way back is Back to In House
+ {const page=await browser.newPage();await page.setContent(html);await page.addScriptTag({content:fixer});
+ const why=await page.evaluate(()=>window.__hoFixer._test.goToGuest({room:'0301',name:'Zed Fakeperson'}));assert.equal(why,'',why);
+ const cl=await page.evaluate(()=>window.__clicks);assert(cl.indexOf('CONF')>=0&&cl.indexOf('NAME')>cl.indexOf('CONF'),JSON.stringify(cl));
+ assert.deepEqual(await page.evaluate(()=>window.__opened),['0301']);await page.close();}
  // from the dashboard (no In House breadcrumb): opens the Front Desk menu, then In House, by itself
  {const page=await browser.newPage();await page.setContent(html.replace('<div id="crumb"><a href="#" id="bc" onclick="go(\'list\');return false">In House</a></div>','<nav><a href="#" id="fd" role="button" onclick="document.getElementById(\'dd\').style.display=\'block\';return false">Front Desk</a><ul id="dd" style="display:none"><li><a href="#" role="menuitem" onclick="setTimeout(()=>go(\'list\'),600);return false">Arrivals</a></li><li><a href="#" role="menuitem" onclick="setTimeout(()=>go(\'list\'),600);return false">In House</a></li></ul></nav>').replace("go('list');\n</script>","document.getElementById('app').innerHTML='<h2>Dashboard</h2>';\n</script>"));
  await page.addScriptTag({content:fixer});
