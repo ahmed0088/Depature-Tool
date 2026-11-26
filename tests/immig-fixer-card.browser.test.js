@@ -11,9 +11,10 @@ try{const page=await browser.newPage({viewport:{width:1200,height:900},serviceWo
  await page.setContent(`<!doctype html><body><textarea id="immigPasteInput2"></textarea><div id="immigError2"><span id="immigErrorMsg2"></span></div><span id="immigTabCount"></span><div id="immigMissingWrap"></div><div id="immigMissingBody"></div><span id="immigInhouseXmlLabel"></span><div id="immigResults2" style="display:none"><div id="immigKpis2"></div><div id="immigMeta2"></div><div id="immigFilters2"><button data-if="all" class="fchip"></button></div><input id="immigSearch2"><div class="tbl-wrap"><table><tbody id="immigTable2"></tbody></table></div></div>`);
  await page.evaluate(()=>{window.escapeHtml=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));window.toasts=[];window.showToast=(m,t)=>toasts.push(m);window.HOTEL_ID='h1';window.writes=[];
   const store={};window.firebase={database:()=>({ref:p=>({once:async()=>({val:()=>null}),update:async v=>{writes.push([p,JSON.stringify(v)])},push:async v=>{writes.push([p,JSON.stringify(v)])},limitToLast(){return this}})})};});
- for(const f of ['reports.js','opera-auto-core.js','immig-fixer-core.js','immig-fixer.js'])await page.addScriptTag({content:read(f)});
+ for(const f of ['reports.js','opera-auto-core.js','reconcile-core.js','reconcile-card.js','immig-fixer-core.js','immig-fixer.js'])await page.addScriptTag({content:read(f)});
  await page.evaluate(([imm,inh])=>{const p=_immigParseInhouseXML(inh);_immigInhouseList=p.list;_immigNatMap=p.natMap;_immigPassportMap=p.docMap;_immigInhouseRoomGuests=p.roomMap;document.getElementById('immigPasteInput2').value=imm;processImmig2(true);},[IMM,INH]);
  await page.waitForSelector('#immigFixerCard input[type=checkbox]');
+ const rc=await page.locator('#immigReconCard').innerText();assert(/2\s*guests match/.test(rc)&&/Only in the Opera report/.test(rc)&&/Bob Faketwo/.test(rc)&&!/Only in the Vicas list/.test(rc),'reconcile card: Bob only in Opera, two match: '+rc);
  const text=await page.locator('#immigFixerCard').innerText();
  assert(/Room 102/.test(text)&&/ET · Ethiopia/.test(text),'nationality from Vicas by room+name');assert(/••••4321/.test(text)&&!/ZZ7654321/.test(await page.locator('#immigFixerCard').innerHTML()),'full ID number never shown');
  // defaults: nationality on, ID off, guessed/none gender off
