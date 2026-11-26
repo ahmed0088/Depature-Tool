@@ -1,0 +1,202 @@
+/* HotelOps · Opera profile fixer (opt-in, separate from the Opera reader)
+ *
+ * Fills EMPTY Gender / Nationality / ID type / ID number in a guest's Opera Cloud profile, from a plan
+ * he approved in HotelOps (Immigration Check → Fix in Opera → "Copy plan"). It never saves.
+ *
+ * What it does, in order, for the one guest he picked:
+ *  1. Checks the profile on screen is that guest (every name word, any order). Wrong or unclear name: it stops.
+ *  2. Reads each field. A field that already has a value (a masked number counts as a value) is never touched.
+ *  3. DRY RUN is on by default: it only shows what it would fill. Turn it off to fill.
+ *  4. Clicks the profile's "Edit" button if the fields are not open, types the approved values, reads them
+ *     back, and highlights what it changed. It STOPS there: pressing Save is his job.
+ * It never clicks Save, OK, Submit, Apply, Confirm, Done, Yes, Delete or Cancel (hard-coded refusal), never
+ * touches any other field, and never sends anything anywhere. The plan stays in this tab. The change log
+ * keeps the room, the field and the new value (ID numbers as last 4 only), never a name.
+ *
+ * Use: Opera Cloud tab → F12 → Console → paste → Enter. Paste the plan into the small window and press Load.
+ */
+(function () {
+  'use strict';
+  if (window.__hoFixer && window.__hoFixer.open) { window.__hoFixer.open(); return; }
+  const FORBIDDEN = /\b(save|ok|submit|apply|confirm|done|yes|delete|remove|cancel|check ?in|check ?out|post|settle|finish|close|discard)\b/i;
+  const TITLES = new Set(['mr', 'mrs', 'ms', 'miss', 'dr', 'prof', 'mstr', 'master', 'sir', 'madam']);
+  const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = s => fold(s).split(' ').filter(t => t && !TITLES.has(t));
+  const last4 = v => { const s = String(v || '').replace(/\s+/g, ''); return s ? (s.length > 4 ? '••••' + s.slice(-4) : '••••') : ''; };
+  const FIELDS = { gender: 'Gender', nationality: 'Nationality', idType: 'ID Type', idNumber: 'ID Number' };
+  const VALID_NAT = /^[A-Z]{2}$/;
+  const st = { plan: null, cur: null, dry: true, log: [], busy: false };
+  try { st.log = JSON.parse(sessionStorage.getItem('hoFixerLog') || '[]'); } catch (_) {}
+  const saveLog = () => { try { sessionStorage.setItem('hoFixerLog', JSON.stringify(st.log.slice(-300))); } catch (_) {} };
+
+  // ── plan decode (same format and checksum as immig-fixer-core.js) ──
+  function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h.toString(36); }
+  function decode(text) {
+    const m = /^HOFIX1\.([a-z0-9]+)\.([A-Za-z0-9+/=]+)$/.exec(String(text || '').trim());
+    if (!m) throw new Error('That is not a plan. Copy it again from HotelOps.');
+    let body, plan; try { body = decodeURIComponent(escape(atob(m[2]))); plan = JSON.parse(body); } catch (_) { throw new Error('The plan could not be read.'); }
+    if (hash(body) !== m[1]) throw new Error('The plan was changed or cut short. Copy it again.');
+    if (!plan || plan.v !== 1 || !Array.isArray(plan.items)) throw new Error('Unsupported plan.');
+    plan.items.forEach(it => it.fields.forEach(f => {
+      if (!FIELDS[f.field] || typeof f.value !== 'string' || !f.value) throw new Error('A plan field is not allowed.');
+      if (f.field === 'gender' && !/^[MF]$/.test(f.value)) throw new Error('Gender must be M or F.');
+      if (f.field === 'nationality' && !VALID_NAT.test(f.value)) throw new Error('Bad country code.');
+    }));
+    return plan;
+  }
+
+  // ── screen reading (labels, not Opera internals) ──
+  const vis = el => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none'; };
+  const own = el => (el.textContent || '').replace(/\s+/g, ' ').trim();
+  function profileName() {
+    const root = document.body;
+    const re = /^(?:Mr|Mrs|Ms|Miss|Dr|Prof|Mstr)\.?\s+([A-Za-z][^\n]{1,60})$/i;
+    const nodes = [...root.querySelectorAll('h1,h2,h3,[class*="title"],[class*="name"],span,div')].filter(vis).slice(0, 600);
+    for (const n of nodes) {
+      if (n.children.length > 2) continue;
+      const t = own(n); const m = re.exec(t);
+      if (m && t.length < 70) return t;
+    }
+    return '';
+  }
+  function nameOk(planName, shown) {
+    const A = words(planName), B = words(shown);
+    if (!A.length || A.length !== B.length) return false;
+    const sb = new Set(B); return A.every(t => sb.has(t));
+  }
+  /** the value box next to a label ("Gender", "Nationality", "ID Number"), as { el, value, kind } */
+  function fieldFor(label, scope) {
+    const lab = fold(label), root = scope || document.body;
+    const labels = [...root.querySelectorAll('label,span,div,th,td,oj-label')].filter(n => vis(n) && n.children.length === 0 && fold(own(n)) === lab);
+    for (const l of labels) {
+      let box = null;
+      if (l.tagName === 'LABEL' && l.htmlFor) box = document.getElementById(l.htmlFor);
+      let p = l.parentElement;
+      for (let i = 0; i < 4 && p && !box; i++, p = p.parentElement) {
+        box = p.querySelector('input:not([type=hidden]):not([type=checkbox]):not([type=password]),select,textarea,[role=combobox]');
+      }
+      if (box) return { el: box, value: 'value' in box ? box.value : own(box), editable: true, label: l };
+      // read-only display: the text right after the label
+      const holder = l.parentElement; if (holder) {
+        const txt = own(holder).replace(own(l), '').trim();
+        return { el: null, value: txt, editable: false, label: l };
+      }
+    }
+    return null;
+  }
+  const FIELD_LABELS = { gender: ['Gender'], nationality: ['Nationality'], idType: ['ID Type'], idNumber: ['ID Number'] };
+  function readField(f) {
+    for (const lb of FIELD_LABELS[f]) { const r = fieldFor(lb); if (r) return r; }
+    return null;
+  }
+  const isEmpty = v => { const s = String(v == null ? '' : v).trim(); return !s || /^[-–—_.]+$/.test(s) || /^(unknown|u|n\/a|none)$/i.test(s); };
+
+  // ── the only clicks it can make ──
+  function safeClick(el) {
+    const label = (el.getAttribute('aria-label') || own(el) || el.value || '').trim();
+    if (FORBIDDEN.test(label)) throw new Error('Refused to click "' + label.slice(0, 30) + '". Only he presses it.');
+    el.click();
+  }
+  function findEditButtons() {
+    return [...document.querySelectorAll('button,a,[role=button],oj-button')].filter(b => vis(b) && /^edit$/i.test((b.getAttribute('aria-label') || own(b)).trim()));
+  }
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const setNative = (el, v) => {
+    const proto = el.tagName === 'SELECT' ? HTMLSelectElement.prototype : el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const d = Object.getOwnPropertyDescriptor(proto, 'value'); (d && d.set ? d.set : (x, y) => { x.value = y; }).call(el, v);
+  };
+  async function type(el, text) {
+    el.focus(); setNative(el, ''); el.dispatchEvent(new Event('input', { bubbles: true }));
+    if (el.tagName === 'SELECT') {
+      const o = [...el.options].find(o => fold(o.value) === fold(text) || fold(o.textContent) === fold(text) || fold(o.textContent).startsWith(fold(text) + ' '));
+      if (!o) return false; setNative(el, o.value); el.dispatchEvent(new Event('change', { bubbles: true })); return true;
+    }
+    setNative(el, text); el.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(250);
+    // a list that opens under the box (Oracle JET combobox): pick the one row that starts with the value
+    const opts = [...document.querySelectorAll('[role=option],li[role=option],.oj-listbox-result,.oj-listbox-result-label')].filter(vis).filter(o => !FORBIDDEN.test(own(o)));
+    const want = fold(text), pick = opts.filter(o => { const t = fold(own(o)); return t === want || t.startsWith(want + ' ') || t.startsWith(want); });
+    if (pick.length === 1) { pick[0].click(); await sleep(150); }
+    else if (pick.length > 1) return false;
+    el.dispatchEvent(new Event('change', { bubbles: true })); el.dispatchEvent(new Event('blur', { bubbles: true }));
+    return true;
+  }
+  const say = (m, bad) => { if (UI.msg) { UI.msg.textContent = m; UI.msg.style.color = bad ? '#c0392b' : '#1b6b3a'; } };
+  function logIt(item, field, value, result) {
+    const e = { t: new Date().toISOString(), hotel: (st.plan && st.plan.hotel) || '', room: item.room, arrival: item.arrival || '', field, to: field === 'idNumber' ? last4(value) : value, result, dry: st.dry };
+    st.log.push(e); saveLog(); renderLog();
+  }
+
+  /** read-only check: is the right guest open, and which approved fields are empty */
+  function check(item) {
+    const shown = profileName();
+    if (!shown) return { ok: false, why: 'No guest profile found on this screen. Open the guest\'s profile first.' };
+    if (!nameOk(item.name, shown)) return { ok: false, why: 'The profile open is not room ' + item.room + '\'s guest. Nothing was changed.' };
+    const rows = item.fields.map(f => {
+      const r = readField(f.field);
+      return { f, found: !!r, empty: r ? isEmpty(r.value) : false, editable: r ? r.editable : false, current: r ? r.value : '' };
+    });
+    return { ok: true, rows };
+  }
+  async function fill(item) {
+    if (st.busy) return; st.busy = true;
+    try {
+      const c = check(item);
+      if (!c.ok) { say(c.why, true); item.fields.forEach(f => logIt(item, f.field, f.value, 'refused: wrong or no profile')); return; }
+      const todo = c.rows.filter(r => r.found && r.empty);
+      c.rows.filter(r => !r.found).forEach(r => logIt(item, r.f.field, r.f.value, 'field not found on screen'));
+      c.rows.filter(r => r.found && !r.empty).forEach(r => logIt(item, r.f.field, r.f.value, 'skipped: already has a value'));
+      if (!todo.length) { say('Nothing to fill: every approved field is already set or was not found.', false); return; }
+      if (st.dry) { todo.forEach(r => logIt(item, r.f.field, r.f.value, 'dry run: would fill')); say('Dry run: would fill ' + todo.map(r => FIELDS[r.f.field]).join(', ') + '. Untick Dry run to fill.', false); return; }
+      if (todo.some(r => !r.editable)) {
+        const btns = findEditButtons();
+        if (!btns.length) { say('The fields are read-only and no Edit button was found. Open Edit yourself, then press Fill again.', true); return; }
+        // the Edit of the panel that holds the first needed field (nearest ancestor that contains one)
+        const first = readField(todo[0].f.field), scopeBtn = (first && first.label && btns.find(b => { let p = first.label.parentElement; while (p) { if (p.contains(b)) return true; p = p.parentElement; } return false; })) || btns[0];
+        safeClick(scopeBtn); await sleep(700);
+      }
+      const done = [];
+      for (const r of todo) {
+        const cur = readField(r.f.field);
+        if (!cur || !cur.editable) { logIt(item, r.f.field, r.f.value, 'field not editable after Edit'); continue; }
+        if (!isEmpty(cur.value)) { logIt(item, r.f.field, r.f.value, 'skipped: filled meanwhile'); continue; }
+        const picked = await type(cur.el, r.f.value);
+        const back = readField(r.f.field), shownVal = back ? String(back.value) : '';
+        const good = picked && fold(shownVal).startsWith(fold(r.f.value));
+        if (good) { cur.el.style.outline = '3px solid #1b9c5a'; cur.el.style.outlineOffset = '2px'; done.push(FIELDS[r.f.field]); logIt(item, r.f.field, r.f.value, 'filled, not saved'); }
+        else { logIt(item, r.f.field, r.f.value, 'could not fill: type it yourself'); }
+      }
+      say(done.length ? 'Filled ' + done.join(', ') + '. Check them, then press Save in Opera yourself.' : 'Could not fill. Use the values shown in the list and type them yourself.', !done.length);
+    } catch (e) { say(String(e.message || e), true); }
+    finally { st.busy = false; }
+  }
+
+  // ── the small window (Shadow DOM, so Opera's styles cannot touch it) ──
+  const UI = {};
+  const host = document.createElement('div'); host.setAttribute('data-hotelops', 'fixer');
+  host.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:2147483000;width:330px;font:12px system-ui,sans-serif';
+  const sh = host.attachShadow({ mode: 'closed' });
+  sh.innerHTML = '<style>*{box-sizing:border-box}.w{background:#fff;color:#1d2433;border:1px solid #c9d1e0;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.25);overflow:hidden}.h{background:#243b6b;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;cursor:move}.b{padding:10px;max-height:60vh;overflow:auto}textarea{width:100%;height:46px;font:11px monospace}button{font:inherit;padding:5px 9px;border-radius:7px;border:1px solid #9aa6bf;background:#f3f6fc;cursor:pointer}button.p{background:#243b6b;color:#fff;border-color:#243b6b}.r{border:1px solid #dde3ef;border-radius:8px;padding:6px 8px;margin:6px 0;cursor:pointer}.r.on{border-color:#243b6b;background:#eef3ff}small{color:#5b6680}.m{margin:6px 0;min-height:16px}.g{font:10px monospace;color:#5b6680;max-height:80px;overflow:auto;white-space:pre-wrap}</style>' +
+    '<div class="w"><div class="h"><b>Opera profile fixer</b><span id="x" style="cursor:pointer">–</span></div><div class="b" id="body"><small>Fills empty fields only. Never saves: you press Save.</small>' +
+    '<textarea id="plan" placeholder="Paste the plan from HotelOps"></textarea><div><button id="load" class="p">Load plan</button> <label><input type="checkbox" id="dry" checked> Dry run</label></div><div class="m" id="msg"></div><div id="list"></div><div style="margin-top:6px"><button id="fillb" class="p" disabled>Check &amp; fill the selected room</button></div><div style="margin-top:8px"><small>Change log</small> <button id="copyl">Copy log</button><div class="g" id="log"></div></div></div></div>';
+  UI.msg = sh.getElementById('msg');
+  function renderList() {
+    const l = sh.getElementById('list'); l.textContent = '';
+    if (!st.plan) return;
+    st.plan.items.forEach(it => {
+      const d = document.createElement('div'); d.className = 'r' + (st.cur === it ? ' on' : '');
+      d.innerHTML = '<b></b> <small></small>'; d.firstChild.textContent = 'Room ' + it.room;
+      d.lastChild.textContent = it.fields.map(f => FIELDS[f.field] + ': ' + (f.field === 'idNumber' ? last4(f.value) : f.value)).join(' · ');
+      d.onclick = () => { st.cur = it; renderList(); sh.getElementById('fillb').disabled = false; say('Open room ' + it.room + '\'s guest profile in Opera, then press the button.', false); };
+      l.appendChild(d);
+    });
+  }
+  function renderLog() { sh.getElementById('log').textContent = st.log.slice(-12).map(e => e.t.slice(11, 19) + ' r' + e.room + ' ' + e.field + ' ' + e.to + ' ' + e.result + (e.dry ? ' (dry)' : '')).join('\n'); }
+  sh.getElementById('load').onclick = () => { try { st.plan = decode(sh.getElementById('plan').value); st.cur = null; renderList(); say('Plan loaded: ' + st.plan.items.length + ' room(s). Pick a room.', false); } catch (e) { say(e.message, true); } };
+  sh.getElementById('dry').onchange = e => { st.dry = e.target.checked; say(st.dry ? 'Dry run: nothing will be typed.' : 'Dry run off: it will fill empty fields (never Save).', false); };
+  sh.getElementById('fillb').onclick = () => { if (st.cur) fill(st.cur); };
+  sh.getElementById('copyl').onclick = () => { const t = st.log.map(e => JSON.stringify(e)).join('\n'); try { navigator.clipboard.writeText(t); say('Log copied. Paste it in HotelOps → Fix in Opera → Save log.', false); } catch (_) { say('Could not copy the log.', true); } };
+  sh.getElementById('x').onclick = () => { const b = sh.getElementById('body'); b.style.display = b.style.display === 'none' ? '' : 'none'; };
+  document.documentElement.appendChild(host); renderLog();
+  window.__hoFixer = { open() { host.style.display = ''; }, _test: { decode, check, fill, st, nameOk, profileName, safeClick, setPlan(p) { st.plan = p; renderList(); }, setDry(v) { st.dry = v; } } };
+})();
