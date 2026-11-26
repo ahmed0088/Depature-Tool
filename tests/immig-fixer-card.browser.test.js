@@ -1,0 +1,32 @@
+'use strict';
+// The "Fix in Opera" card with FAKE guests: plan from both reports, ID numbers never stored, only approved fields copied.
+const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=require('playwright-core');
+const read=n=>fs.readFileSync(__dirname+'/../'+n,'utf8');
+const imm=(first,last,sex,nat,pass,room)=>`<G_IMMIGRATION><ROWNO>1</ROWNO><FIRST_NAME>${first}</FIRST_NAME><LAST_NAME>${last}</LAST_NAME><MIDDLE_NAME></MIDDLE_NAME><SEX>${sex}</SEX><NATIONALITY>${nat}</NATIONALITY><PASSPORT>${pass}</PASSPORT><ARRIVAL_DATE>11/25/2026</ARRIVAL_DATE><DEPARTURE_DATE>11/30/2026</DEPARTURE_DATE><ROOM>${room}</ROOM></G_IMMIGRATION>`;
+const IMM=`<?xml version="1.0"?><DATA><LIST_REPORT><REPORT><P_RESORT1>Test Hotel</P_RESORT1><P_BUSINESS_DATE>2026-11-26T00:00:00.000+00:00</P_BUSINESS_DATE><P_DATE>26/11/2026</P_DATE><P_TIME>08:00</P_TIME>${imm('Ann','Fakeone','U','','','0102')}${imm('Bob','Faketwo','M','India','XXXXXXX11','0103')}${imm('Cy','Fakethree','','Oman','','0104')}</REPORT></LIST_REPORT></DATA>`;
+const det=(g,f,n,d,r)=>['GivenName1','FamilyName1','Nationality1','DocumentNumber1','RoomNumber1','ArrivalDate2'].map((k,i)=>[g,f,n,d,r,'25/11/2026'][i]).map((v,i)=>`<Field Name="${['GivenName1','FamilyName1','Nationality1','DocumentNumber1','RoomNumber1','ArrivalDate2'][i]}"><FormattedValue>${v}</FormattedValue></Field>`).join('');
+const INH=`<CrystalReport xmlns="urn:crystal-reports:schemas:report-detail"><Section><Details Level="2">${det('Ann','Fakeone','Ethiopia','ZZ7654321','102')}</Details><Details Level="2">${det('Cy','Fakethree','Oman','OM1','104')}</Details></Section></CrystalReport>`;
+(async()=>{const executablePath=[process.env.CHROME_PATH,'/usr/bin/google-chrome','/usr/bin/chromium'].find(p=>p&&fs.existsSync(p)),browser=await chromium.launch({executablePath,headless:true,args:['--no-sandbox']});
+try{const page=await browser.newPage({viewport:{width:1200,height:900},serviceWorkers:'block'}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.setContent(`<!doctype html><body><textarea id="immigPasteInput2"></textarea><div id="immigError2"><span id="immigErrorMsg2"></span></div><span id="immigTabCount"></span><div id="immigMissingWrap"></div><div id="immigMissingBody"></div><span id="immigInhouseXmlLabel"></span><div id="immigResults2" style="display:none"><div id="immigKpis2"></div><div id="immigMeta2"></div><div id="immigFilters2"><button data-if="all" class="fchip"></button></div><input id="immigSearch2"><div class="tbl-wrap"><table><tbody id="immigTable2"></tbody></table></div></div>`);
+ await page.evaluate(()=>{window.escapeHtml=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));window.toasts=[];window.showToast=(m,t)=>toasts.push(m);window.HOTEL_ID='h1';window.writes=[];
+  const store={};window.firebase={database:()=>({ref:p=>({once:async()=>({val:()=>null}),update:async v=>{writes.push([p,JSON.stringify(v)])},push:async v=>{writes.push([p,JSON.stringify(v)])},limitToLast(){return this}})})};});
+ for(const f of ['reports.js','immig-fixer-core.js','immig-fixer.js'])await page.addScriptTag({content:read(f)});
+ await page.evaluate(([imm,inh])=>{const p=_immigParseInhouseXML(inh);_immigInhouseList=p.list;_immigNatMap=p.natMap;_immigPassportMap=p.docMap;_immigInhouseRoomGuests=p.roomMap;document.getElementById('immigPasteInput2').value=imm;processImmig2(true);},[IMM,INH]);
+ await page.waitForSelector('#immigFixerCard input[type=checkbox]');
+ const text=await page.locator('#immigFixerCard').innerText();
+ assert(/Room 102/.test(text)&&/ET · Ethiopia/.test(text),'nationality from Vicas by room+name');assert(/••••4321/.test(text)&&!/ZZ7654321/.test(await page.locator('#immigFixerCard').innerHTML()),'full ID number never shown');
+ // defaults: nationality on, ID off, guessed/none gender off
+ const st=await page.evaluate(()=>JSON.stringify(hoImmigFixerState.ok));const ok=JSON.parse(st),id=Object.keys(ok)[0];assert.equal(ok[id].nationality,true);assert.equal(ok[id].idNumber,false);
+ await page.locator('select[data-edit$="|gender"]').first().selectOption('F');
+ await page.locator('input[data-ok$="|idNumber"]').first().check();await page.locator('input[data-ok$="|idType"]').first().check();
+ await page.evaluate(()=>{window.copied='';Object.defineProperty(navigator,'clipboard',{value:{writeText:async t=>{window.copied=t}},configurable:true});});
+ await page.locator('#immigFixCopy').click();const code=await page.evaluate(()=>window.copied);const plan=require('../immig-fixer-core.js').decodePlan(code);
+ const fields=plan.items.find(i=>i.room==='102').fields.map(f=>f.field).sort();assert.deepEqual(fields,['gender','idNumber','idType','nationality']);
+ await page.locator('#immigFixSave').click();await page.waitForFunction(()=>writes.length>0);const w=await page.evaluate(()=>JSON.stringify(writes));
+ assert(!/ZZ7654321/.test(w),'shared record must never hold the full ID number');assert(/••••4321/.test(w)&&/gender/.test(w));
+ await page.locator('#immigFixLogIn').fill(JSON.stringify({t:'2026-11-26T08:00:00Z',room:'102',field:'idNumber',to:'ZZ7654321',result:'filled, not saved'})+'\n'+JSON.stringify({t:'x',room:'102',field:'name',to:'Ann',result:'bad'}));
+ await page.evaluate(()=>{writes.length=0});await page.locator('#immigFixLogSave').click();await page.waitForFunction(()=>writes.length>0);const lw=await page.evaluate(()=>JSON.stringify(writes));
+ assert(!/ZZ7654321/.test(lw)&&/••••4321/.test(lw),'a pasted log with a full number is masked before saving');assert.equal(JSON.parse(lw).length,1,'a line with a field outside the allowed list is dropped');
+ assert.deepEqual(errors,[]);console.log('Fix in Opera card passed with fake guests: plan from both reports by room and name, ID numbers never stored or shown in full, only approved fields copied, shared saves hold gender/nationality and last 4 only.');
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
