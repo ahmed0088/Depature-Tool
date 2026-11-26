@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 644, items: ['The Opera fixer now picks the innermost result row with the confirmation link, goes back via Back to Manage Reservation then Back to In House (the breadcrumbs are dead there), and ignores disabled links.'] },
   { v: 643, items: ['Fixes the Opera fixer finding the room row again (v642 broke it). Row and confirmation link detection is back to the v640 way, with a test for it.'] },
   { v: 642, items: ['The Opera fixer now waits for real states instead of short timers: it acts the moment the room row appears (up to 25 s), and waits for Edit mode and Save to finish. The log shows how long each wait took.'] },
   { v: 641, items: ['The Opera fixer now runs the whole list by itself: it fills empty gender, nationality and ID fields, presses Save on the profile, checks the saved values, and moves to the next guest with no Next guest click. It also finds shared rooms, never logs DONE when a field failed, adds an ID document for guests who have none, and ends with a summary. Dry run still types and saves nothing.'] },
