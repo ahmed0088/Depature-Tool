@@ -32,16 +32,16 @@ try{
  await run(true,async page=>{await page.evaluate(()=>window.__hoFixer._test.autoRun(0));
   assert.deepEqual(await page.evaluate(()=>window.__opened),['0301','0302']);
   assert.equal(await page.locator('#gin').count(),0,'dry run types nothing');assert.equal(await page.evaluate(()=>window.__saved),false);});
- // real: opens 0301 by itself, fills gender M, pauses, never Save
+ // real: opens 0301 by itself, fills gender M, presses Save once, goes on by itself (no Next guest click)
  await run(false,async page=>{await page.evaluate(()=>window.__hoFixer._test.autoRun(0));
-  assert.deepEqual(await page.evaluate(()=>window.__opened),['0301'],'pauses after the first guest');
-  assert.equal(await page.locator('#gin').inputValue(),'M');assert.equal(await page.evaluate(()=>window.__saved),false,'Save must never be pressed');
-  assert(!(await page.evaluate(()=>window.__clicks)).some(c=>/^save$/i.test(c)));
-  assert.equal(await page.evaluate(()=>window.__hoFixer._test.st.paused),true);});
+  assert.deepEqual(await page.evaluate(()=>window.__opened),['0301','0302'],'continues to the next guest by itself');
+  assert.equal(await page.evaluate(()=>window.__saved),true,'Save pressed after filling');
+  assert.equal((await page.evaluate(()=>window.__clicks)).filter(c=>/^save$/i.test(c)).length,1,'Save pressed once, for the filled guest only');
+  assert.equal(await page.evaluate(()=>window.__hoFixer._test.st.paused),false);});
  // wrong guest in the plan: nothing opens
  const page=await browser.newPage();await page.setContent(html);await page.addScriptTag({content:fixer});
  const why=await page.evaluate(()=>window.__hoFixer._test.goToGuest({room:'0301',name:'Somebody Else'}));
- assert(/not found in the In House list/.test(why),why);assert.deepEqual(await page.evaluate(()=>window.__opened),[]);await page.close();
+ assert(/name was not found/.test(why),why);assert.deepEqual(await page.evaluate(()=>window.__clicks.filter(c=>c==='NAME')),[],'never opens a profile for the wrong name');await page.close();
  // room not in the In House list: skipped with a clear message, not a failure of the whole run
  {const page=await browser.newPage();await page.setContent(html);await page.addScriptTag({content:fixer});
  const why=await page.evaluate(()=>window.__hoFixer._test.goToGuest({room:'0106',name:'Nobody Here'}));
