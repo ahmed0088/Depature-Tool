@@ -316,6 +316,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     return c.find(n => n.closest('a,[role=link]')) ? c.find(n => n.closest('a,[role=link]')) : c[0] || null;
   }
   const resReady = () => /Reservation Overview|Manage Reservation/i.test(document.body.innerText || '') && !roomBox() && !busy() && hasText(/Overview/);
+  const filtersNow = () => [...document.querySelectorAll('label[for]')].filter(vis).map(l => { const el = document.getElementById(l.htmlFor); const t = own(l); return el && /^(input|select)$/i.test(el.tagName) && el.value && !/name|contact|email|phone/i.test(t) ? t.slice(0, 18) + '=' + String(el.value).slice(0, 12) : ''; }).filter(Boolean).slice(0, 10).join(', ') || 'none set';
   const dsc = el => el ? '<' + el.tagName.toLowerCase() + (el.id ? '#' + String(el.id).slice(0, 28) : '') + '> ' + own(el).slice(0, 24) : 'none';
   const nv = (item, m) => logIt(item, 'nav', '', m);
   const IDTAGS = 'a,[role=link],[role=tab],[role=menuitem],[role=treeitem],[role=button],li,span,div,td';
@@ -326,7 +327,9 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
       const sb = findExact('search', 'button,a,[role=button]'); if (!sb) return 'No Search button found. ' + 'Page shows: ' + labelsNow().slice(0, 150);
       let rows = null;
       for (const fmt of [String(item.room).replace(/\D/g, '').padStart(4, '0'), String(item.room).replace(/\D/g, '').replace(/^0+/, '')]) {
-        const box = await waitFor(roomBox, 6000); if (!box) return 'Room ' + item.room + ': the Room box disappeared. Page shows: ' + labelsNow().slice(0, 150);
+        let box = roomBox();
+        if (!box) { const mod = findExact('modify search criteria', 'button,a,[role=button]'); if (mod) { nv(item, 'search panel collapsed, expanding'); try { safeClick(mod); } catch (_) {} } box = await waitFor(roomBox, 6000); }
+        if (!box) return 'Room ' + item.room + ': the Room box disappeared. Page shows: ' + labelsNow().slice(0, 150);
         box.focus(); setNative(box, ''); box.dispatchEvent(new Event('input', { bubbles: true }));
         setNative(box, fmt); box.dispatchEvent(new Event('input', { bubbles: true })); box.dispatchEvent(new Event('change', { bubbles: true })); box.dispatchEvent(new Event('blur', { bubbles: true }));
         nv(item, 'typed Room ' + fmt.length + ' digits, pressing Search');
@@ -336,7 +339,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
         nv(item, 'rows found: ' + (rows ? rows.length : 0));
         if (rows) break;
       }
-      if (!rows) { nv(item, 'no row; page shows: ' + labelsNow().slice(0, 250)); return 'Room ' + item.room + ': not found in the In House list (checked out or not arrived yet?), skipped.'; }
+      if (!rows) { nv(item, 'no row; filters: ' + filtersNow());  return 'Room ' + item.room + ': not found in the In House list (checked out or not arrived yet?), skipped.'; }
       if (rows.length > 1) return 'Room ' + item.room + ': more than one row matches. Open it yourself.';
       const conf = [...rows[0].querySelectorAll('a,[role=link]')].find(a => vis(a) && /^\d{5,}$/.test(own(a)));
       if (!conf) return 'Room ' + item.room + ': no confirmation number link in the row.';
@@ -357,7 +360,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     await sleep(200);
     return '';
   }
-  const CODE_V = 'v638';
+  const CODE_V = 'v639';
   async function autoRun(from) {
     if (st.auto || !st.plan) return; st.auto = true; st.stop = false; setBtns();
     logIt({}, 'version', '', 'fixer code ' + CODE_V + ', helper ' + (window.__hoFxVer || 'unknown'));
@@ -367,9 +370,11 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
         if (st.stop) { say('Stopped.', false); return; }
         const it = items[st.idx]; st.cur = it; renderList();
         say('Room ' + it.room + ' (' + (st.idx + 1) + ' of ' + items.length + '): opening the guest…', false);
+        const TG = Date.now();
         const why = await goToGuest(it);
-        if (why) { logIt(it, 'nav', '', 'could not open: ' + why.slice(0, 60)); say(why, true); if (/In House list did not open/.test(why)) return; continue; }
+        if (why) { logIt(it, 'guest', '', (/not found in the In House/.test(why) ? 'SKIPPED not in list' : 'FAILED ' + why.slice(0, 70)) + ' (' + (Date.now() - TG) + ' ms)'); say(why, true); if (/In House list did not open/.test(why)) return; continue; }
         await fill(it);
+        logIt(it, 'guest', '', 'DONE ' + (st.dry ? '(dry run) ' : '') + (Date.now() - TG) + ' ms');
         if (!st.dry) { st.paused = true; say('Room ' + it.room + ' is filled. Check it, press Save in Opera, then press Next guest.', false); return; }
       }
       say('Done. ' + (st.dry ? 'Dry run only: nothing was typed.' : 'All rooms visited.'), false);
