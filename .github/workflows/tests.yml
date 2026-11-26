@@ -47,7 +47,7 @@ jobs:
 
       - name: Fix in Opera plan, card and profile fixer
         run: |
-          node --test tests/immig-fixer.test.js tests/opera-auto.test.js
+          node --test tests/immig-fixer.test.js tests/opera-auto.test.js tests/reconcile.test.js
           node tests/immig-fixer-card.browser.test.js
           node tests/immig-fixer.browser.test.js
           node tests/enrolment-quick-layout.browser.test.js
