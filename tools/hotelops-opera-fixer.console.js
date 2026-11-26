@@ -328,8 +328,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
   }
   function roomRows(item, roomOnly) {
     const want = words(item.name);
-    return [...document.querySelectorAll('tr,[role=row]')].filter(vis).filter(tr => {
-      if (tr.querySelector('tr,[role=row]')) return false;
+    return [...document.querySelectorAll('tr')].filter(vis).filter(tr => {   // exactly as v640: real table rows only
       const cells = [...tr.children].map(own);
       if (!cells.some(c => c && norm(c) === norm(item.room) && /^\d{3,4}$/.test(c.trim()))) return false;
       if (roomOnly) return true;
@@ -370,7 +369,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
           const b = busy(); if (b) { sawBusy = true; idleSince = 0; return null; }
           const r = roomRows(item); if (r.length) return r;
           if (!idleSince) idleSince = Date.now();
-          if (roomRows(item, true).length) { if (!roomOnlyAt) roomOnlyAt = Date.now(); if (Date.now() - roomOnlyAt > 2500) return 'room'; } else roomOnlyAt = 0;
+          if (roomRows(item, true).length) { if (!roomOnlyAt) roomOnlyAt = Date.now(); if (Date.now() - roomOnlyAt > 1200 && roomRows(item, true).some(tr => [...tr.querySelectorAll('a,[role=link]')].some(a => vis(a) && /^\d{5,}$/.test(own(a))))) return 'room'; } else roomOnlyAt = 0;
           if (Date.now() - idleSince > (sawBusy ? 2000 : 3500) && (noData() || Date.now() - idleSince > 8000)) return 'none';
           return null;
         }, 25000);
@@ -382,7 +381,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
           const ro = roomRows(item, true); const roo = ro.length ? ro : null;
           nv(item, 'rows by room only: ' + (roo ? roo.length : 0));
           if (roo) { rows = roo; byRoom = true; }
-          else { const all = [...document.querySelectorAll('tr,[role=row]')].filter(vis).length; nv(item, 'table rows on screen: ' + all + (noData() ? ', page says no data' : '') + '; links: ' + [...document.querySelectorAll('a')].filter(vis).filter(a => /^\d{5,}$/.test(own(a))).slice(0, 4).map(dsc).join(' ; ')); }
+          else { const all = [...document.querySelectorAll('tr')].filter(vis).length; nv(item, 'table rows on screen: ' + all + (noData() ? ', page says no data' : '') + '; links: ' + [...document.querySelectorAll('a')].filter(vis).filter(a => /^\d{5,}$/.test(own(a))).slice(0, 4).map(dsc).join(' ; ')); }
         }
         if (rows) break;
       }
@@ -430,7 +429,7 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     if (miss.length) return { ok: false, why: 'saved but could not confirm: ' + miss.join(', ') };
     return { ok: true, why: '' };
   }
-  const CODE_V = 'v642';
+  const CODE_V = 'v643';
   async function autoRun(from) {
     if (st.auto || !st.plan) return; st.auto = true; st.stop = false; setBtns();
     logIt({}, 'version', '', 'fixer code ' + CODE_V + ', helper ' + (window.__hoFxVer || 'unknown'));
@@ -491,5 +490,5 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
   document.documentElement.appendChild(host); renderLog();
   // helper mode (the Chrome extension sets __hoFixerLazy): the window stays hidden until HotelOps hands it a list
   if (window.__hoFixerLazy) host.style.display = 'none';
-  window.__hoFixer = { open() { host.style.display = ''; }, setHook(f) { st.hook = f; }, loadCode(code) { st.plan = decode(code); st.cur = null; st.paused = false; renderList(); setBtns(); host.style.display = ''; sh.getElementById('plan').value = ''; say('List loaded: ' + st.plan.items.length + ' room(s). Dry run is on. Press Start.', false); return st.plan.items.length; }, _test: { decode, check, fill, st, nameOk, profileName, safeClick, setPlan(p) { st.plan = p; renderList(); setBtns(); }, autoRun, goToGuest, setDry(v) { st.dry = v; } } };
+  window.__hoFixer = { open() { host.style.display = ''; }, setHook(f) { st.hook = f; }, loadCode(code) { st.plan = decode(code); st.cur = null; st.paused = false; renderList(); setBtns(); host.style.display = ''; sh.getElementById('plan').value = ''; say('List loaded: ' + st.plan.items.length + ' room(s). Dry run is on. Press Start.', false); return st.plan.items.length; }, _test: { roomRows, decode, check, fill, st, nameOk, profileName, safeClick, setPlan(p) { st.plan = p; renderList(); setBtns(); }, autoRun, goToGuest, setDry(v) { st.dry = v; } } };
 })();
