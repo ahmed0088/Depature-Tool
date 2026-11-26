@@ -244,12 +244,13 @@ const BUILT = chrome.runtime.getManifest().version, ID = 'hotelops-wa';
 // the two readers HotelOps can hand over: WhatsApp (as before) and Opera (a second user script, every frame of Opera Cloud)
 const KIND = { wa: { id: ID, key: 'reader', on: 'on', matches: ['https://web.whatsapp.com/*'], side: 'wa', fresh: 'ho-wa-ext-new' },
   op: { id: 'hotelops-op', key: 'opReader', on: 'opOn', matches: ${JSON.stringify(OP_MATCHES)}, all: true, side: 'opera', fresh: 'ho-op-ext-new' },
-  nx: { id: 'hotelops-nx', key: 'nxReader', on: 'nxOn', matches: ${JSON.stringify(NX_MATCHES)}, side: 'neorcha', fresh: 'ho-nx-ext-new' } };
+  nx: { id: 'hotelops-nx', key: 'nxReader', on: 'nxOn', matches: ${JSON.stringify(NX_MATCHES)}, side: 'neorcha', fresh: 'ho-nx-ext-new' },
+  fx: { id: 'hotelops-fx', key: 'fxReader', on: 'fxOn', matches: ${JSON.stringify(OP_MATCHES)}, side: 'fixer', fresh: 'ho-fx-ext-new' } };
 const num = v => parseFloat(String(v || '').replace(/[^\\d.]/g, '')) || 0;
 // "Allow User Scripts" is on for this helper (chrome://extensions → Details): only then can a newer reader run
 const canRun = () => { try { chrome.userScripts.getScripts().catch(() => {}); return true; } catch (_) { return false; } };   // Chrome's own test: the call throws while it is off
 async function newest(k) { const K = KIND[k || 'wa'], s = await chrome.storage.local.get(K.key), r = s[K.key]; return r && num(r.v) > num(BUILT) ? r : null; }
-async function info() { const r = await newest('wa'), o = await newest('op'), x = await newest('nx'); return { source: 'ho-wa-ext-info', v: r ? r.v : BUILT, op: o ? o.v : BUILT, nx: x ? x.v : BUILT, us: canRun() }; }
+async function info() { const r = await newest('wa'), o = await newest('op'), x = await newest('nx'), f = await newest('fx'); return { source: 'ho-wa-ext-info', v: r ? r.v : BUILT, op: o ? o.v : BUILT, nx: x ? x.v : BUILT, fx: f ? f.v : BUILT, us: canRun() }; }
 let busy = Promise.resolve();
 async function ensureOne(k) {
   const K = KIND[k], r = await newest(k), have = await chrome.userScripts.getScripts({ ids: [K.id] }), st = await chrome.storage.local.get(K.on), on = st[K.on];
@@ -267,6 +268,7 @@ function ensure() {
     await ensureOne('wa');
     await ensureOne('op').catch(() => {});
     await ensureOne('nx').catch(() => {});
+    await ensureOne('fx').catch(() => {});
     return true;
   }).catch(() => false);
 }
@@ -322,7 +324,7 @@ function link(p) {
   ports[side].add(p);
   if (side === 'app') ensure().then(tell).then(() => awayHello(p));   // the helper's info first, then what it keeps about Away
   p.onMessage.addListener(async m => {
-    const k = m && (m.source === 'ho-wa-ext-code' ? 'wa' : m.source === 'ho-op-ext-code' ? 'op' : m.source === 'ho-nx-ext-code' ? 'nx' : '');
+    const k = m && (m.source === 'ho-wa-ext-code' ? 'wa' : m.source === 'ho-op-ext-code' ? 'op' : m.source === 'ho-nx-ext-code' ? 'nx' : m.source === 'ho-fx-ext-code' ? 'fx' : '');
     if (k) {   // HotelOps updated: keep its reader and run it from now on (only HotelOps can hand one over)
       const K = KIND[k], cur = (await info())[k === 'wa' ? 'v' : k];
       if (side !== 'app' || typeof m.code !== 'string' || num(m.v) <= num(cur)) return tell();
@@ -364,8 +366,14 @@ function link(p) {
       try { await chrome.storage.session.set({ fxJob: j }); } catch (_) { fxMem = j; }
       let go = ''; try { const x = new URL(String(m.url || '')); if (x.protocol === 'https:' && /(^|[.])(oraclecloud|oracleindustry|oraclehospitality)[.]com$/i.test(x.hostname)) go = x.href; } catch (_) {}
       if (ports.fixer.size) {
-        toSide('fixer', j);
         const t = [...ports.fixer][0].sender && [...ports.fixer][0].sender.tab;
+        const lt = await newest('fx');   // a newer fixer came from HotelOps and this tab still runs an older one: reload the tab once, the new one asks for the list itself
+        if (lt && canRun() && t && [...ports.fixer].some(q => num(q.fxv) < num(lt.v))) {
+          try { await chrome.tabs.reload(t.id); } catch (_) {}
+          toSide('app', { source: 'ho-fx-progress', note: 'Updating the fixer on the Opera tab (reloading it). The list loads by itself.' });
+          return;
+        }
+        toSide('fixer', j);
         try { if (t) { chrome.tabs.update(t.id, { active: true }); chrome.windows.update(t.windowId, { focused: true }); } } catch (_) {}
         toSide('app', { source: 'ho-fx-progress', note: 'Sent to the Opera tab. Press Start in the fixer window there.' });
       } else if (go) {
@@ -376,7 +384,7 @@ function link(p) {
     }
     if (side === 'app' && /^ho-fx/.test(src)) return;
     if (side === 'fixer') {
-      if (src === 'ho-fx-ask') { let j = fxMem; try { const s = await chrome.storage.session.get('fxJob'); j = s.fxJob || j; } catch (_) {} if (j && Date.now() - j.at < 3600e3) { try { p.postMessage(j); } catch (_) {} } return; }
+      if (src === 'ho-fx-ask') { p.fxv = String(m.v || ''); let j = fxMem; try { const s = await chrome.storage.session.get('fxJob'); j = s.fxJob || j; } catch (_) {} if (j && Date.now() - j.at < 3600e3) { try { p.postMessage(j); } catch (_) {} } return; }
       if (src === 'ho-fx-got') { fxMem = null; try { await chrome.storage.session.remove('fxJob'); } catch (_) {} return; }
       if (src === 'ho-fx-progress' || src === 'ho-fx-log') toSide('app', m);
       return;
@@ -431,14 +439,14 @@ ensure();`;
   D.hoWaHelper = ${JSON.stringify(v)}; D.hoWaAuto = '1'; D.hoAwayRelay = '1';${opReader ? ` D.hoOpHelper = ${JSON.stringify(v)};` : ''}${nx ? ` D.hoNxHelper = ${JSON.stringify(v)};` : ''}${en ? ` D.hoEnHelper = ${JSON.stringify(v)};` : ''}${fx ? ` D.hoFxHelper = ${JSON.stringify(v)};` : ''}
   let port = null;
   const BACK = d => d && typeof d === 'object' && (d.source === 'ho-wa-pong' || d.source === 'ho-wa-ack' || d.source === 'ho-wa-gack' || d.source === 'ho-wa-ext-code'
-    || d.source === 'ho-op-ack' || d.source === 'ho-op-guard' || d.source === 'ho-op-ext-code' || d.source === 'ho-op-open' || d.source === 'ho-op-reload' || d.source === 'ho-away-set' || d.source === 'ho-away-pinack' || d.source === 'ho-nx-job' || d.source === 'ho-fx-job' || d.source === 'ho-nx-ext-code' || d.source === 'ho-en-job'
+    || d.source === 'ho-op-ack' || d.source === 'ho-op-guard' || d.source === 'ho-op-ext-code' || d.source === 'ho-op-open' || d.source === 'ho-op-reload' || d.source === 'ho-away-set' || d.source === 'ho-away-pinack' || d.source === 'ho-nx-job' || d.source === 'ho-fx-job' || d.source === 'ho-nx-ext-code' || d.source === 'ho-fx-ext-code' || d.source === 'ho-en-job'
     || (d.source === 'ho-wa' && (d.send || d.words || (d.guard && !d.guard.events && !d.guard.arm))));
   const open = () => {
     // switched off / removed: Chrome won't connect any more → HotelOps is told at once (and the heartbeat stops)
     try { port = chrome.runtime.connect({ name: 'app' }); } catch (_) { port = null; if (!D.hoHelperOff) { D.hoHelperOff = String(Date.now()); window.postMessage({ source: 'ho-helper-off' }, location.origin); } return; }
     delete D.hoHelperOff;
     port.onMessage.addListener(m => {
-      if (m && m.source === 'ho-wa-ext-info') { D.hoWaUs = m.us ? '1' : '0'; D.hoWaCode = String(m.v); if (m.op) D.hoOpCode = String(m.op); if (m.nx) D.hoNxCode = String(m.nx); }
+      if (m && m.source === 'ho-wa-ext-info') { D.hoWaUs = m.us ? '1' : '0'; D.hoWaCode = String(m.v); if (m.op) D.hoOpCode = String(m.op); if (m.nx) D.hoNxCode = String(m.nx); if (m.fx) D.hoFxCode = String(m.fx); }
       if (m && m.source === 'ho-helper-beat') D.hoHelperBeat = String(Date.now());
       window.postMessage(m, location.origin);
     });
@@ -486,14 +494,17 @@ It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''
   }
 
   // the Opera fixer inside the helper: it sleeps until HotelOps hands it a list, then shows its window on the Opera tab (top frame only)
-  function fxSide(script, v) {
-    return '// HotelOps helper · Opera fixer ' + v + ' · fills only what HotelOps hands it, never presses Save\n(function () {\n  if (window.top !== window || window.__hoFxBridge) return;\n  window.__hoFxBridge = true; window.__hoFixerLazy = true; window.__hoFxVer = ' + JSON.stringify(String(v)) + ';\n' + script +
+  function fxSide(script, v, fresh) {
+    const gate = fresh
+      ? '  try { if (!chrome.runtime || typeof chrome.runtime.connect !== "function") return; document.documentElement.dataset.hoFxUs = ' + JSON.stringify(String(v)) + '; } catch (_) { return; }\n'
+      : '  if (document.documentElement.dataset.hoFxUs) return;   // a newer fixer (updated by itself) runs instead\n';
+    return '// HotelOps helper · Opera fixer ' + v + (fresh ? ' (updated by itself)' : '') + ' · fills only what HotelOps hands it, never presses Save\n(function () {\n  if (window.top !== window || window.__hoFxBridge) return;\n' + gate + '  window.__hoFxBridge = true; window.__hoFixerLazy = true; window.__hoFxVer = ' + JSON.stringify(String(v)) + ';\n' + script +
       '\n  let port = null;\n  const send = o => { try { if (!port) open(); port.postMessage(o); } catch (_) {} };\n' +
       '  function open() {\n    try { port = chrome.runtime.connect({ name: "fixer" }); } catch (_) { port = null; return; }\n' +
       '    port.onMessage.addListener(m => {\n      if (!m || m.source !== "ho-fx-job" || typeof m.code !== "string") return;\n' +
       '      try { window.__hoFixer.loadCode(m.code); send({ source: "ho-fx-got" }); send({ source: "ho-fx-progress", note: "List loaded on the Opera tab. Press Start in the fixer window." }); }\n' +
       '      catch (e) { send({ source: "ho-fx-progress", note: String(e && e.message || e).slice(0, 160), bad: true }); }\n    });\n' +
-      '    port.onDisconnect.addListener(() => { port = null; setTimeout(open, 1500); });\n    try { port.postMessage({ source: "ho-fx-ask" }); } catch (_) {}\n  }\n' +
+      '    port.onDisconnect.addListener(() => { port = null; setTimeout(open, 1500); });\n    try { port.postMessage({ source: "ho-fx-ask", v: window.__hoFxVer }); } catch (_) {}\n  }\n' +
       '  window.__hoFixer.setHook((k, a, b) => { if (k === "say") send({ source: "ho-fx-progress", note: String(a).slice(0, 200), bad: !!b }); else if (k === "log") send({ source: "ho-fx-log", entry: a }); });\n  open();\n})();';
   }
 
@@ -572,7 +583,7 @@ It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''
   if (!doc || typeof doc.createElement !== 'function') { W.hoWaHelper = { files, zip, waSide, opSide, nxSide, enSide, fxSide, opSnippet, lockOf, bakeLock, OP_MATCHES }; return; }
 
   // HotelOps updated and the helper still runs an older reader: hand it this one (once per open)
-  let handed = '', opHanded = '', nxHanded = '';
+  let handed = '', opHanded = '', nxHanded = '', fxHanded = '';
   async function autoUpdate() {
     const d = doc.documentElement.dataset, v = ver();
     if (d.hoWaAuto && d.hoWaCode && handed !== v && W.hoWaPure && parseFloat(v) > parseFloat(d.hoWaCode)) {
@@ -585,6 +596,14 @@ It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''
       opHanded = v;
       try { W.postMessage({ source: 'ho-op-ext-code', v, code: opSide(await opReader(), location.origin, v, true) }, location.origin); }
       catch (_) { opHanded = ''; }
+    }
+    // the Opera fixer: the same, so a fixer fix reaches the helper by pushing HotelOps only (a helper with the fixer-update relay says so with hoFxCode)
+    if (d.hoWaAuto && d.hoFxCode && fxHanded !== v && parseFloat(v) > parseFloat(d.hoFxCode)) {
+      fxHanded = v;
+      try {
+        const raw = await fetch('tools/hotelops-opera-fixer.console.js', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
+        W.postMessage({ source: 'ho-fx-ext-code', v, code: fxSide(raw, v, true) }, location.origin);
+      } catch (_) { fxHanded = ''; }
     }
     // the Neorcha collector: the same, for a helper that has it (v480 on) — so a fix reaches it without a new download
     const nxs = nxSrc();
