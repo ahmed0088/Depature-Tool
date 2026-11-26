@@ -487,7 +487,7 @@ It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''
 
   // the Opera fixer inside the helper: it sleeps until HotelOps hands it a list, then shows its window on the Opera tab (top frame only)
   function fxSide(script, v) {
-    return '// HotelOps helper · Opera fixer ' + v + ' · fills only what HotelOps hands it, never presses Save\n(function () {\n  if (window.top !== window || window.__hoFxBridge) return;\n  window.__hoFxBridge = true; window.__hoFixerLazy = true;\n' + script +
+    return '// HotelOps helper · Opera fixer ' + v + ' · fills only what HotelOps hands it, never presses Save\n(function () {\n  if (window.top !== window || window.__hoFxBridge) return;\n  window.__hoFxBridge = true; window.__hoFixerLazy = true; window.__hoFxVer = ' + JSON.stringify(String(v)) + ';\n' + script +
       '\n  let port = null;\n  const send = o => { try { if (!port) open(); port.postMessage(o); } catch (_) {} };\n' +
       '  function open() {\n    try { port = chrome.runtime.connect({ name: "fixer" }); } catch (_) { port = null; return; }\n' +
       '    port.onMessage.addListener(m => {\n      if (!m || m.source !== "ho-fx-job" || typeof m.code !== "string") return;\n' +
