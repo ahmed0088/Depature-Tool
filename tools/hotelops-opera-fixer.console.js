@@ -244,52 +244,57 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     .filter((n, i, arr) => arr.indexOf(n) === i);
   let exclude = new Set();
   const inHouseItem = () => inHouseAll().find(n => !exclude.has(n)) || null;
-  // Proven manual path: hamburger > search box (type "In House") or Site Map > click "In House". Returns the element to click, or null.
+  let route = '';   // the route that worked in this session is tried first next time
+  const ms = t0 => ' (' + (Date.now() - t0) + ' ms)';
+  const elTag = el => '<' + el.tagName.toLowerCase() + (el.id ? '#' + String(el.id).slice(0, 25) : '') + '>';
+  // Proven manual path: hamburger > search box (type "In House") > click the result. Polls every 150 ms, clicks the moment the result shows.
   async function viaHamburger(round) {
-    const cand = [...document.querySelectorAll('a,button,[role=button],oj-button')].filter(n => { if (!vis(n)) return false; const r = n.getBoundingClientRect(); return r.left < 140 && r.top < 100; });
-    const ham = cand.find(n => /menu|navigat|hamburger/i.test((n.getAttribute('aria-label') || n.title || n.id || '') + ' ' + n.className)) || cand[0];
-    logIt(st.cur || {}, 'nav', '', 'round ' + round + ': hamburger ' + (ham ? '<' + ham.tagName.toLowerCase() + (ham.id ? '#' + String(ham.id).slice(0, 25) : '') + '> ' + (ham.getAttribute('aria-label') || '').slice(0, 25) : 'not found'));
-    if (!ham) return null;
+    const T = Date.now();
+    let sbox = () => [...document.querySelectorAll('input')].find(i => vis(i) && /search/i.test((i.getAttribute('aria-label') || '') + ' ' + (i.placeholder || '') + ' ' + (i.id || '')) && !roomBoxIs(i));
     exclude = new Set(inHouseAll());   // the breadcrumb already on the page is not the menu result
-    try { safeClick(ham); } catch (_) { return null; }
-    await sleep(1200);
-    const sbox = await waitFor(() => [...document.querySelectorAll('input')].find(i => vis(i) && /search/i.test((i.getAttribute('aria-label') || '') + ' ' + (i.placeholder || '') + ' ' + (i.id || ''))), 5000);
-    if (sbox) { setVal(sbox, 'In House'); logIt(st.cur || {}, 'nav', '', 'round ' + round + ': typed In House in the menu search'); const hit = await waitFor(inHouseItem, 9000); if (hit) return hit; }
+    if (!sbox()) {
+      const cand = [...document.querySelectorAll('a,button,[role=button],oj-button')].filter(n => { if (!vis(n)) return false; const r = n.getBoundingClientRect(); return r.left < 140 && r.top < 100; });
+      const ham = cand.find(n => /menu|navigat|hamburger/i.test((n.getAttribute('aria-label') || n.title || n.id || '') + ' ' + n.className)) || cand[0];
+      logIt(st.cur || {}, 'nav', '', 'round ' + round + ': hamburger ' + (ham ? elTag(ham) + ' ' + (ham.getAttribute('aria-label') || '').slice(0, 25) : 'not found') + ms(T));
+      if (!ham) return null;
+      try { safeClick(ham); } catch (_) { return null; }
+    }
+    const box = await waitFor(sbox, 4000);
+    if (box) {
+      setVal(box, 'In House'); logIt(st.cur || {}, 'nav', '', 'typed In House in the menu search' + ms(T));
+      const hit = await waitFor(inHouseItem, 6000); if (hit) { logIt(st.cur || {}, 'nav', '', 'result shown' + ms(T)); return hit; }
+    }
     const sm = findExact('site map', 'a,button,[role=button],[role=menuitem],li,span');
-    if (sm) { logIt(st.cur || {}, 'nav', '', 'round ' + round + ': Site Map'); try { safeClick(sm); } catch (_) {} const hit = await waitFor(inHouseItem, 10000); if (hit) return hit;
-      const alpha = findExact('alphabetical', 'a,button,[role=tab],[role=button],li,span'); if (alpha) { try { safeClick(alpha); } catch (_) {} return await waitFor(inHouseItem, 6000); } }
+    if (sm) { logIt(st.cur || {}, 'nav', '', 'no search result, trying Site Map' + ms(T)); try { safeClick(sm); } catch (_) {} const hit = await waitFor(inHouseItem, 8000); if (hit) return hit;
+      const alpha = findExact('alphabetical', 'a,button,[role=tab],[role=button],li,span'); if (alpha) { try { safeClick(alpha); } catch (_) {} return await waitFor(inHouseItem, 5000); } }
     logIt(st.cur || {}, 'nav', '', 'menu shows: ' + labelsNow());
     return null;
   }
-  // Opens the In House list on its own and waits for its Room box. Tries: already there, the breadcrumb, Front Desk menu > In House,
-  // expanding the collapsed Search panel. Up to 3 rounds. Returns '' when ready, else a message that names the step that failed.
+  const roomBoxIs = i => { const b = roomBox(); return b === i; };
+  // Opens the In House list on its own and waits for its Room box. Order: Back to In House link (when on a reservation/profile),
+  // the hamburger search (proven), then Front Desk menu, then breadcrumb. The route that worked is tried first next time.
   async function ensureInHouse() {
-    let last = 'start';
+    let last = 'start'; const T0 = Date.now();
+    const done = how => { route = how; logIt(st.cur || {}, 'nav', '', 'In House open via ' + how + ms(T0)); return ''; };
     for (let round = 1; round <= 3; round++) {
       if (roomBox()) return '';
       const modify = findExact('modify search criteria', 'button,a,[role=button]');
-      if (modify && /in house/i.test(document.body.innerText || '')) { last = 'expand'; try { safeClick(modify); } catch (_) {} if (await waitFor(roomBox, 4000)) return ''; }
-      const back = round === 1 ? findExact('back to in house', 'a,button,[role=button],[role=link]') : null;
-      if (back) { last = 'back'; logIt(st.cur || {}, 'nav', '', 'Back to In House ' + dsc(back)); try { safeClick(back); } catch (_) {} await sleep(300); await waitFor(() => !busy(), 8000); if (await waitFor(roomBox, 12000)) return ''; }
-      const crumb = round === 1 && !/Manage (Profile|Reservation)/i.test(document.body.innerText || '') ? findExact('in house', 'a,[role=link]') : null;
-      if (crumb) { last = 'breadcrumb'; logIt(st.cur || {}, 'nav', '', 'round ' + round + ': breadcrumb In House <' + crumb.tagName.toLowerCase() + (crumb.id ? '#' + String(crumb.id).slice(0, 25) : '') + '>'); try { safeClick(crumb); } catch (_) {} }
-      else {
-        const deep = round > 1 || /Manage (Profile|Reservation)/i.test(document.body.innerText || '');
-        exclude = new Set();
-        let item = deep ? null : inHouseItem();
-        if (!item) {
-          const fd = deep ? null : findExact('front desk', 'a,button,[role=button],[role=link],[role=menuitem],[role=tab],li,span');
-          if (fd) { last = 'menu:Front Desk'; logIt(st.cur || {}, 'nav', '', 'round ' + round + ': opening Front Desk menu'); try { safeClick(fd); } catch (_) {}
-            item = await waitFor(inHouseItem, 3500); }
-          if (!item) { last = 'menu:In House not shown, hamburger'; item = await viaHamburger(round); }
-          if (!item) { last = 'hamburger search found no In House'; logIt(st.cur || {}, 'nav', '', 'page shows: ' + labelsNow()); continue; }
+      if (modify && /in house/i.test(document.body.innerText || '')) { last = 'expand'; try { safeClick(modify); } catch (_) {} if (await waitFor(roomBox, 3000)) return done('expand'); }
+      const back = findExact('back to in house', 'a,button,[role=button],[role=link]');
+      if (back && round === 1) { last = 'back'; logIt(st.cur || {}, 'nav', '', 'Back to In House ' + dsc(back)); try { safeClick(back); } catch (_) {} if (await waitFor(roomBox, 10000)) return done('back'); }
+      const deep = /Manage (Profile|Reservation)/i.test(document.body.innerText || '');
+      const order = round === 1 && route && route !== 'hamburger' && !deep ? [route, 'hamburger', 'front', 'crumb'] : ['hamburger', 'front', 'crumb'];
+      let clicked = false;
+      for (const r of [...new Set(order)]) {
+        if (r === 'hamburger') { last = 'hamburger'; exclude = new Set(); const item = await viaHamburger(round); if (item) { try { safeClick(item); clicked = true; } catch (_) {} } }
+        else if (r === 'front' && !deep && round === 1) {
+          exclude = new Set(); const fd = findExact('front desk', 'a,button,[role=button],[role=link],[role=menuitem],[role=tab],li,span');
+          if (fd) { last = 'front'; try { safeClick(fd); } catch (_) {} const item = await waitFor(inHouseItem, 1500); if (item) { try { safeClick(item); clicked = true; } catch (_) {} } }
+        } else if (r === 'crumb' && !deep && round === 1) {
+          const crumb = findExact('in house', 'a,[role=link]'); if (crumb) { last = 'breadcrumb'; try { safeClick(crumb); clicked = true; } catch (_) {} }
         }
-        last = 'menu:In House'; logIt(st.cur || {}, 'nav', '', 'round ' + round + ': menu In House'); try { safeClick(item); } catch (_) {}
+        if (clicked) { logIt(st.cur || {}, 'nav', '', 'round ' + round + ': clicked In House via ' + r); await sleep(150); await waitFor(() => !busy(), 6000); if (await waitFor(roomBox, 15000)) return done(r); const d = dialogText(); if (d) return 'The In House list did not open: Opera shows a question ("' + d + '"). Answer it yourself, then press Next guest.'; clicked = false; }
       }
-      await sleep(300);
-      for (let w = 0; w < 40 && busy(); w++) await sleep(250);
-      if (await waitFor(roomBox, 20000)) return '';
-      const d = dialogText(); if (d) return 'The In House list did not open: Opera shows a question ("' + d + '"). Answer it yourself, then press Next guest.';
     }
     const where = (location.hash || location.pathname || '').slice(0, 50);
     return 'The In House list did not open (step: ' + last + '; page: ' + where + '). Open Front Desk > In House yourself, then press Next guest.';
@@ -352,8 +357,10 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     await sleep(200);
     return '';
   }
+  const CODE_V = 'v638';
   async function autoRun(from) {
     if (st.auto || !st.plan) return; st.auto = true; st.stop = false; setBtns();
+    logIt({}, 'version', '', 'fixer code ' + CODE_V + ', helper ' + (window.__hoFxVer || 'unknown'));
     try {
       const items = st.plan.items;
       for (st.idx = from; st.idx < items.length; st.idx++) {
