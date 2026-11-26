@@ -114,6 +114,18 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     if (FORBIDDEN.test(label)) throw new Error('Refused to click "' + label.slice(0, 30) + '". Only he presses it.');
     el.click();
   }
+  // ── the one extra button it may press: "Show Masked Information", only on the Identification page, only to read an ID number ──
+  const isMaskedVal = v => /^[X*•x]{3,}/.test(String(v || '').trim());
+  function findShowMasked() {
+    if (!/Identification/i.test(document.body.innerText || '')) return null;
+    return [...document.querySelectorAll('button,a,[role=button],oj-button')].find(b => vis(b) && /^show masked information$/i.test((b.getAttribute('aria-label') || own(b)).trim())) || null;
+  }
+  async function revealMasked(item) {
+    const b = findShowMasked(); if (!b) return false;
+    b.click(); await sleep(800);   // read-only view change: nothing is saved, nothing is typed
+    logIt(item, 'idNumber', '', 'opened Show Masked Information (numbers on screen are not logged)');
+    return true;
+  }
   function findEditButtons() {
     return [...document.querySelectorAll('button,a,[role=button],oj-button')].filter(b => vis(b) && /^edit$/i.test((b.getAttribute('aria-label') || own(b)).trim()));
   }
@@ -151,15 +163,21 @@ Real Opera layout it was built for (Ibis Styles Deira): Front Desk > In House > 
     if (!nameOnScreen(item.name)) return { ok: false, why: 'The profile open is not room ' + item.room + '\'s guest (name does not match). Nothing was changed.' };
     const rows = item.fields.map(f => {
       const r = readField(f.field);
-      return { f, found: !!r, empty: r ? isEmpty(r.value) : false, editable: r ? r.editable : false, current: r ? r.value : '' };
+      return { f, found: !!r, empty: r ? isEmpty(r.value) : false, masked: r ? isMaskedVal(r.value) : false, editable: r ? r.editable : false, current: r ? r.value : '' };
     });
     return { ok: true, rows };
   }
   async function fill(item) {
     if (st.busy) return; st.busy = true;
     try {
-      const c = check(item);
+      let c = check(item);
       if (!c.ok) { say(c.why, true); item.fields.forEach(f => logIt(item, f.field, f.value, 'refused: wrong or no profile')); return; }
+      // a masked ID number cannot be told from a filled one: with the user's OK, open Show Masked Information once and look again
+      const idRow = c.rows.find(r => r.f.field === 'idNumber' && r.found && isMaskedVal(r.current));
+      if (idRow) {
+        if (st.dry) logIt(item, 'idNumber', idRow.f.value, 'dry run: would open Show Masked Information to check the ID number');
+        else if (await revealMasked(item)) c = check(item);
+      }
       let todo = c.rows.filter(r => r.found && r.empty);
       // an ID number is only typed together with its ID type; Opera keeps masked numbers non-editable and they count as filled
       c.rows.filter(r => !r.found).forEach(r => logIt(item, r.f.field, r.f.value, 'field not found on screen'));
