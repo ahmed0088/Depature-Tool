@@ -24,6 +24,9 @@ Shared rules for all Opera automation live in `opera-auto-core.js` (link check, 
 
 Show Masked Information (user said yes, v629): when an approved ID number row looks masked, the fixer presses that one button on the Identification page (never in a dry run) and looks again. If a number is there it is left alone. The revealed number is never logged or copied. It still never presses Save. Untested on real Opera: whether the ID Number box becomes editable after the reveal and Edit.
 
+## In the Chrome helper (v633)
+With the helper (version 633 or newer) installed, **Start fixing** sends the list to the helper, which hands it to the fixer on your Opera tab (it opens Opera if no tab is open). The list is kept in the helper's memory only (never on disk) and is cleared once the fixer has it. Press Start in the fixer window. Dry run is on until you untick it.
+
 ## Start (auto mode), v632
 Press **Start fixing** in HotelOps, paste the list in the Opera fixer window, press **Load**, then **Start (all guests)**.
 For each guest it clicks only: the In House breadcrumb, Search (after typing the room), the confirmation number, the guest name and the Identification menu. It checks the name matches before it fills. It starts as a dry run (visits and logs, types nothing). With dry run off it fills the empty boxes of one guest, then waits: you check, press Save in Opera, then press **Next guest**. It never presses Save. Auto-save is a later opt-in switch, not built.
