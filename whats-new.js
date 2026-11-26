@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 646, items: ['Cloud run code: Immigration Check has a small Cloud run code box. When the GitHub Opera run asks for your authenticator code, type the 6 digits and press Send. It is used once and deleted.'] },
   { v: 645, items: ['Immigration Check has a Run in cloud (check only) button. It copies a short list (room, arrival, gender, nationality, ID type, last 4 of the ID number, no names) to paste into your Instinct chat. The cloud run then checks those rooms in Opera and replies. It changes nothing.'] },
   { v: 644, items: ['The Opera fixer now picks the innermost result row with the confirmation link, goes back via Back to Manage Reservation then Back to In House (the breadcrumbs are dead there), and ignores disabled links.'] },
   { v: 643, items: ['Fixes the Opera fixer finding the room row again (v642 broke it). Row and confirmation link detection is back to the v640 way, with a test for it.'] },
