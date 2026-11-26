@@ -49,3 +49,11 @@ jobs:
           HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
           HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
           HOTELOPS_HOTEL: ${{ secrets.HOTELOPS_HOTEL }}
+      - name: Cleanup (always, also when cancelled or failed)
+        if: always()
+        run: node scripts/opera-cloud.js
+        env:
+          MODE: cleanup
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
+          HOTELOPS_HOTEL: ${{ secrets.HOTELOPS_HOTEL }}
