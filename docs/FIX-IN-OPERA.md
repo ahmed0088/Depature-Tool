@@ -22,4 +22,4 @@ Opera link per hotel: paste the hotel's Opera Cloud link in the Fix in Opera car
 
 Shared rules for all Opera automation live in `opera-auto-core.js` (link check, buttons that may never be pressed, name matching). `tests/opera-auto.test.js` checks the pasted fixer follows them.
 
-Still pending: pressing "Show Masked Information" is not done. The fixer does not press it, so ID numbers stay uneditable while masked, until the user says yes.
+Show Masked Information (user said yes, v629): when an approved ID number row looks masked, the fixer presses that one button on the Identification page (never in a dry run) and looks again. If a number is there it is left alone. The revealed number is never logged or copied. It still never presses Save. Untested on real Opera: whether the ID Number box becomes editable after the reveal and Edit.
