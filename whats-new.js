@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 636, items: ['The Opera fixer now logs every step (typed room, Search, rows found, Confirmation Number, guest name, Identification), always returns to the In House list through the menu search before the next guest, and tries the room as 0301 and 301. Update the helper zip to get it.'] },
   { v: 635, items: ['The Opera fixer can now open In House through the menu search (hamburger, type In House) when the Front Desk menu does not show it, and the log lists what the menu shows. Update the helper zip to get it.'] },
   { v: 634, items: ['The Opera fixer now opens the In House list by itself: it uses the breadcrumb, or the Front Desk menu then In House, waits for Opera to load, retries, and names the step that failed. Update the helper zip to get it.'] },
   { v: 633, items: ['The Opera fixer now lives in your Chrome helper. Press Start fixing in Immigration Check: the list goes to your Opera tab (Opera opens if it is closed), the fixer window opens there, and you press Start. It runs as a dry run first, opens each guest by itself and stops before Save. Update the helper (download it from Settings, or use the zip you were sent) to get it.'] },
