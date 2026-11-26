@@ -83,5 +83,9 @@ try{
  {const page=await browser.newPage();await page.setContent('<table><tbody><tr role="row"><td><a href="#" id="cl">1234567</a></td><td><div role="row">0111</div></td><td>Zed Fakeperson</td></tr></tbody></table>');await page.addScriptTag({content:fixer});
   const r=await page.evaluate(()=>{const t=window.__hoFixer._test;const a=t.roomRows({room:'0111',name:'Zed Fakeperson'}),b=t.roomRows({room:'0111',name:'Other Person'},true);return [a.length,!!a[0].querySelector('a'),b.length]});
   assert.deepEqual(r,[1,true,1],'row detection must match the v640 behaviour: '+r);await page.close();}
+ // v644: nested In House grid. The outer row wraps the whole table; the innermost row with the room cell and link:id ending :l1 must be chosen
+ {const page=await browser.newPage();await page.setContent('<table id="outer"><tbody><tr id="outerTr"><td><table><tbody><tr id="r0"><td><a href="#" id="x:0:l1">1111111</a></td><td>0105</td><td>Amy Notreal</td></tr><tr id="r1"><td><a href="#" id="x:1:l1">2222222</a></td><td>0111</td><td>Zed Fakeperson</td></tr></tbody></table></td></tr></tbody></table>');await page.addScriptTag({content:fixer});
+  const r=await page.evaluate(()=>{const t=window.__hoFixer._test;const a=t.roomRows({room:'0111',name:'Zed Fakeperson'});return [a.length,a[0]&&a[0].id,a[0]&&a[0].querySelector('a').id]});
+  assert.deepEqual(r,[1,'r1','x:1:l1'],'innermost row with the link: '+r);await page.close();}
  console.log('Auto fixer passed on a mock Opera: opens guests itself, fills only empty gender, never saves, refuses a wrong name.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
