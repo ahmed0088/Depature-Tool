@@ -80,7 +80,9 @@
       if (r.noPass) {
         if (mt.guest && !isEmptyValue(mt.guest.doc) && !isMasked(mt.guest.doc)) {
           const kind = docKind(mt.guest.doc);
-          fields.push({ field: 'idType', label: 'ID type', value: kind, display: kind, source: 'Vicas Inhouse', needsTap: true, idKind: kind });
+          const pref = kind === 'EID' && meta && UAE_ID_TYPES.includes(meta.uaeIdType) ? meta.uaeIdType : '';
+          const tv = kind === 'PAS' ? 'PAS' : pref;
+          fields.push({ field: 'idType', label: 'ID type', value: tv, display: tv, source: kind === 'PAS' ? 'Vicas Inhouse' : (pref ? 'Emirates ID: your usual UAE type' : 'Emirates ID: choose RES or IDC'), needsTap: true, idKind: kind });
           fields.push({ field: 'idNumber', label: 'ID number', value: String(mt.guest.doc).replace(/\s+/g, ''), display: last4(mt.guest.doc), source: 'Vicas Inhouse', needsTap: true, idKind: kind, secret: true });
         } else if (mt.why) notes.push('ID: ' + mt.why);
       }
@@ -90,6 +92,9 @@
   }
 
   const FIELDS = ['gender', 'nationality', 'idType', 'idNumber'];
+  // ID Type codes seen in Opera (Ibis Styles Deira). Opera has no Emirates ID code: he picks one (RES, IDC or GCC ID) until it is settled.
+  const UAE_ID_TYPES = ['RES', 'IDC'];   // both are used for UAE documents; GCC ID is for other GCC nationals' cards, PAS for passports
+  const ID_TYPES = ['PAS', 'DRL', 'IDC', 'MID', 'GCC ID', 'RES', 'GRN', 'SSC', 'VISA', 'UNKNOWN'];
   function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h.toString(36); }
   const b64 = s => typeof Buffer !== 'undefined' ? Buffer.from(s, 'utf8').toString('base64') : btoa(unescape(encodeURIComponent(s)));
   const unb64 = s => typeof Buffer !== 'undefined' ? Buffer.from(s, 'base64').toString('utf8') : decodeURIComponent(escape(atob(s)));
@@ -99,8 +104,9 @@
     (plan.items || []).forEach(it => {
       const ok = it.fields.filter(f => f.value && approved && approved[it.id] && approved[it.id][f.field]);
       // an ID number is only sent together with its type, and an ID type never travels alone
-      const hasNum = ok.some(f => f.field === 'idNumber');
-      const f2 = ok.filter(f => f.field !== 'idType' || hasNum);
+      const hasNum = ok.some(f => f.field === 'idNumber'), hasType = ok.some(f => f.field === 'idType');
+      // the number is only typed when its type is approved too (Opera needs a type for the document)
+      const f2 = ok.filter(f => f.field === 'idType' ? hasNum : f.field === 'idNumber' ? hasType : true);
       if (f2.length) items.push({ id: it.id, room: it.room, name: it.name, arrival: it.arrival, fields: f2.map(f => ({ field: f.field, value: f.value })) });
     });
     const body = JSON.stringify({ v: 1, hotel: plan.hotel, bd: plan.businessDate, items });
@@ -119,6 +125,7 @@
         if (!FIELDS.includes(f.field) || typeof f.value !== 'string' || !f.value) throw new Error('A plan field is not allowed.');
         if (f.field === 'gender' && !/^[MF]$/.test(f.value)) throw new Error('Gender must be M or F.');
         if (f.field === 'nationality' && !VALID[f.value]) throw new Error('Unknown country code.');
+        if (f.field === 'idType' && !ID_TYPES.includes(f.value)) throw new Error('Unknown ID type.');
       });
     });
     return plan;
@@ -128,5 +135,5 @@
     const secret = o.field === 'idNumber';
     return { t: o.t || new Date().toISOString(), hotel: o.hotel || '', room: normRoom(o.room), arrival: o.arrival || '', field: o.field, to: secret ? last4(o.value) : String(o.value || ''), result: o.result, by: o.by || '', dry: !!o.dry };
   }
-  return { countryCode, countryList, normRoom, tokens, nameMatch, docKind, last4, isMasked, isEmptyValue, matchInhouse, buildPlan, encodePlan, decodePlan, logEntry, FIELDS };
+  return { countryCode, countryList, normRoom, tokens, nameMatch, docKind, last4, isMasked, isEmptyValue, matchInhouse, ID_TYPES, UAE_ID_TYPES, buildPlan, encodePlan, decodePlan, logEntry, FIELDS };
 });
