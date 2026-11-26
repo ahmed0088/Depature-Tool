@@ -668,7 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v645';
+const APP_VERSION = 'v646';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;
@@ -971,4 +971,4 @@ function buildStyledWorkbook(sheets, styles) {
 function downloadStyledWorkbook(filename, sheets, styles) {
   const blob = buildStyledWorkbook(sheets, styles), url = URL.createObjectURL(blob), a = document.createElement('a');
   a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+                          }
