@@ -13,13 +13,13 @@ try{const page=await browser.newPage({viewport:{width:1200,height:900},serviceWo
   const store={};window.firebase={database:()=>({ref:p=>({once:async()=>({val:()=>null}),update:async v=>{writes.push([p,JSON.stringify(v)])},push:async v=>{writes.push([p,JSON.stringify(v)])},limitToLast(){return this}})})};});
  for(const f of ['reports.js','opera-auto-core.js','reconcile-core.js','reconcile-card.js','immig-fixer-core.js','immig-fixer.js'])await page.addScriptTag({content:read(f)});
  await page.evaluate(([imm,inh])=>{const p=_immigParseInhouseXML(inh);_immigInhouseList=p.list;_immigNatMap=p.natMap;_immigPassportMap=p.docMap;_immigInhouseRoomGuests=p.roomMap;document.getElementById('immigPasteInput2').value=imm;processImmig2(true);},[IMM,INH]);
- await page.waitForSelector('#immigFixerCard input[type=checkbox]');
+ const op=()=>page.evaluate(()=>document.querySelectorAll('#immigFixerCard details').forEach(d=>d.open=true));await page.waitForSelector('#immigFixerCard input[type=checkbox]',{state:'attached'});await op();
  const rc=await page.locator('#immigReconCard').innerText();assert(/2\s*guests match/.test(rc)&&/Only in the Opera report/.test(rc)&&/Bob Faketwo/.test(rc)&&!/Only in the Vicas list/.test(rc),'reconcile card: Bob only in Opera, two match: '+rc);
  const text=await page.locator('#immigFixerCard').innerText();
  assert(/Room 102/.test(text)&&/ET · Ethiopia/.test(text),'nationality from Vicas by room+name');assert(/••••4321/.test(text)&&!/ZZ7654321/.test(await page.locator('#immigFixerCard').innerHTML()),'full ID number never shown');
- // defaults: nationality on, ID off, guessed/none gender off
- const st=await page.evaluate(()=>JSON.stringify(hoImmigFixerState.ok));const ok=JSON.parse(st),id=Object.keys(ok)[0];assert.equal(ok[id].nationality,true);assert.equal(ok[id].idNumber,false);
- await page.locator('select[data-edit$="|gender"]').first().selectOption('F');
+ // defaults: nationality on, strong passport on, guessed/none gender off
+ const st=await page.evaluate(()=>JSON.stringify(hoImmigFixerState.ok));const ok=JSON.parse(st),id=Object.keys(ok)[0];assert.equal(ok[id].nationality,true);assert.equal(ok[id].idNumber,true,'a passport from a strong Vicas match is pre-ticked');
+ await page.locator('select[data-edit$="|gender"]').first().selectOption('F');await op();
  await page.locator('input[data-ok$="|idNumber"]').first().check();await page.locator('input[data-ok$="|idType"]').first().check();
  await page.evaluate(()=>{window.copied='';Object.defineProperty(navigator,'clipboard',{value:{writeText:async t=>{window.copied=t}},configurable:true});});
  await page.locator('#immigFixCopy').click();const code=await page.evaluate(()=>window.copied);const plan=require('../immig-fixer-core.js').decodePlan(code);
