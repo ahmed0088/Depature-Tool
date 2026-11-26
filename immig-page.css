@@ -1,0 +1,39 @@
+/* Immigration Check page: clearer steps, evenly spaced cards, and a layout that works on phone and desktop.
+   Scoped to #panel-immig and built on the app's theme variables, so every theme keeps its own colours. */
+#panel-immig > div { max-width: 980px; margin-left: auto; margin-right: auto; }
+#panel-immig .card { padding: 16px 18px; margin-bottom: 14px; border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 6px 18px rgba(0,0,0,.05); }
+#panel-immig .howto { margin-bottom: 14px; }
+/* steps */
+#panel-immig .imm-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; list-style: none; margin: 0 0 14px; padding: 0; counter-reset: imm; }
+#panel-immig .imm-steps li { counter-increment: imm; display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; font-size: .74rem; line-height: 1.3; color: var(--text2); }
+#panel-immig .imm-steps li::before { content: counter(imm); flex: 0 0 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 700 .7rem var(--mono, monospace); background: var(--gold, var(--sky, #3b82f6)); color: #fff; }
+#panel-immig .imm-steps b { display: block; color: var(--text); font-size: .76rem; margin-bottom: 1px; }
+/* Opera link / Fix in Opera setup card */
+#panel-immig .imm-opera { border-left: 4px solid var(--gold, var(--sky, #3b82f6)); }
+#panel-immig .imm-h { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin-bottom: 10px; }
+#panel-immig .imm-h b { font-size: .9rem; color: var(--text); }
+#panel-immig .imm-h span { font-size: .72rem; color: var(--text3); }
+#panel-immig .imm-lbl { display: block; font-size: .72rem; font-weight: 600; margin-bottom: 5px; color: var(--text2); }
+#panel-immig .imm-lbl small { font-weight: 400; color: var(--text3); }
+#panel-immig .imm-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+#panel-immig .imm-row input { flex: 1 1 260px; min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2, var(--card)); color: var(--text); font-size: .8rem; }
+#panel-immig .imm-msg { margin-top: 6px; font-size: .68rem; color: var(--text3); }
+#panel-immig .imm-hint { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); font-size: .7rem; color: var(--text3); }
+#panel-immig .upload-zone { border-radius: 12px; transition: border-color .15s, transform .15s; }
+#panel-immig .upload-zone[onclick]:hover { border-color: var(--gold, var(--sky, #3b82f6)); transform: translateY(-1px); }
+/* the main drop area: a compact bar instead of a tall empty box */
+#panel-immig .upload-zone > div[style*="padding:24px"] { padding: 16px 18px !important; flex-direction: row !important; text-align: left !important; gap: 14px !important; justify-content: center; }
+#panel-immig .upload-zone > div[style*="padding:24px"] > div:first-child { font-size: 1.6rem !important; }
+#panel-immig #immigPasteInput2 { width: 100%; box-sizing: border-box; }
+#panel-immig .card > div[style*="margin-top:10px"] .btn { min-width: 112px; justify-content: center; }
+@media (max-width: 760px) {
+  #panel-immig { padding-left: 14px; padding-right: 14px; }
+  #panel-immig .imm-steps { grid-template-columns: 1fr 1fr; }
+  #panel-immig .card { padding: 14px; }
+  #panel-immig .upload-zone > div[style*="padding:24px"] { flex-direction: column !important; text-align: center !important; padding: 14px !important; }
+  #panel-immig .card > div[style*="margin-top:10px"] { display: grid !important; grid-template-columns: 1fr 1fr; }
+  #panel-immig .imm-row .btn { flex: 1 1 120px; justify-content: center; }
+}
+@media (max-width: 420px) { #panel-immig .imm-steps { grid-template-columns: 1fr; } }
+#panel-immig .upload-zone textarea { display: block; width: 100%; max-width: 100%; box-sizing: border-box; margin: 0; }
+#panel-immig .upload-zone .upload-label-bar + textarea { padding: 10px 12px; }
