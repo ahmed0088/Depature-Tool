@@ -23,3 +23,8 @@ Opera link per hotel: paste the hotel's Opera Cloud link in the Fix in Opera car
 Shared rules for all Opera automation live in `opera-auto-core.js` (link check, buttons that may never be pressed, name matching). `tests/opera-auto.test.js` checks the pasted fixer follows them.
 
 Show Masked Information (user said yes, v629): when an approved ID number row looks masked, the fixer presses that one button on the Identification page (never in a dry run) and looks again. If a number is there it is left alone. The revealed number is never logged or copied. It still never presses Save. Untested on real Opera: whether the ID Number box becomes editable after the reveal and Edit.
+
+## Start (auto mode), v632
+Press **Start fixing** in HotelOps, paste the list in the Opera fixer window, press **Load**, then **Start (all guests)**.
+For each guest it clicks only: the In House breadcrumb, Search (after typing the room), the confirmation number, the guest name and the Identification menu. It checks the name matches before it fills. It starts as a dry run (visits and logs, types nothing). With dry run off it fills the empty boxes of one guest, then waits: you check, press Save in Opera, then press **Next guest**. It never presses Save. Auto-save is a later opt-in switch, not built.
+Not verified on the real Opera: the exact page layout after each click (tested on a mock page only). If a step fails it says which and moves on or stops.
