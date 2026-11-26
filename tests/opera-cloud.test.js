@@ -16,3 +16,24 @@ console.log('opera-cloud: authenticator code and link checks passed');
   assert.equal(c, '654321'); assert.equal(db.operaCloudCode, undefined, 'deleted after use'); assert.equal(db.operaCloudWant, undefined);
   console.log('opera-cloud: code-per-run path passed');
 })();
+// privacy cleanup: a fake database + sign-in server; an unused plan is removed, a fresh one is kept when a max age is set, and the public log says nothing about guests
+(async () => {
+  const http = require('node:http'), { spawnSync } = require('node:child_process'), { once } = require('node:events');
+  const store = { 'hotels/h1/operaCloudPlan': { code: 'SYNTHETIC', at: Date.now() - 3600e3, mode: 'audit' }, 'hotels/h1/operaCloudResult': { at: Date.now() - 2 * 864e5, lines: [{ room: '0101' }] } };
+  const srv = http.createServer((q, r) => {
+    if (q.method === 'POST') { r.setHeader('content-type', 'application/json'); return r.end(JSON.stringify({ idToken: 't', localId: 'u' })); }
+    const k = decodeURIComponent(q.url.split('?')[0].replace(/^\//, '').replace(/\.json$/, ''));
+    if (q.method === 'DELETE') { delete store[k]; return r.end('null'); }
+    r.setHeader('content-type', 'application/json'); r.end(JSON.stringify(store[k] === undefined ? null : store[k]));
+  }).listen(0); await once(srv, 'listening');
+  const base = 'http://127.0.0.1:' + srv.address().port, env = Object.assign({}, process.env, { MODE: 'cleanup', HOTELOPS_EMAIL: 'a@b.c', HOTELOPS_PASS: 'x', HOTELOPS_HOTEL: 'h1', FB_AUTH_URL: base + '/auth', FB_DB_URL: base });
+  const run = extra => new Promise(res => { const c = require('node:child_process').spawn(process.execPath, [require.resolve('../scripts/opera-cloud.js')], { env: Object.assign({}, env, extra) }); let o = ''; c.stdout.on('data', d => o += d); c.on('close', () => res(o)); });
+  store['hotels/h1/operaCloudPlan'].at = Date.now();
+  let out = await run({ CLEANUP_MAX_MIN: '30' }); assert(store['hotels/h1/operaCloudPlan'], 'a fresh plan is kept by the scheduled cleanup'); assert.equal(store['hotels/h1/operaCloudResult'], undefined, 'old result dropped');
+  store['hotels/h1/operaCloudPlan'].at = Date.now() - 3600e3;
+  out = await run({ CLEANUP_MAX_MIN: '30' }); assert.equal(store['hotels/h1/operaCloudPlan'], undefined, 'a stale plan is removed');
+  store['hotels/h1/operaCloudPlan'] = { code: 'SYNTHETIC', at: Date.now() };
+  out = await run({}); assert.equal(store['hotels/h1/operaCloudPlan'], undefined, 'after a run the plan is removed at once');
+  assert(!/0101|SYNTHETIC/.test(out)); srv.close();
+  console.log('opera-cloud: privacy cleanup passed');
+})().catch(e => { console.error(e); process.exit(1); });
