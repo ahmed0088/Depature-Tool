@@ -96,7 +96,7 @@
       (skipped.length ? '<details class="imm-more"><summary>Why ' + skipped.length + ' cannot be fixed</summary><div class="imm-small">' + skipped.map(it => 'Room ' + esc(it.room) + ' · ' + esc(it.name) + ' · ' + esc(it.notes.join(' · ') || 'nothing to fill')).join('<br>') + '</div></details>' : '') +
       (!items.length ? '<div class="imm-sub">Nothing to fix. All good.</div>' : '') +
       '<div class="imm-go"><button class="btn gold imm-big" id="immigFixCopy">▶ Start fixing (<span id="immigFixN">' + approvedCount() + '</span> ticked fields)</button> <button class="btn imm-big" id="immigFixCloud">☁ Run in cloud (check only)</button></div>' +
-      '<details class="imm-more" id="immigCloudBox"><summary>Cloud run (GitHub)</summary><div class="imm-small" style="margin:6px 0">1. Send the plan. 2. On GitHub run "Opera fixer (cloud)" with mode audit. 3. Type your code here when it asks. The plan is kept only until the run starts, then deleted.</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><button class="btn" id="immigCloudPlan">Send plan to cloud</button><label class="imm-small"><input type="checkbox" id="immigCloudSave"> Allow Save (fills empty fields and saves; full ID numbers are sent)</label></div><div class="imm-small" id="immigCloudRes" style="margin:6px 0"></div><div class="imm-small" id="immigCloudWant" style="margin:6px 0">When the GitHub cloud run asks for your authenticator code, type the 6 digits here and press Send. It is used once and deleted.</div><div style="display:flex;gap:8px"><input id="immigCloudCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code" style="width:130px"><button class="btn" id="immigCloudSend">Send code</button></div></details>' +
+      '<details class="imm-more" id="immigCloudBox"><summary>Cloud run (GitHub)</summary><div class="imm-small" style="margin:6px 0">Sign-in test: press the button, then type your code below when it asks. Check run: send the plan, press the check button, type your code. Nothing is saved in Opera. The plan is kept only until the run starts, then deleted.</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><button class="btn gold" id="immigCloudStartSignin">▶ Start sign-in test</button><button class="btn" id="immigCloudStartAudit">▶ Start read-only check</button></div><div class="imm-small" id="immigCloudStartMsg" style="margin:4px 0"></div><div class="imm-small" id="immigCloudKeyRow" style="display:none;margin:4px 0">One-time setup on this device: paste the GitHub start key (the same one Neorcha uses). It stays on this device only.<br><input id="immigCloudKey" type="password" autocomplete="off" placeholder="GitHub start key" style="width:220px"> <button class="btn" id="immigCloudKeySave">Save key</button></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><button class="btn" id="immigCloudPlan">Send plan to cloud</button><label class="imm-small"><input type="checkbox" id="immigCloudSave"> Allow Save (fills empty fields and saves; full ID numbers are sent)</label></div><div class="imm-small" id="immigCloudRes" style="margin:6px 0"></div><div class="imm-small" id="immigCloudWant" style="margin:6px 0">When the GitHub cloud run asks for your authenticator code, type the 6 digits here and press Send. It is used once and deleted.</div><div style="display:flex;gap:8px"><input id="immigCloudCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code" style="width:130px"><button class="btn" id="immigCloudSend">Send code</button></div></details>' +
       '<div class="imm-small" id="immigFixStatus" style="margin:6px 0">' + esc(S.fxNote || '') + '</div>' + extState() +
       (helperFx() ? '<ol class="imm-3"><li>Press <b>Start fixing</b>. The list goes to your Opera tab.</li><li>In the fixer window there, press <b>Start</b>. It opens each guest and fills the empty boxes.</li><li>Check the guest, press Save in Opera yourself, then press <b>Next guest</b>.</li></ol>' : '<ol class="imm-3"><li>Press <b>Start fixing</b>. It copies the list.</li><li>In Opera: open the fixer window, paste the list, press <b>Load</b>.</li><li>Press <b>Start</b> in the window. It opens each guest and fills the empty boxes. You press Save in Opera.</li></ol>') +
       '<details class="imm-more"><summary>More</summary><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="immigFixSave">Remember gender and nationality</button></div>' +
@@ -114,6 +114,9 @@
     document.getElementById('immigFixCopy').onclick = copyPlan;
     document.getElementById('immigFixCloud').onclick = copyCloudRequest;
     document.getElementById('immigCloudSend').onclick = sendCloudCode;
+    document.getElementById('immigCloudStartSignin').onclick = () => startCloud('signin');
+    document.getElementById('immigCloudStartAudit').onclick = () => startCloud('audit');
+    document.getElementById('immigCloudKeySave').onclick = saveCloudKey;
     document.getElementById('immigCloudPlan').onclick = sendCloudPlan;
     watchCloudWant(); watchCloudResult();
     document.getElementById('immigFixSave').onclick = saveShared;
@@ -149,6 +152,31 @@
       rows.push([it.room, it.arrival || '', f.gender ? f.gender.value : '-', f.nationality ? f.nationality.value : '-', f.idType ? f.idType.value : '-', f.idNumber ? f.idNumber.display : '-'].join('|'));
     });
     return rows.length ? 'CLOUD OPERA CHECK (read-only, change nothing in Opera)\nroom|arrival|gender|nationality|id type|id number last 4  (- = already filled in Opera, nothing to do)\n' + rows.join('\n') : '';
+  }
+  // start the GitHub run from here (same start key as Neorcha, kept on this device). Only signin or audit: Save is never started from this button.
+  const GH_KEY = 'ho_gh_start_key_v1', GH_API = 'https://api.github.com/repos/ahmed0088/Depature-Tool/actions/workflows/opera-cloud.yml/dispatches';
+  function cloudMsg(t, bad) { const m = document.getElementById('immigCloudStartMsg'); if (m) { m.textContent = t; m.style.color = bad ? 'var(--red,#c0392b)' : ''; } }
+  function saveCloudKey() {
+    const el = document.getElementById('immigCloudKey'), v = String(el && el.value || '').trim();
+    if (!v) return toast('Paste the start key first.', 'err');
+    try { localStorage.setItem(GH_KEY, v); el.value = ''; const r = document.getElementById('immigCloudKeyRow'); if (r) r.style.display = 'none'; toast('Key saved on this device. Press Start again.', 'ok'); } catch (_) { toast('Could not save the key on this device.', 'err'); }
+  }
+  async function startCloud(mode) {
+    if (mode !== 'signin' && mode !== 'audit') return;
+    let key = ''; try { key = localStorage.getItem(GH_KEY) || ''; } catch (_) {}
+    if (!key) { const r = document.getElementById('immigCloudKeyRow'); if (r) r.style.display = ''; return cloudMsg('Needs the GitHub start key once on this device.', true); }
+    const d = db(); if (!d) return toast('Not connected to the database.', 'err');
+    if (mode === 'audit') { let plan = null; try { const sn = await d.ref('hotels/' + HOTEL_ID + '/operaCloudPlan').once('value'); plan = sn.val(); } catch (_) {} if (!plan) return cloudMsg('Press "Send plan to cloud" first (tick the fixes).', true); }
+    const ov = S.opera ? A.validateOperaUrl(S.opera) : null, url = ov && ov.ok ? ov.url : '';
+    cloudMsg('Asking GitHub to start…');
+    try {
+      const r = await fetch(GH_API, { method: 'POST', headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: 'main', inputs: { mode, url, limit: mode === 'signin' ? '2' : '0' } }) });
+      if (r.status === 401) return cloudMsg('GitHub refused the key (expired or mistyped). Paste a new one.', true);
+      if (r.status === 403 || r.status === 404) return cloudMsg('The key cannot start this run. It needs the Depature-Tool repository and Actions: Read and write.', true);
+      if (!r.ok) return cloudMsg('GitHub answered ' + r.status + '.', true);
+      cloudMsg('Started (' + (mode === 'signin' ? 'sign-in test' : 'read-only check') + '). Within about a minute type your authenticator code below and press Send.');
+      const b = document.getElementById('immigCloudBox'); if (b) b.open = true;
+    } catch (_) { cloudMsg('Could not reach GitHub.', true); }
   }
   // the authenticator code for the GitHub cloud run: written once to a private path, the run reads it and deletes it
   async function sendCloudCode() {
