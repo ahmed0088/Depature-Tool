@@ -98,7 +98,7 @@
       '<div class="imm-go"><button class="btn gold imm-big" id="immigFixCopy">▶ Start fixing (<span id="immigFixN">' + approvedCount() + '</span> ticked fields)</button> <button class="btn imm-big" id="immigFixCloud">☁ Run in cloud (check only)</button></div>' +
       '<div id="immigCloudBox" style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:10px 0"><b>Fix in Opera (cloud) · saves guest profiles</b>' +
       '<ol class="imm-3" style="margin:8px 0 8px 18px;padding:0;line-height:1.7"><li>Load today\'s Immigration report and In House list above, and tick the fixes.</li>' +
-      '<li>Press the big button.<div style="margin:6px 0"><button class="btn gold imm-big" id="immigCloudOne">▶ Fix in Opera now (fills empty fields and SAVES)</button></div><div class="imm-small">It fills only empty gender, nationality and ID in guest profiles and presses Save. It never overwrites a value and never touches folios, postings or cashiering.</div></li>' +
+      '<li>Press the big button.<div style="margin:6px 0"><button class="btn gold imm-big" id="immigCloudOne">▶ Fix in Opera now (first 5 rooms, fills empty fields and SAVES)</button></div><div class="imm-small" style="margin:4px 0">First run is only 5 rooms. Check the results below in Opera, then use <button class="btn" id="immigCloudAll">Run all rooms</button></div><div class="imm-small">It fills only empty gender, nationality and ID in guest profiles and presses Save. It never overwrites a value and never touches folios, postings or cashiering.</div></li>' +
       '<li>When it asks, type your fresh 6-digit code and press Send.<div style="display:flex;gap:8px;margin:6px 0"><input id="immigCloudCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code" style="width:130px"><button class="btn" id="immigCloudSend">Send code</button></div></li>' +
       '<li>See the results below: rooms saved, nothing to fill, need a look.</li></ol>' +
       '<div class="imm-small" id="immigCloudStartMsg" style="margin:4px 0;font-weight:600"></div><div class="imm-small" id="immigCloudWant" style="margin:4px 0"></div><div class="imm-small" id="immigCloudRes" style="margin:6px 0"></div>' +
@@ -121,7 +121,8 @@
     document.getElementById('immigFixCopy').onclick = copyPlan;
     document.getElementById('immigFixCloud').onclick = copyCloudRequest;
     document.getElementById('immigCloudSend').onclick = sendCloudCode;
-    document.getElementById('immigCloudOne').onclick = oneButton;
+    document.getElementById('immigCloudOne').onclick = () => oneButton(false);
+    document.getElementById('immigCloudAll').onclick = () => oneButton(true);
     document.getElementById('immigCloudStartSignin').onclick = () => startCloud('signin');
     document.getElementById('immigCloudStartAudit').onclick = async () => { if (await sendCloudPlan(false)) startCloud('audit'); };   // read-only: plan without full ID numbers
     document.getElementById('immigCloudKeySave').onclick = saveCloudKey;
@@ -169,7 +170,7 @@
     if (!v) return toast('Paste the start key first.', 'err');
     try { localStorage.setItem(GH_KEY, v); el.value = ''; const r = document.getElementById('immigCloudKeyRow'); if (r) r.style.display = 'none'; toast('Key saved on this device. Press Start again.', 'ok'); } catch (_) { toast('Could not save the key on this device.', 'err'); }
   }
-  async function startCloud(mode) {
+  async function startCloud(mode, lim) {
     if (mode !== 'signin' && mode !== 'audit' && mode !== 'save') return;   // 'save' is started only by the big button
     let key = ''; try { key = localStorage.getItem(GH_KEY) || ''; } catch (_) {}
     if (!key) { const r = document.getElementById('immigCloudKeyRow'); if (r) r.style.display = ''; return cloudMsg('Needs the GitHub start key once on this device.', true); }
@@ -178,11 +179,11 @@
     const ov = S.opera ? A.validateOperaUrl(S.opera) : null, url = ov && ov.ok ? ov.url : '';
     cloudMsg('Asking GitHub to start…'); const t0 = Date.now();
     try {
-      const r = await fetch(GH_API, { method: 'POST', headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: 'main', inputs: { mode, url, limit: mode === 'signin' ? '2' : '0' } }) });
+      const r = await fetch(GH_API, { method: 'POST', headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: 'main', inputs: { mode, url, limit: mode === 'signin' ? '2' : (lim === 'all' ? '0' : lim === '5' ? '5' : '0') } }) });
       if (r.status === 401) return cloudMsg('GitHub refused the key (expired or mistyped). Paste a new one.', true);
       if (r.status === 403 || r.status === 404) return cloudMsg('The key cannot start this run. It needs the Depature-Tool repository and Actions: Read and write.', true);
       if (!r.ok) return cloudMsg('GitHub answered ' + r.status + '.', true);
-      cloudMsg('Started (' + (mode === 'signin' ? 'sign-in test' : mode === 'save' ? 'fix in Opera' : 'read-only check') + '). GitHub is getting ready (about a minute). Type your code in step 3 when it asks.');
+      cloudMsg('Started (' + (mode === 'signin' ? 'sign-in test' : mode === 'save' ? 'fix in Opera, ' + (lim === '5' ? 'first 5 rooms' : 'all rooms') : 'read-only check') + '). GitHub is getting ready (about a minute). Type your code in step 3 when it asks.');
       const b = document.getElementById('immigCloudBox'); if (b) b.open = true;
       watchRun(key, t0, mode);
     } catch (e) { cloudMsg('Could not reach GitHub (' + String(e && e.message || e).slice(0, 80) + ').', true); }
@@ -210,10 +211,10 @@
     }
   }
   // one button: today's loaded report -> plan (read-only form, no full ID numbers) -> start the read-only run -> results show in the card below
-  async function oneButton() {
+  async function oneButton(all) {
     let ok = false; try { ok = await sendCloudPlan(true); } catch (e) { return cloudMsg('Could not prepare the plan (' + String(e && e.message || e).slice(0, 80) + ').', true); }   // the big button always sends the plan in save mode (empty fields only; full ID numbers go to the private path)
     if (!ok) return cloudMsg('Load today\'s Immigration report and In House list above first, and tick the fixes.', true);
-    try { await startCloud('save'); } catch (e) { cloudMsg('Could not start (' + String(e && e.message || e).slice(0, 80) + ').', true); }
+    try { await startCloud('save', all ? 'all' : '5'); } catch (e) { cloudMsg('Could not start (' + String(e && e.message || e).slice(0, 80) + ').', true); }
   }
   // the authenticator code for the GitHub cloud run: written once to a private path, the run reads it and deletes it
   async function sendCloudCode() {
