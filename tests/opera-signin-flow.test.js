@@ -3,7 +3,7 @@
 // the real "Stay signed in?" page is answered No; sign-in ends on a fake Opera page.
 const fs = require('node:fs'), assert = require('node:assert/strict'), { chromium } = require('playwright-core');
 process.env.MODE = 'signin';
-const { msSignIn } = require('../scripts/opera-cloud.js');
+const { msSignIn, NO_PASSKEY } = require('../scripts/opera-cloud.js');
 const MS = 'https://login.mock-ms.test/', OP = 'https://fake.oraclehospitality.eu-frankfurt-1.ocs.oraclecloud.com/opera';
 const pages = {
   email: '<title>Sign in</title><input name="loginfmt"><input type="submit" id="idSIButton9" value="Next"><script>idSIButton9.onclick=e=>{e.preventDefault();location.href="' + MS + 'pw"}</script>',
@@ -32,6 +32,11 @@ const pages2 = Object.assign({}, pages, {
     await p2.goto(MS);
     await msSignIn(p2, 'fake.user@example.test', 'fake-pass', async () => '000000');
     assert(/oraclecloud\.com/.test(p2.url()), 'passkey prompt handled, ended on the fake Opera page: ' + p2.url());
+    // scenario 4: passkey offered only when WebAuthn exists; with NO_PASSKEY Microsoft goes straight to the password
+    const c4 = await browser.newContext(); await c4.addInitScript(NO_PASSKEY); const p4 = await c4.newPage();
+    await p4.route('**/*', r => { const u = r.request().url(); r.fulfill({ contentType: 'text/html', body: u === MS ? '<title>Sign in</title><input name="loginfmt"><input type="submit" id="idSIButton9" value="Next"><script>idSIButton9.onclick=()=>{location.href="' + MS + '"+(window.PublicKeyCredential?"pk":"pwd")}</script>' : u === MS + 'pk' ? '<title>Face, fingerprint, PIN or security key</title><button>Cancel</button>' : u === MS + 'pwd' ? pages.pw : u === MS + 'kmsi' ? pages.kmsi : u === OP ? pages.op : '' }); });
+    await p4.goto(MS); await msSignIn(p4, 'fake.user@example.test', 'fake-pass', async () => '000000');
+    assert(/oraclecloud\.com/.test(p4.url()), 'with passkeys hidden the password page is reached: ' + p4.url());
     // scenario 3: a page nobody planned for: the run must THROW with the page labels (so HotelOps can show the reason), not exit silently
     const p3 = await browser.newPage(); await p3.route('**/*', r => r.fulfill({ contentType: 'text/html', body: '<title>Something new</title><button id="zz">Mystery</button>' }));
     await p3.goto(MS); const saved = process.exit; let exited = false; process.exit = () => { exited = true; };
