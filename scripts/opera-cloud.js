@@ -30,12 +30,14 @@ function totp(key, nowMs) {
 const okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' && /(^|\.)oraclecloud\.com$/i.test(x.hostname); } catch (_) { return false; } };
 
 // ── Microsoft sign-in, step by step; on a surprise it logs only the page's title and button labels ──
+// A cloud machine has no passkey device. Hide WebAuthn so Microsoft does not offer "Face, fingerprint, PIN or security key" and goes to the password instead.
+const NO_PASSKEY = '(()=>{try{delete window.PublicKeyCredential;Object.defineProperty(navigator,"credentials",{get:()=>undefined,configurable:true});}catch(e){}})();';
 async function msSignIn(page, user, pass, getCode) {
   const seen = async () => { const t = await page.title().catch(() => ''); const b = await page.$$eval('button,input[type=submit],a,[role=button],[role=link],[role=option],[data-value]', n => n.filter(x => x.offsetParent !== null).map(x => ((x.id ? '#' + x.id + ' ' : '') + (x.value || x.getAttribute('aria-label') || x.textContent || '')).replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 12)).catch(() => []); return 'title "' + t.slice(0, 60) + '"; buttons: ' + b.join(' | ').slice(0, 300); };
   // click with a short wait; if something covers the element, click it through the page itself (never hangs 30 s)
   const tap = async el => { try { await el.click({ timeout: 6000 }); } catch (_) { say('click was blocked, trying again; ' + await seen()); await el.evaluate(n => n.click()).catch(() => {}); } };
   const bail = m => { throw new Error(mask(m)); };
-  let usedCode = '';
+  let usedCode = '', passkeyTries = 0;
   for (let step = 0; step < 40; step++) {
     await page.waitForTimeout(1500);
     const url = page.url();
@@ -51,6 +53,10 @@ async function msSignIn(page, user, pass, getCode) {
     const pt = await page.title().catch(() => ''), bodyTxt = await page.evaluate(() => (document.body && document.body.innerText || '').slice(0, 600)).catch(() => '');
     if (/face, fingerprint|passkey|security key|windows hello/i.test(pt + ' ' + bodyTxt) && !(await vis('input[name="passwd"]')) && !(await vis('input[name="otc"]'))) {
       if ((e = await vis('#idA_PWD_SwitchToCredPicker, a:has-text("Sign-in options"), a:has-text("Other ways to sign in"), button:has-text("Other ways to sign in"), a:has-text("Use another method"), a:has-text("Use your password"), button:has-text("Use your password"), a:has-text("Sign in another way")'))) { say('step: passkey page, choosing another sign-in way'); await tap(e); continue; }
+      passkeyTries++;
+      if (passkeyTries === 1 || passkeyTries === 4) say('passkey page labels; ' + await seen());
+      if (passkeyTries > 8) bail('Microsoft keeps asking for a passkey that the cloud machine cannot answer. Last page: ' + await seen());
+      if (passkeyTries > 2 && (e = await page.$('a:text-matches("password|another way|other ways|options", "i"), [role=button]:text-matches("password|another way|other ways|options", "i")')) && await e.isVisible().catch(() => false)) { say('step: passkey page, trying a password link'); await tap(e); continue; }
       if ((e = await vis('button:has-text("Cancel"), input[value="Cancel"], #idBtn_Back'))) { say('step: passkey page, cancelling it'); await tap(e); continue; }
     }
     if (/how do you want to sign in|sign-in options|choose a way to sign in|verify your identity/i.test(pt + ' ' + bodyTxt) && !(await vis('input[name="passwd"]')) && !(await vis('input[name="otc"]'))) {
@@ -130,7 +136,8 @@ async function main() {
   const { chromium } = require('playwright-core');
   const executablePath = [E.CHROME_PATH, '/usr/bin/google-chrome', '/usr/bin/chromium'].find(p => p && fs.existsSync(p));
   const browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox'] });
-  const page = await (await browser.newContext({ viewport: { width: 1400, height: 900 } })).newPage();
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } }); await ctx.addInitScript(NO_PASSKEY);
+  const page = await ctx.newPage();
   page.setDefaultTimeout(30000);
   const limit = Math.max(0, parseInt(E.LIMIT, 10) || 0);
   try {
@@ -163,4 +170,4 @@ async function main() {
   } finally { try { if (FB) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); if (MODE !== 'signin') await FB.del('operaCloudPlan'); } } catch (_) {} await browser.close(); }
 }
 if (require.main === module) main().catch(e => fail(/^(audit|save)$/i.test(String(E.MODE || 'audit')) ? 'Runner stopped (details are only in the HotelOps card, not in this public log)' : 'Runner stopped: ' + (e && e.message || e)));
-module.exports = { totp, b32, okUrl, codeFromHotelOps, msSignIn };
+module.exports = { NO_PASSKEY, totp, b32, okUrl, codeFromHotelOps, msSignIn };
