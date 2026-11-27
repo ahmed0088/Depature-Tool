@@ -31,11 +31,12 @@ const okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' 
 
 // ── Microsoft sign-in, step by step; on a surprise it logs only the page's title and button labels ──
 async function msSignIn(page, user, pass, getCode) {
-  const seen = async () => { const t = await page.title().catch(() => ''); const b = await page.$$eval('button,input[type=submit],a[role=button],[role=button]', n => n.map(x => (x.value || x.textContent || '').trim()).filter(Boolean).slice(0, 8)).catch(() => []); return 'title "' + t.slice(0, 60) + '"; buttons: ' + b.join(' | ').slice(0, 160); };
+  const seen = async () => { const t = await page.title().catch(() => ''); const b = await page.$$eval('button,input[type=submit],a,[role=button],[role=link],[role=option],[data-value]', n => n.filter(x => x.offsetParent !== null).map(x => ((x.id ? '#' + x.id + ' ' : '') + (x.value || x.getAttribute('aria-label') || x.textContent || '')).replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 12)).catch(() => []); return 'title "' + t.slice(0, 60) + '"; buttons: ' + b.join(' | ').slice(0, 300); };
   // click with a short wait; if something covers the element, click it through the page itself (never hangs 30 s)
   const tap = async el => { try { await el.click({ timeout: 6000 }); } catch (_) { say('click was blocked, trying again; ' + await seen()); await el.evaluate(n => n.click()).catch(() => {}); } };
+  const bail = m => { throw new Error(mask(m)); };
   let usedCode = '';
-  for (let step = 0; step < 24; step++) {
+  for (let step = 0; step < 40; step++) {
     await page.waitForTimeout(1500);
     const url = page.url();
     if (/oraclecloud\.com/i.test(new URL(url).hostname) && !/login|signin|sso|idcs/i.test(url) && await page.$('a[id*="ode_pg_sdbr_"], [id*="pt1:"]').catch(() => null)) { say('signed in to Opera'); return true; }
@@ -44,7 +45,16 @@ async function msSignIn(page, user, pass, getCode) {
     if ((e = await vis('input[name="loginfmt"]'))) { say('step: Microsoft email'); await e.fill(user); await (await vis('#idSIButton9') || e).press('Enter').catch(() => {}); continue; }
     if ((e = await vis('input[name="passwd"]'))) { say('step: Microsoft password'); await e.fill(pass); await (await vis('#idSIButton9') || e).press('Enter').catch(() => {}); continue; }
     if ((e = await vis('input[name="otc"]'))) {
-      say('step: authenticator code needed'); const code = await getCode(usedCode); if (!code) fail('No authenticator code arrived within 3 minutes. Run again and type the code in HotelOps when asked.'); usedCode = code; say('step: typing the code'); await e.fill(code); await (await vis('#idSubmit_SAOTCC_Continue') || await vis('#idSIButton9') || e).press('Enter').catch(() => {}); continue;
+      say('step: authenticator code needed'); const code = await getCode(usedCode); if (!code) bail('No authenticator code arrived within 3 minutes. Press the button again and type the code when the card asks.'); usedCode = code; say('step: typing the code'); await e.fill(code); await (await vis('#idSubmit_SAOTCC_Continue') || await vis('#idSIButton9') || e).press('Enter').catch(() => {}); continue;
+    }
+    // Microsoft offers a passkey ("Face, fingerprint, PIN or security key") that a cloud machine cannot answer: go to the other sign-in ways, then pick the password
+    const pt = await page.title().catch(() => ''), bodyTxt = await page.evaluate(() => (document.body && document.body.innerText || '').slice(0, 600)).catch(() => '');
+    if (/face, fingerprint|passkey|security key|windows hello/i.test(pt + ' ' + bodyTxt) && !(await vis('input[name="passwd"]')) && !(await vis('input[name="otc"]'))) {
+      if ((e = await vis('#idA_PWD_SwitchToCredPicker, a:has-text("Sign-in options"), a:has-text("Other ways to sign in"), button:has-text("Other ways to sign in"), a:has-text("Use another method"), a:has-text("Use your password"), button:has-text("Use your password"), a:has-text("Sign in another way")'))) { say('step: passkey page, choosing another sign-in way'); await tap(e); continue; }
+      if ((e = await vis('button:has-text("Cancel"), input[value="Cancel"], #idBtn_Back'))) { say('step: passkey page, cancelling it'); await tap(e); continue; }
+    }
+    if (/how do you want to sign in|sign-in options|choose a way to sign in|verify your identity/i.test(pt + ' ' + bodyTxt) && !(await vis('input[name="passwd"]')) && !(await vis('input[name="otc"]'))) {
+      if ((e = await vis('[role="button"]:has-text("Use your password"), [role="button"]:has-text("Password"), button:has-text("Use your password"), a:has-text("Use your password"), [data-value="Password"]'))) { say('step: choosing password sign-in'); await tap(e); continue; }
     }
     const other = await vis('#signInAnotherWay, a:has-text("Sign in another way"), a:has-text("I can\'t use my Microsoft Authenticator app right now")');
     if (other) { say('step: choose another sign-in way'); await tap(other); continue; }
@@ -55,7 +65,7 @@ async function msSignIn(page, user, pass, getCode) {
     if ((e = await vis('button:has-text("Sign in with Microsoft"), a:has-text("Sign in with Microsoft"), button:has-text("Microsoft")'))) { say('step: choose Microsoft'); await tap(e); continue; }
     if (step > 3 && step % 4 === 0) say('waiting; ' + await seen());
   }
-  fail('Microsoft sign-in did not finish. Last page: ' + await seen());
+  bail('Microsoft sign-in did not finish. Last page: ' + await seen());
 }
 
 // ── the code path: HotelOps writes {code, at}; the runner reads it once and deletes it ──
