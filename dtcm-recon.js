@@ -49,10 +49,44 @@
     return { cause: 'Not posted', fix: `Add ${v.shortfall.toFixed(2)} AED on ${v.date}` };
   }
 
+  /* PM (post-master) corrections: the guest's room is checked out, so the user posts the TD fix on a
+     PM / house account under the same guest name. Map each such line back to that guest's DTCM stay
+     (room + the night it fixes) so it counts against the original stay and is not flagged again. */
+  function attachPmAdjustments(operaRows, segments, warnings){
+    const same = (a, b) => C.namesMatch(a, b) || C.nameOverlap(a, b) >= 2;
+    const out = operaRows.map(r => Object.assign({}, r));
+    const real = out.filter(r => !r.isPM);
+    out.forEach(r => {
+      if (!r.isPM) return;
+      const segs = segments.filter(s => s.guest && same(s.guest, r.guest));
+      if (!segs.length){
+        warnings.push('PM posting of ' + r.amount + ' AED dated ' + r.businessDate + ' has no matching guest in DTCM (by name). Check the name on the PM line.');
+        return;
+      }
+      const d = r.businessDate;
+      const inside = segs.find(s => s.checkInISO && d >= s.checkInISO && (!s.checkOutISO || d <= s.checkOutISO));
+      const seg = inside || segs.slice().sort((a, b) => (b.checkOutISO || b.checkInISO || '').localeCompare(a.checkOutISO || a.checkInISO || ''))[0];
+      r.room = seg.room; r.viaPM = true; r.pmSource = 'PM';
+      if (inside) return;                      // dated on a night of the stay: counts as that night
+      const mine = real.filter(x => x.room === seg.room && same(x.guest, r.guest) && !x.isReversal).map(x => x.businessDate);
+      const posted = new Set(mine);
+      if (r.amount > 0){
+        const addDays = (iso, n) => { const t = new Date(iso + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+        let day = seg.checkInISO, last = seg.checkOutISO || d;
+        while (day && day < last && posted.has(day)) day = addDays(day, 1);
+        if (day && day < last) { r.businessDate = day; posted.add(day); real.push({ room: seg.room, guest: r.guest, businessDate: day, isReversal: false }); }
+      } else if (mine.length){
+        r.businessDate = mine.sort().pop();
+      }
+    });
+    return out;
+  }
+
   function reconcile(dtcmParsed, operaRows, operaFileTotal){
     const dtcmSegments  = dtcmParsed.segments || dtcmParsed;
-    const dtcmFinalFees = dtcmParsed.finalFees || 0;
     const warnings = [];
+    if (operaRows.some(r => r.isPM)) operaRows = attachPmAdjustments(operaRows, dtcmSegments, warnings);
+    const dtcmFinalFees = dtcmParsed.finalFees || 0;
 
     /* ---------- 1. MODE + BUSINESS DATE ---------- */
     const nonRev      = operaRows.filter(r => !r.isReversal);
