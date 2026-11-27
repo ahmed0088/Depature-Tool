@@ -96,14 +96,14 @@
       (skipped.length ? '<details class="imm-more"><summary>Why ' + skipped.length + ' cannot be fixed</summary><div class="imm-small">' + skipped.map(it => 'Room ' + esc(it.room) + ' · ' + esc(it.name) + ' · ' + esc(it.notes.join(' · ') || 'nothing to fill')).join('<br>') + '</div></details>' : '') +
       (!items.length ? '<div class="imm-sub">Nothing to fix. All good.</div>' : '') +
       '<div class="imm-go"><button class="btn gold imm-big" id="immigFixCopy">▶ Start fixing (<span id="immigFixN">' + approvedCount() + '</span> ticked fields)</button> <button class="btn imm-big" id="immigFixCloud">☁ Run in cloud (check only)</button></div>' +
-      '<div id="immigCloudBox" style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:10px 0"><b>Check in Opera (cloud, read-only)</b>' +
+      '<div id="immigCloudBox" style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:10px 0"><b>Fix in Opera (cloud) · saves guest profiles</b>' +
       '<ol class="imm-3" style="margin:8px 0 8px 18px;padding:0;line-height:1.7"><li>Load today\'s Immigration report and In House list above, and tick the fixes.</li>' +
-      '<li>Press the big button.<div style="margin:6px 0"><button class="btn gold imm-big" id="immigCloudOne">▶ Check in Opera now</button></div></li>' +
+      '<li>Press the big button.<div style="margin:6px 0"><button class="btn gold imm-big" id="immigCloudOne">▶ Fix in Opera now (fills empty fields and SAVES)</button></div><div class="imm-small">It fills only empty gender, nationality and ID in guest profiles and presses Save. It never overwrites a value and never touches folios, postings or cashiering.</div></li>' +
       '<li>When it asks, type your fresh 6-digit code and press Send.<div style="display:flex;gap:8px;margin:6px 0"><input id="immigCloudCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code" style="width:130px"><button class="btn" id="immigCloudSend">Send code</button></div></li>' +
-      '<li>See the results below. Nothing is saved in Opera.</li></ol>' +
+      '<li>See the results below: rooms saved, nothing to fill, need a look.</li></ol>' +
       '<div class="imm-small" id="immigCloudStartMsg" style="margin:4px 0;font-weight:600"></div><div class="imm-small" id="immigCloudWant" style="margin:4px 0"></div><div class="imm-small" id="immigCloudRes" style="margin:6px 0"></div>' +
       '<div class="imm-small" id="immigCloudKeyRow" style="display:none;margin:4px 0">One-time setup on this device: paste the GitHub start key (the same one Neorcha uses). It stays on this device only.<br><input id="immigCloudKey" type="password" autocomplete="off" placeholder="GitHub start key" style="width:220px"> <button class="btn" id="immigCloudKeySave">Save key</button></div>' +
-      '<details class="imm-more" id="immigCloudAdv"><summary>Advanced</summary><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0"><button class="btn" id="immigCloudStartSignin">Start sign-in test only</button><button class="btn" id="immigCloudStartAudit">Start read-only check (plan already sent)</button><button class="btn" id="immigCloudPlan">Send plan to cloud</button></div><label class="imm-small"><input type="checkbox" id="immigCloudSave"> Allow Save (fills empty fields and saves; full ID numbers are sent). The big button never uses this.</label></details></div>' +
+      '<details class="imm-more" id="immigCloudAdv"><summary>Advanced</summary><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0"><button class="btn" id="immigCloudStartSignin">Start sign-in test only</button><button class="btn" id="immigCloudStartAudit">Read-only check (no saving)</button><button class="btn" id="immigCloudPlan">Send plan to cloud</button></div><label class="imm-small"><input type="checkbox" id="immigCloudSave"> Save mode for the Advanced plan button (the big button always saves).</label></details></div>' +
       '<div class="imm-small" id="immigFixStatus" style="margin:6px 0">' + esc(S.fxNote || '') + '</div>' + extState() +
       (helperFx() ? '<ol class="imm-3"><li>Press <b>Start fixing</b>. The list goes to your Opera tab.</li><li>In the fixer window there, press <b>Start</b>. It opens each guest and fills the empty boxes.</li><li>Check the guest, press Save in Opera yourself, then press <b>Next guest</b>.</li></ol>' : '<ol class="imm-3"><li>Press <b>Start fixing</b>. It copies the list.</li><li>In Opera: open the fixer window, paste the list, press <b>Load</b>.</li><li>Press <b>Start</b> in the window. It opens each guest and fills the empty boxes. You press Save in Opera.</li></ol>') +
       '<details class="imm-more"><summary>More</summary><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="immigFixSave">Remember gender and nationality</button></div>' +
@@ -123,7 +123,7 @@
     document.getElementById('immigCloudSend').onclick = sendCloudCode;
     document.getElementById('immigCloudOne').onclick = oneButton;
     document.getElementById('immigCloudStartSignin').onclick = () => startCloud('signin');
-    document.getElementById('immigCloudStartAudit').onclick = () => startCloud('audit');
+    document.getElementById('immigCloudStartAudit').onclick = async () => { if (await sendCloudPlan(false)) startCloud('audit'); };   // read-only: plan without full ID numbers
     document.getElementById('immigCloudKeySave').onclick = saveCloudKey;
     document.getElementById('immigCloudPlan').onclick = sendCloudPlan;
     watchCloudWant(); watchCloudResult();
@@ -170,11 +170,11 @@
     try { localStorage.setItem(GH_KEY, v); el.value = ''; const r = document.getElementById('immigCloudKeyRow'); if (r) r.style.display = 'none'; toast('Key saved on this device. Press Start again.', 'ok'); } catch (_) { toast('Could not save the key on this device.', 'err'); }
   }
   async function startCloud(mode) {
-    if (mode !== 'signin' && mode !== 'audit') return;
+    if (mode !== 'signin' && mode !== 'audit' && mode !== 'save') return;   // 'save' is started only by the big button
     let key = ''; try { key = localStorage.getItem(GH_KEY) || ''; } catch (_) {}
     if (!key) { const r = document.getElementById('immigCloudKeyRow'); if (r) r.style.display = ''; return cloudMsg('Needs the GitHub start key once on this device.', true); }
     const d = db(); if (!d) return toast('Not connected to the database.', 'err');
-    if (mode === 'audit') { let plan = null; try { const sn = await d.ref('hotels/' + HOTEL_ID + '/operaCloudPlan').once('value'); plan = sn.val(); } catch (_) {} if (!plan) return cloudMsg('Press "Send plan to cloud" first (tick the fixes).', true); }
+    if (mode !== 'signin') { let plan = null; try { const sn = await d.ref('hotels/' + HOTEL_ID + '/operaCloudPlan').once('value'); plan = sn.val(); } catch (_) {} if (!plan) return cloudMsg('Press "Send plan to cloud" first (tick the fixes).', true); if (mode === 'save' && plan.mode !== 'save') return cloudMsg('The plan was not sent in save mode. Press the big button again.', true); }
     const ov = S.opera ? A.validateOperaUrl(S.opera) : null, url = ov && ov.ok ? ov.url : '';
     cloudMsg('Asking GitHub to start…');
     try {
@@ -182,16 +182,15 @@
       if (r.status === 401) return cloudMsg('GitHub refused the key (expired or mistyped). Paste a new one.', true);
       if (r.status === 403 || r.status === 404) return cloudMsg('The key cannot start this run. It needs the Depature-Tool repository and Actions: Read and write.', true);
       if (!r.ok) return cloudMsg('GitHub answered ' + r.status + '.', true);
-      cloudMsg('Started (' + (mode === 'signin' ? 'sign-in test' : 'read-only check') + '). GitHub is getting ready (about a minute). Type your code in step 3 when it asks.');
+      cloudMsg('Started (' + (mode === 'signin' ? 'sign-in test' : mode === 'save' ? 'fix in Opera' : 'read-only check') + '). GitHub is getting ready (about a minute). Type your code in step 3 when it asks.');
       const b = document.getElementById('immigCloudBox'); if (b) b.open = true;
     } catch (_) { cloudMsg('Could not reach GitHub.', true); }
   }
   // one button: today's loaded report -> plan (read-only form, no full ID numbers) -> start the read-only run -> results show in the card below
   async function oneButton() {
-    const box = document.getElementById('immigCloudSave'), was = box && box.checked; if (box) box.checked = false;   // this button never saves
-    let ok = false; try { ok = await sendCloudPlan(); } finally { if (box) box.checked = was; }
+    const ok = await sendCloudPlan(true);   // the big button always sends the plan in save mode (empty fields only; full ID numbers go to the private path)
     if (!ok) return cloudMsg('Load today\'s Immigration report and In House list above first, and tick the fixes.', true);
-    await startCloud('audit');
+    await startCloud('save');
   }
   // the authenticator code for the GitHub cloud run: written once to a private path, the run reads it and deletes it
   async function sendCloudCode() {
@@ -201,10 +200,10 @@
     try { await d.ref('hotels/' + HOTEL_ID + '/operaCloudCode').set({ code: v, at: Date.now() }); el.value = ''; toast('Code sent. The cloud run uses it once.', 'ok'); } catch (_) { toast('Could not send the code.', 'err'); }
   }
   // the plan for the GitHub cloud run: a private temporary path, read and deleted by the run when it starts. Names are needed to find the guests; they never go in a log.
-  async function sendCloudPlan() {
+  async function sendCloudPlan(forceSave) {
     const d = db(); if (!d) { toast('Not connected to the database.', 'err'); return false; }
     if (!approvedCount()) { toast('Tick at least one fix first.', 'err'); return false; }
-    const save = !!(document.getElementById('immigCloudSave') || {}).checked;
+    const save = forceSave === true || (forceSave !== false && !!(document.getElementById('immigCloudSave') || {}).checked);
     const copy = JSON.parse(JSON.stringify(S.plan));
     if (!save) copy.items.forEach(it => it.fields.forEach(f => { if (f.field === 'idNumber') f.value = String(f.display || '').replace(/\D/g, '').slice(-4).padStart(4, '0'); }));   // read-only: no full ID numbers leave the page
     const ov = S.opera ? A.validateOperaUrl(S.opera) : null;
@@ -217,9 +216,9 @@
     try { resRef = d.ref('hotels/' + HOTEL_ID + '/operaCloudResult'); resRef.on('value', snap => {
       const v = snap.val(), el = document.getElementById('immigCloudRes'); if (!el) return;
       if (!v) { el.innerHTML = ''; return; }
-      const L = Array.isArray(v.lines) ? v.lines : [], rooms = {}; L.forEach(l => { (rooms[l.room] = rooms[l.room] || []).push(l); });
-      const state = v.state === 'running' ? 'Running…' : v.state === 'failed' ? 'Failed: ' + esc(v.error || '') : 'Done';
-      el.innerHTML = '<b>Cloud run (' + esc(v.mode || '') + '): ' + state + '</b>' + (v.mode === 'save' && v.saved ? '' : ' · read-only') + '<br>' + Object.keys(rooms).map(r => 'Room ' + esc(r) + ': ' + rooms[r].filter(x => x.field !== 'nav').map(x => esc((x.field === 'guest' ? '' : x.field + ' ') + x.result)).join('; ')).join('<br>').slice(0, 4000) + ' <button class="btn" id="immigCloudClear">Clear</button>';
+      const sm = C.cloudSummary(v.lines, v.state === 'done'), rl = a => a.map(esc).join(', ') || 'none';
+      const head = v.state === 'running' ? '⏳ Running… (' + sm.saved.length + ' saved so far)' : v.state === 'failed' ? '❌ Failed: ' + esc(String(v.error || 'unknown').slice(0, 140)) : '✅ Done: ' + sm.saved.length + ' saved, ' + sm.none.length + ' nothing to fill, ' + sm.bad.length + ' need a look';
+      el.innerHTML = '<b>' + head + '</b>' + (v.mode === 'save' ? '' : ' · read-only, nothing saved') + (v.state === 'failed' ? '' : '<br>Saved: rooms ' + rl(sm.saved) + '<br>Nothing to fill: rooms ' + rl(sm.none) + '<br>Need a look: ' + (sm.bad.length ? sm.bad.map(b => 'room ' + esc(b[0]) + ' (' + esc(b[1]) + ')').join('; ') : 'none')) + ' <button class="btn" id="immigCloudClear">Clear</button>';
       const b = document.getElementById('immigCloudClear'); if (b) b.onclick = () => resRef.remove().catch(() => {});
     }); } catch (_) { resRef = null; }
   }
