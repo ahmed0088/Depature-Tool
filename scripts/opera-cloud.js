@@ -32,6 +32,8 @@ const okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' 
 // ── Microsoft sign-in, step by step; on a surprise it logs only the page's title and button labels ──
 async function msSignIn(page, user, pass, getCode) {
   const seen = async () => { const t = await page.title().catch(() => ''); const b = await page.$$eval('button,input[type=submit],a[role=button],[role=button]', n => n.map(x => (x.value || x.textContent || '').trim()).filter(Boolean).slice(0, 8)).catch(() => []); return 'title "' + t.slice(0, 60) + '"; buttons: ' + b.join(' | ').slice(0, 160); };
+  // click with a short wait; if something covers the element, click it through the page itself (never hangs 30 s)
+  const tap = async el => { try { await el.click({ timeout: 6000 }); } catch (_) { say('click was blocked, trying again; ' + await seen()); await el.evaluate(n => n.click()).catch(() => {}); } };
   let usedCode = '';
   for (let step = 0; step < 24; step++) {
     await page.waitForTimeout(1500);
@@ -45,11 +47,12 @@ async function msSignIn(page, user, pass, getCode) {
       say('step: authenticator code needed'); const code = await getCode(usedCode); if (!code) fail('No authenticator code arrived within 3 minutes. Run again and type the code in HotelOps when asked.'); usedCode = code; say('step: typing the code'); await e.fill(code); await (await vis('#idSubmit_SAOTCC_Continue') || await vis('#idSIButton9') || e).press('Enter').catch(() => {}); continue;
     }
     const other = await vis('#signInAnotherWay, a:has-text("Sign in another way"), a:has-text("I can\'t use my Microsoft Authenticator app right now")');
-    if (other) { say('step: choose another sign-in way'); await other.click(); continue; }
+    if (other) { say('step: choose another sign-in way'); await tap(other); continue; }
     const codeOpt = await vis('div[data-value="PhoneAppOTP"], [data-value="PhoneAppOTP"], div:has-text("Use a verification code")');
-    if (codeOpt) { say('step: pick verification code'); await codeOpt.click(); continue; }
-    if ((e = await vis('#idBtn_Back'))) { say('step: stay signed in? No'); await e.click(); continue; }
-    if ((e = await vis('button:has-text("Sign in with Microsoft"), a:has-text("Sign in with Microsoft"), button:has-text("Microsoft")'))) { say('step: choose Microsoft'); await e.click(); continue; }
+    if (codeOpt) { say('step: pick verification code'); await tap(codeOpt); continue; }
+    // "Stay signed in?" page only (#idBtn_Back is also the Back arrow on other Microsoft pages: clicking that one stalls, so wait for the real next page instead)
+    if ((e = await vis('#idBtn_Back')) && (await page.$('#KmsiCheckboxField, #KmsiDescription').catch(() => null) || /stay signed in/i.test(await page.title().catch(() => '') + ' ' + await page.evaluate(() => (document.body && document.body.innerText || '').slice(0, 400)).catch(() => '')))) { say('step: stay signed in? No'); await tap(e); continue; }
+    if ((e = await vis('button:has-text("Sign in with Microsoft"), a:has-text("Sign in with Microsoft"), button:has-text("Microsoft")'))) { say('step: choose Microsoft'); await tap(e); continue; }
     if (step > 3 && step % 4 === 0) say('waiting; ' + await seen());
   }
   fail('Microsoft sign-in did not finish. Last page: ' + await seen());
@@ -149,4 +152,4 @@ async function main() {
   } finally { try { if (FB) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); await FB.del('operaCloudPlan'); } } catch (_) {} await browser.close(); }
 }
 if (require.main === module) main().catch(e => fail(/^(audit|save)$/i.test(String(E.MODE || 'audit')) ? 'Runner stopped (details are only in the HotelOps card, not in this public log)' : 'Runner stopped: ' + (e && e.message || e)));
-module.exports = { totp, b32, okUrl, codeFromHotelOps };
+module.exports = { totp, b32, okUrl, codeFromHotelOps, msSignIn };
