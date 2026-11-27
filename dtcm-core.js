@@ -350,9 +350,14 @@
       const guest   = (c[iGuest] || '').trim();
       if (!guest){ noteSkip('noGuest', c); continue; }
 
-      const rm = (c[iRoom] || '').trim().match(/\d+/);
-      const room = rm ? String(parseInt(rm[0], 10)) : '';
-      if (!room){ noteSkip('noRoom', c); continue; }
+      const roomRawTxt = (c[iRoom] || '').trim();
+      const rm = /^\s*PM/i.test(roomRawTxt) ? null : roomRawTxt.match(/\d+/);
+      let room = rm ? String(parseInt(rm[0], 10)) : '';
+      /* Post-master (PM) / house account: a correction posted for a guest whose room is already
+         checked out has no real room number. Keep it as a PM line; reconcile() maps it back to
+         the guest's own stay by name. */
+      const isPM = !room;
+      if (isPM) room = 'PM';
 
       const bizDate = parseJournalDate((c[iDate] || '').trim());
       if (!bizDate){ noteSkip('badDate', c); continue; }
@@ -414,7 +419,7 @@
         remark, ref, trxNo, user, time,
         kind, taxCode,
         isRoomMove, fromRoom, toRoom, isPackage,
-        isAdjustment, isReversal
+        isAdjustment, isReversal, isPM, roomRawTxt
       });
     }
 
