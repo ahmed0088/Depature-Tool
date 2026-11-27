@@ -149,7 +149,8 @@ async function main() {
       say('finished: ' + counts.total + ' steps (room details are only in the HotelOps card)'); await pushResult('done', { rooms: n, saved: wantSave });
     }
   } catch (e) { try { if (FB) await FB.put('operaCloudResult', { at: Date.now(), state: 'failed', mode: MODE, error: mask(e && e.message || e).slice(0, 200), lines: [] }); } catch (_) {} throw e;
-  } finally { try { if (FB) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); await FB.del('operaCloudPlan'); } } catch (_) {} await browser.close(); }
+  // a sign-in test never touches a plan that was sent for a check
+  } finally { try { if (FB) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); if (MODE !== 'signin') await FB.del('operaCloudPlan'); } } catch (_) {} await browser.close(); }
 }
 if (require.main === module) main().catch(e => fail(/^(audit|save)$/i.test(String(E.MODE || 'audit')) ? 'Runner stopped (details are only in the HotelOps card, not in this public log)' : 'Runner stopped: ' + (e && e.message || e)));
 module.exports = { totp, b32, okUrl, codeFromHotelOps, msSignIn };
