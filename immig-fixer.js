@@ -173,10 +173,10 @@
     if (mode !== 'signin' && mode !== 'audit' && mode !== 'save') return;   // 'save' is started only by the big button
     let key = ''; try { key = localStorage.getItem(GH_KEY) || ''; } catch (_) {}
     if (!key) { const r = document.getElementById('immigCloudKeyRow'); if (r) r.style.display = ''; return cloudMsg('Needs the GitHub start key once on this device.', true); }
-    const d = db(); if (!d) return toast('Not connected to the database.', 'err');
+    const d = db(); if (!d) return cloudMsg('Not connected to the database. Refresh the page and try again.', true);
     if (mode !== 'signin') { let plan = null; try { const sn = await d.ref('hotels/' + HOTEL_ID + '/operaCloudPlan').once('value'); plan = sn.val(); } catch (_) {} if (!plan) return cloudMsg('Press "Send plan to cloud" first (tick the fixes).', true); if (mode === 'save' && plan.mode !== 'save') return cloudMsg('The plan was not sent in save mode. Press the big button again.', true); }
     const ov = S.opera ? A.validateOperaUrl(S.opera) : null, url = ov && ov.ok ? ov.url : '';
-    cloudMsg('Asking GitHub to start…');
+    cloudMsg('Asking GitHub to start…'); const t0 = Date.now();
     try {
       const r = await fetch(GH_API, { method: 'POST', headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: 'main', inputs: { mode, url, limit: mode === 'signin' ? '2' : '0' } }) });
       if (r.status === 401) return cloudMsg('GitHub refused the key (expired or mistyped). Paste a new one.', true);
@@ -184,13 +184,36 @@
       if (!r.ok) return cloudMsg('GitHub answered ' + r.status + '.', true);
       cloudMsg('Started (' + (mode === 'signin' ? 'sign-in test' : mode === 'save' ? 'fix in Opera' : 'read-only check') + '). GitHub is getting ready (about a minute). Type your code in step 3 when it asks.');
       const b = document.getElementById('immigCloudBox'); if (b) b.open = true;
-    } catch (_) { cloudMsg('Could not reach GitHub.', true); }
+      watchRun(key, t0, mode);
+    } catch (e) { cloudMsg('Could not reach GitHub (' + String(e && e.message || e).slice(0, 80) + ').', true); }
+  }
+  // follow the run on GitHub and show one plain status line (never silent). Does not override the "waiting for your code" line.
+  let watchTok = 0;
+  async function watchRun(key, t0, mode) {
+    const tok = ++watchTok, runs = GH_API.replace('/dispatches', '/runs?event=workflow_dispatch&per_page=5');
+    for (let i = 0; i < 40 && tok === watchTok; i++) {
+      await new Promise(r => setTimeout(r, i ? 10000 : 6000));
+      if (tok !== watchTok) return;
+      try {
+        const r = await fetch(runs, { headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28' } });
+        if (!r.ok) { cloudMsg('Cannot read the run status (GitHub answered ' + r.status + ').', true); return; }
+        const j = await r.json(), run = (j.workflow_runs || []).filter(x => Date.parse(x.created_at) >= t0 - 60000).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+        if (!run) { cloudMsg('Waiting for GitHub to start the run…'); continue; }
+        const link = ' (' + run.html_url + ')';
+        if (run.status === 'completed') {
+          if (run.conclusion === 'success') return cloudMsg('Run finished. See the results below.');
+          return cloudMsg('The run stopped (' + (run.conclusion || 'failed') + '). The reason shows below if the run could report it; otherwise open the run' + link, true);
+        }
+        const w = document.getElementById('immigCloudWant'); if (w && w.textContent.trim()) continue;
+        cloudMsg(run.status === 'in_progress' ? 'Running on GitHub. If it asks for your code, type it in step 3.' : 'GitHub is starting the run…');
+      } catch (_) { cloudMsg('Cannot reach GitHub to read the run status.', true); return; }
+    }
   }
   // one button: today's loaded report -> plan (read-only form, no full ID numbers) -> start the read-only run -> results show in the card below
   async function oneButton() {
-    const ok = await sendCloudPlan(true);   // the big button always sends the plan in save mode (empty fields only; full ID numbers go to the private path)
+    let ok = false; try { ok = await sendCloudPlan(true); } catch (e) { return cloudMsg('Could not prepare the plan (' + String(e && e.message || e).slice(0, 80) + ').', true); }   // the big button always sends the plan in save mode (empty fields only; full ID numbers go to the private path)
     if (!ok) return cloudMsg('Load today\'s Immigration report and In House list above first, and tick the fixes.', true);
-    await startCloud('save');
+    try { await startCloud('save'); } catch (e) { cloudMsg('Could not start (' + String(e && e.message || e).slice(0, 80) + ').', true); }
   }
   // the authenticator code for the GitHub cloud run: written once to a private path, the run reads it and deletes it
   async function sendCloudCode() {
