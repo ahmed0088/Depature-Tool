@@ -15,4 +15,8 @@ assert(/plan\.mode !== 'save'/.test(fn), 'save starts only when the plan was sen
 assert(/opera-cloud\.yml\/dispatches/.test(src), 'dispatches the Opera fixer workflow');
 assert(/limit: mode === 'signin' \? '2' : '0'/.test(src), 'signin touches at most 2 rooms');
 assert(/Authorization: 'Bearer ' \+ key/.test(fn) && !/console\.|toast\([^)]*key/.test(fn), 'key only goes to the GitHub header');
+const wf = src.slice(src.indexOf('async function watchRun'), src.indexOf('// one button:'));
+assert(/watchRun\(key, t0, mode\)/.test(fn) && /Running on GitHub/.test(wf) && /The run stopped/.test(wf) && /Run finished/.test(wf), 'the card follows the run and shows one plain status line');
+assert(!/toast\('Not connected/.test(fn), 'no failure is shown only as a vanishing toast');
+assert(/Could not prepare the plan/.test(one) && /Could not start \(/.test(one), 'big button failures show a line');
 console.log('immig-cloud-start: signin/audit small buttons, save only from the big button');
