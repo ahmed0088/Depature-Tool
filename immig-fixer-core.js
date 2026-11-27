@@ -135,5 +135,20 @@
     const secret = o.field === 'idNumber';
     return { t: o.t || new Date().toISOString(), hotel: o.hotel || '', room: normRoom(o.room), arrival: o.arrival || '', field: o.field, to: secret ? last4(o.value) : String(o.value || ''), result: o.result, by: o.by || '', dry: !!o.dry };
   }
-  return { countryCode, countryList, normRoom, tokens, nameMatch, docKind, last4, isMasked, isEmptyValue, matchInhouse, ID_TYPES, UAE_ID_TYPES, buildPlan, encodePlan, decodePlan, logEntry, FIELDS };
+  /** the cloud run's result as plain lists (pure): rooms saved / nothing to fill / need a look, from the room-level log lines */
+  function cloudSummary(lines, done) {
+    const rooms = {}, order = [];
+    (Array.isArray(lines) ? lines : []).forEach(l => {
+      const r = String(l && l.room || '').trim(); if (!r) return;
+      if (!rooms[r]) { rooms[r] = { saved: false, bad: '', seen: false }; order.push(r); }
+      const x = rooms[r], res = String(l.result || '');
+      if (l.field === 'guest') { if (/^SAVED\b/.test(res)) x.saved = true; else if (/^(SAVE FAILED|FAILED|PARTIAL)/.test(res)) x.bad = x.bad || res.replace(/^(SAVE FAILED|FAILED|PARTIAL)\s*/, '').slice(0, 70) || 'failed'; }
+      else if (/not found|did not open|name was not found|no Save button/i.test(res)) x.bad = x.bad || res.slice(0, 70);
+      x.seen = true;
+    });
+    const saved = [], bad = [], none = [];
+    order.forEach(r => { const x = rooms[r]; if (x.saved && !x.bad) saved.push(r); else if (x.bad) bad.push([r, x.bad]); else if (done) none.push(r); });
+    return { saved, bad, none, total: order.length };
+  }
+  return { cloudSummary, countryCode, countryList, normRoom, tokens, nameMatch, docKind, last4, isMasked, isEmptyValue, matchInhouse, ID_TYPES, UAE_ID_TYPES, buildPlan, encodePlan, decodePlan, logEntry, FIELDS };
 });
