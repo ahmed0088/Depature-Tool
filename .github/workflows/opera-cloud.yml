@@ -54,6 +54,7 @@ jobs:
         run: node scripts/opera-cloud.js
         env:
           MODE: cleanup
+          CLEANUP_MAX_MIN: ${{ (inputs.mode || 'signin') == 'signin' && '180' || '' }}
           HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
           HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
           HOTELOPS_HOTEL: ${{ secrets.HOTELOPS_HOTEL }}
