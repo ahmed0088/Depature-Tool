@@ -174,6 +174,32 @@ console.log('\nDTCM Recon · November fixes (made-up guests)');
   })(), true);
 }
 
+console.log('\nDTCM Recon · PM (post-master) corrections (made-up guests)');
+{
+  const sb = makeSandbox(), R = sb.Reconciler;
+  const days = Array.from({ length: 10 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
+  const seg = (room, guest, ci, co, n) => ({ room, roomRaw: room, guest, guestNorm: guest.toLowerCase(), storedNights: n, storedTdFees: n * 10,
+    checkIn: new Date(ci + 'T00:00:00Z'), checkOut: new Date(co + 'T00:00:00Z'), checkInISO: ci, checkOutISO: co, checkInTime: '02:00 PM', checkOutTime: '11:00 AM',
+    status: 'Checked Out', bedrooms: 1, houseUse: false, earlyCheckin: false, lateCheckout: false });
+  const post = (room, guest, d, amt, extra) => Object.assign({ code: '7510', desc: 'Tourism Dirham', room, guest, guestNorm: guest.toLowerCase(), businessDate: d, amount: amt, debit: amt, credit: 0,
+    kind: 'nightly', isRoomMove: false, isPackage: false, isAdjustment: false, isReversal: false, remark: '', ref: '', trxNo: room + d + amt, time: '23:30' }, extra || {});
+  const segs = [seg('400', 'Anchor Guest', '2026-10-25', '2026-11-20', 10), seg('301', 'Quark Zed', '2026-11-01', '2026-11-05', 4)];
+  const base = days.map(d => post('400', 'Anchor Guest', d, 10)).concat(['01', '02', '03'].map(x => post('301', 'Quark Zed', '2026-11-' + x, 10)));
+  const run = rows => R.reconcile({ segments: segs, finalFees: 140 }, rows, rows.reduce((a, r) => a + r.amount, 0));
+  const without = run(base);
+  check('control: a missing night is flagged for the checked-out room', without.fixPlan.filter(p => p.room === '301').length, 1);
+  const pm = post('PM', 'Quark Zed', '2026-11-08', 10, { isPM: true, trxNo: 'pm1' });
+  const withPm = run(base.concat([pm]));
+  check('PM +10 for the same guest counts against the original stay (no longer flagged)', withPm.fixPlan.filter(p => p.room === '301').length, 0);
+  check('the original PM rows are not changed by the run', pm.room, 'PM');
+  const stray = run(base.concat([post('PM', 'Nobody Else', '2026-11-08', 10, { isPM: true, trxNo: 'pm2' })]));
+  check('a PM line with no matching DTCM guest raises a warning', stray.warnings.some(w => /PM posting/.test(w)), true);
+  const o = R.parseOpera('ROOM\tGUEST_FULL_NAME\tBUSINESS_DATE\tTRX_CODE\tTRX_DESC\tCASHIER_DEBIT\tCASHIER_CREDIT\tREMARK\tREFERENCE\tTRX_NO\n' +
+    'PM\tQuark Zed\t08-NOV-26\t7510\tTourism Dirham\t10\t0\t\t\t1\n0301\tQuark Zed\t01-NOV-26\t7510\tTourism Dirham\t10\t0\t\t\t2\n');
+  check('Opera parser keeps a PM line and marks it', o.rows.map(r => r.room + ':' + !!r.isPM).join(), 'PM:true,301:false');
+}
+
+
 console.log('\nHotel TD settings');
 {
   // same Opera file with code 7510 → 7600 and a different description
