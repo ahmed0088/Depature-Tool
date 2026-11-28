@@ -171,3 +171,6 @@
  #panel-immig .imm-row > .btn { width: 100%; justify-content: center; }
  #panel-immig input:not([type=checkbox]):not([type=file]), #panel-immig select, #panel-immig textarea { font-size: 16px; }
 }
+
+/* Named Opera connections stay visible before report upload. */
+#panel-immig .imm-hotel-picker{display:flex;gap:10px;align-items:end;flex-wrap:wrap;padding:8px 0}#panel-immig .imm-hotel-picker>label{display:grid;gap:8px;flex:1 1 260px;min-width:0}#panel-immig .imm-hotel-picker>label>span{font-size:.6rem;font-weight:750;letter-spacing:.12em;color:var(--imm-muted)}#panel-immig .imm-hotel-picker .btn{flex:0 1 auto;font-size:.76rem}#panel-immig .imm-hotel-guidance{margin:5px 0 10px}#panel-immig #immigHotelName{width:100%;max-width:440px}#panel-immig .imm-run-hotel{padding:9px 11px;border:1px solid var(--imm-line);background:var(--bg2,var(--card));border-radius:9px;margin:0 0 14px;font-size:.78rem;font-weight:650;overflow-wrap:anywhere}@media(max-width:600px){#panel-immig .imm-hotel-picker>label{flex-basis:100%}#panel-immig .imm-hotel-picker .btn{flex:1 1 120px;min-height:46px}}

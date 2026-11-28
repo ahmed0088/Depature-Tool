@@ -89,11 +89,13 @@ async function main() {
   if (FB) { for(const key of ['operaCloudCode','operaCloudWant']){const value=await FB.get(key);if(!RUN_TAG||value?.tag===RUN_TAG||Date.now()>(key==='operaCloudWant'?Number(value?.expiresAt)||Number(value?.at||0)+180000:Number(value?.at||0)+180000))await FB.del(key);} }   // never use an old code
   const getCode = async notThis => E.OPERA_TOTP ? freshTotp(E.OPERA_TOTP,notThis) : codeFromHotelOps(FB, notThis,RUN_TAG);
   // the plan is read and deleted at once, before anything else, so it never outlives this run (a stale result is dropped after a day)
-  const rejectPlan=async error=>{await FB.put('operaCloudResult',{at:Date.now(),state:'failed',mode:MODE,tag:RUN_TAG,error,lines:[]});throw Error(error);};
+  let target={url};
+  const rejectPlan=async error=>{await FB.put('operaCloudResult',{at:Date.now(),state:'failed',mode:MODE,tag:RUN_TAG,target,error,lines:[]});throw Error(error);};
   let job = null;
   if (MODE !== 'signin' && !E.PLAN_FILE) {
     job = await FB.get('operaCloudPlan');if(RUN_TAG&&job?.tag!==RUN_TAG)await rejectPlan('This reviewed plan belongs to another cloud run. Review the current plan and start again.');await FB.del('operaCloudPlan');
     if (!job || typeof job.code !== 'string') await rejectPlan('No plan found. In HotelOps press "Send plan to cloud", then run this again.');
+    if(job.target){const selected=require('../opera-auto-core').validateOperaUrl(job.target.url);if(!selected.ok||selected.url!==url)await rejectPlan('The saved hotel link differs from the reviewed plan. Choose the hotel and review its reports again.');target={url,id:String(job.target.id||''),name:String(job.target.name||'').slice(0,100)};}
     if (Date.now() - Number(job.at || 0) > 3 * 3600e3) await rejectPlan('The plan is older than 3 hours and was deleted. Send it again from HotelOps.');
   }
   if (FB) { const old = await FB.get('operaCloudResult'); if (old && Date.now() - Number(old.at || 0) > 864e5) await FB.del('operaCloudResult'); }
@@ -104,7 +106,7 @@ async function main() {
   const page = await ctx.newPage();
   page.setDefaultTimeout(30000);
   const limit = Math.max(0, parseInt(E.LIMIT, 10) || 0);
-  const reportStatus=async(stage,note)=>{say(note);if(FB)await FB.put('operaCloudResult',{at:Date.now(),state:'running',mode:MODE,stage,note,lines:[],tag:RUN_TAG});};
+  const reportStatus=async(stage,note)=>{say(note);if(FB)await FB.put('operaCloudResult',{at:Date.now(),state:'running',mode:MODE,stage,note,lines:[],tag:RUN_TAG,target});};
   try {
     await reportStatus('starting','Cloud computer ready; opening the selected Opera link');
     say('mode ' + MODE + (limit ? ', first ' + limit + ' room(s)' : '') + ': opening Opera');
@@ -114,7 +116,7 @@ async function main() {
     await page.addScriptTag({ content: fs.readFileSync(path.join(ROOT, 'tools/hotelops-opera-fixer.console.js'), 'utf8') });
     const counts = { total: 0 }; 
     const lines = []; let lastPush = 0;
-    const pushResult = async (state, extra) => { if (FB) await FB.put('operaCloudResult', Object.assign({ at: Date.now(), state, mode: MODE, tag:RUN_TAG, lines: lines.slice(-400) }, extra || {})); };
+    const pushResult = async (state, extra) => { if (FB) await FB.put('operaCloudResult', Object.assign({ at: Date.now(), state, mode: MODE, tag:RUN_TAG, target, lines: lines.slice(-400) }, extra || {})); };
     await page.exposeFunction('__opLog', async e => { counts.total++; if (counts.total % 20 === 0) say('progress: ' + counts.total + ' steps'); lines.push({ room: String(e.room || ''), field: String(e.field || ''), to: String(e.to || '').replace(/\d{5,}/g, d => '••••' + d.slice(-4)).slice(0, 40), result: mask(e.result).slice(0, 160), dry: !!e.dry }); if (FB && Date.now() - lastPush > 8000) { lastPush = Date.now(); await pushResult('running'); } });
     await page.evaluate(() => window.__hoFixer.setHook((k, a) => { if (k === 'log') window.__opLog(a); }));
     if (MODE === 'signin') {
@@ -131,7 +133,7 @@ async function main() {
       await page.evaluate(() => window.__hoFixer._test.autoRun(0));
       say('finished: ' + counts.total + ' steps (room details are only in the HotelOps card)'); await pushResult('done', { rooms: n, saved: wantSave });
     }
-  } catch (e) { try { if (FB) await FB.put('operaCloudResult', { at: Date.now(), state: 'failed', mode: MODE, tag:RUN_TAG,error: mask(e && e.message || e).slice(0, 200), lines: [] }); } catch (_) {} throw e;
+  } catch (e) { try { if (FB) await FB.put('operaCloudResult', { at: Date.now(), state: 'failed', mode: MODE, tag:RUN_TAG,target,error: mask(e && e.message || e).slice(0, 200), lines: [] }); } catch (_) {} throw e;
   // a sign-in test never touches a plan that was sent for a check
   } finally { try { if (FB) { for(const key of ['operaCloudCode','operaCloudWant',...(MODE==='signin'?[]:['operaCloudPlan'])]){const value=await FB.get(key);if(!RUN_TAG||value?.tag===RUN_TAG)await FB.del(key);} } } catch (_) {} await browser.close(); }
 }

@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v655"/>
+<meta name="ho-version" content="v656"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="immig-page.css"/>
@@ -1352,6 +1352,7 @@
     <header class="imm-hero"><div class="imm-hero-emblem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg></div><div class="imm-hero-copy"><div class="imm-eyebrow">GUEST DETAILS · OPERA CLOUD</div><h1>Immigration Check</h1><p>Complete guest details. Keep every stay in order.</p></div><span class="imm-cloud-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M7 18h11a4 4 0 0 0 .8-7.9A7 7 0 0 0 5.2 8.6 4.8 4.8 0 0 0 7 18Z"/></svg>Runs in the cloud</span></header>
     <ol class="imm-journey" aria-label="Immigration workflow"><li data-imm-phase="1" class="is-current" aria-current="step"><span>1</span><div><b>Upload reports</b><small>Your two source files</small></div></li><li data-imm-phase="2"><span>2</span><div><b>Review details</b><small>Choose what to include</small></div></li><li data-imm-phase="3"><span>3</span><div><b>Fix & results</b><small>Follow the cloud run</small></div></li></ol>
     <div class="imm-next" id="immNext" role="status" aria-live="polite">Upload your Vicas In-house XML to begin.</div>
+    <div id="immigStep4Slot"></div>
     <details id="immigReports" class="imm-reports" open><summary><span class="imm-summary-title">Source reports</span><span class="imm-summary-note">2 XML files</span></summary><div class="imm-upload-grid">
     <div class="card imm-inputs" data-step="1">
       <div class="imm-h"><b>Upload the Vicas file</b><span>Vicas In-house guests (XML). Helps fill nationality and passport.</span></div>
@@ -1365,7 +1366,6 @@
 
     </div>
     </div><p class="imm-small">The review appears after upload. Both files should cover the same hotel and business date.</p><button class="btn" id="immigReportsClear" onclick="clearImmig()">Clear reports</button></details>
-    <div id="immigStep4Slot"></div>
     <div id="immigWorkArea" class="imm-work-area"><div id="immigResults2" style="display:none;">
       <details class="imm-more imm-all"><summary>See all guests and checks</summary><div id="immigMissingWrap" style="display:none;margin-top:18px;">
       <div class="card" style="border-color:rgba(240,107,122,0.3);">
