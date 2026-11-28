@@ -10,7 +10,7 @@
 (function () {
   'use strict';
   const C = window.hoImmigFix; if (!C || !window.hoOperaAuto) return;
-  const S = { plan: null, ok: {}, shared: {}, uaeType: '', opera: '' };
+  const S = { plan: null, ok: {}, shared: {}, uaeType: '', opera: '', scope: '5' };
   const A = window.hoOperaAuto;
   const lsKey = () => 'hoOperaUrl_' + (typeof HOTEL_ID !== 'undefined' ? HOTEL_ID : '');   // ok: { itemId: { field: true } }
   const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])));
@@ -36,11 +36,11 @@
   }
   function operaRow() {
     const ok = S.opera ? A.validateOperaUrl(S.opera) : null;
-    return '<div class="imm-h"><b>Your Opera link</b><span>Paste it once. The fixer only works on this link.</span></div>' +
+    return '<details id="immigConnectionDetails" class="imm-more"'+(ok&&ok.ok?'':' open')+'><summary>'+(ok&&ok.ok?'✓ Opera link saved · Change link':'Set up Opera once')+'</summary>' +
       '<label class="imm-lbl" for="immigOperaUrl">Paste your hotel\'s Opera link <small>(link only, no password)</small></label>' +
       '<div class="imm-row"><input id="immigOperaUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://…oraclecloud.com/…/OperaCloud" value="' + esc(S.opera) + '"><button class="btn gold" id="immigOperaSave">Save link</button>' + (ok && ok.ok ? '<a class="btn" id="immigOperaOpen" href="' + esc(ok.url) + '" target="_blank" rel="noopener noreferrer">Open Opera ↗</a>' : '') + '</div>' +
       '<div class="imm-msg" id="immigOperaMsg">' + (ok && ok.ok ? 'Saved.' : 'No link saved yet.') + '</div>' +
-      '';
+      '</details>';
   }
   function renderShell() {
     let el = document.getElementById('immigOperaSetup');
@@ -49,8 +49,8 @@
       el = document.createElement('div'); el.id = 'immigOperaSetup'; el.className = 'card imm-opera';
       if (anchor && anchor.id === 'immigStep4Slot') anchor.appendChild(el); else if (anchor) anchor.after(el); else { const res = document.getElementById('immigResults2'); if (!res) return; res.insertBefore(el, res.firstChild); }
     }
-    const typing = document.activeElement && document.activeElement.id === 'immigOperaUrl';
-    if (!typing) el.innerHTML = operaRow();
+    const typing = document.activeElement && document.activeElement.id === 'immigOperaUrl',opened=el.querySelector('details')?.open;
+    if (!typing) {const same=el.dataset.opera===S.opera;el.innerHTML=operaRow();if(same&&opened)el.querySelector('details').open=true;el.dataset.opera=S.opera;}
     const b = document.getElementById('immigOperaSave'); if (b) b.onclick = saveOperaLink;
   }
   async function loadOperaLink() {
@@ -66,72 +66,93 @@
     const d = db(); if (d) { try { await d.ref('hotels/' + HOTEL_ID + '/operaUrl').set(v.url); } catch (_) { toast('Saved on this device only (no database access).', 'err'); } }
     toast('Opera link saved.', 'ok'); renderShell();
   }
-  async function loadShared() {
-    try { const l = localStorage.getItem(lsKey()); if (l && A.validateOperaUrl(l).ok) S.opera = l; } catch (_) {}
-    const d = db(); if (!d || !S.plan) return;
-    try { const o = await d.ref('hotels/' + HOTEL_ID + '/operaUrl').once('value'); if (o.val() && A.validateOperaUrl(o.val()).ok) S.opera = o.val(); } catch (_) {}
-    try { const ps = await d.ref('hotels/' + HOTEL_ID + '/immigFixPrefs/uaeIdType').once('value'); S.uaeType = C.UAE_ID_TYPES.includes(ps.val()) ? ps.val() : ''; } catch (_) {}
-    try { const bd = String((typeof _immigMeta !== 'undefined' && _immigMeta.biz) || '').slice(0, 10) || 'today'; const snap = await d.ref('hotels/' + HOTEL_ID + '/immigFix/' + bd).once('value'); S.shared = snap.val() || {}; } catch (_) { S.shared = {}; }
+  async function loadShared(){
+    const hotel=typeof HOTEL_ID==='undefined'?'':String(HOTEL_ID||'');
+    try{const link=localStorage.getItem(lsKey());if(link&&A.validateOperaUrl(link).ok)S.opera=link;}catch(_){}
+    const d=db();if(!d||!S.plan)return;
+    const day=String((typeof _immigMeta!=='undefined'&&_immigMeta.biz)||'').slice(0,10)||'today';
+    const results=await Promise.allSettled(['operaUrl','immigFixPrefs/uaeIdType','immigFix/'+day].map(path=>d.ref('hotels/'+hotel+'/'+path).once('value')));
+    if(hotel!==String(HOTEL_ID))return;
+    const values=results.map(r=>r.status==='fulfilled'?r.value.val():null);
+    if(values[0]&&A.validateOperaUrl(values[0]).ok)S.opera=values[0];
+    S.uaeType=C.UAE_ID_TYPES.includes(values[1])?values[1]:'';S.shared=values[2]||{};
   }
   function chip(it, f) {
-    const typeSet = !!((it.fields.find(x => x.field === 'idType') || {}).value), on = !!S.ok[it.id][f.field] && (f.field !== 'idNumber' || typeSet), dis = f.field === 'idNumber' ? !typeSet : (f.field === 'idType' ? false : !f.value);
-    let val;
-    if (f.field === 'gender') val = '<select data-edit="' + esc(it.id) + '|gender"><option value="">choose…</option><option' + (f.value === 'M' ? ' selected' : '') + ' value="M">M</option><option' + (f.value === 'F' ? ' selected' : '') + ' value="F">F</option></select>';
-    else if (f.field === 'nationality') val = '<select data-edit="' + esc(it.id) + '|nationality"><option value="">choose…</option>' + C.countryList().map(c => '<option value="' + c.code + '"' + (c.code === f.value ? ' selected' : '') + '>' + esc(c.code + ' · ' + c.name) + '</option>').join('') + '</select>';
-    else if (f.field === 'idType') val = '<select data-edit="' + esc(it.id) + '|idType"><option value="">choose…</option>' + (f.idKind === 'EID' ? C.UAE_ID_TYPES : C.ID_TYPES).map(c => '<option value="' + c + '"' + (c === f.value ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>';
-    else val = '<b>' + esc(f.display) + '</b>';
-    const guess = f.needsTap && f.value && f.field !== 'idType' && f.field !== 'idNumber' ? ' <small style="color:var(--amber)">tap to accept</small>' : '';
-    return '<label style="display:flex;gap:6px;align-items:center;margin:2px 0;' + (dis ? 'opacity:.55' : '') + '"><input type="checkbox" data-ok="' + esc(it.id) + '|' + f.field + '"' + (on ? ' checked' : '') + (dis ? ' disabled' : '') + '> <span style="min-width:74px;color:var(--text3)">' + esc(f.label) + '</span> ' + val + ' <small style="color:var(--text3)">· ' + esc(f.source) + '</small>' + guess + '</label>';
+    const typeSet=!!it.fields.find(x=>x.field==='idType')?.value;
+    const on=!!S.ok[it.id][f.field]&&(f.field!=='idNumber'||typeSet);
+    const disabled=f.field==='idNumber'?!typeSet:f.field==='idType'?false:!f.value;
+    const title=esc(f.label+' for room '+it.room), edit=' data-edit="'+esc(it.id)+'|'+f.field+'" aria-label="'+title+'"';
+    let control;
+    if(f.field==='gender')control='<select'+edit+'><option value="">Choose gender</option><option value="M"'+(f.value==='M'?' selected':'')+'>Male</option><option value="F"'+(f.value==='F'?' selected':'')+'>Female</option></select>';
+    else if(f.field==='nationality')control='<select'+edit+'><option value="">Choose nationality</option>'+C.countryList().map(c=>'<option value="'+c.code+'"'+(c.code===f.value?' selected':'')+'>'+esc(c.name)+' ('+c.code+')</option>').join('')+'</select>';
+    else if(f.field==='idType')control='<select'+edit+'><option value="">Choose document type</option>'+(f.idKind==='EID'?C.UAE_ID_TYPES:C.ID_TYPES).map(c=>'<option'+(c===f.value?' selected':'')+'>'+esc(c)+'</option>').join('')+'</select>';
+    else control='<b class="imm-doc">'+esc(f.display)+'</b>';
+    return '<div class="imm-field"><label><input type="checkbox" aria-label="Include '+title+'" data-ok="'+esc(it.id)+'|'+f.field+'" data-idle-disabled="'+disabled+'"'+(on?' checked':'')+(disabled?' disabled':'')+'><span>'+esc(f.label)+'</span></label><div class="imm-field-value">'+control+'<small>'+esc(f.source)+(f.needsTap&&f.value&&!on?' · Check before including':'')+'</small></div></div>';
   }
-  function approvedCount() { let n = 0; Object.keys(S.ok).forEach(i => Object.keys(S.ok[i]).forEach(f => { if (S.ok[i][f]) n++; })); return n; }
+  function selectedFields(it) {
+    const ok=S.ok[it.id]||{}, chosen=it.fields.filter(f=>ok[f.field]&&f.value);
+    const pair=chosen.some(f=>f.field==='idType')&&chosen.some(f=>f.field==='idNumber');
+    return chosen.filter(f=>!['idType','idNumber'].includes(f.field)||pair);
+  }
+  function approvedCount() {return (S.plan?.items||[]).reduce((n,it)=>n+selectedFields(it).length,0);}
   function paint() {
-    const card = document.getElementById('immigFixerCard'); if (!card || !S.plan) return;
-    const items = S.plan.items;
-    const full = it => it.fields.length && it.fields.every(f => S.ok[it.id][f.field]);
-    const ready = items.filter(it => it.fields.length && full(it)), needs = items.filter(it => it.fields.length && !full(it)), skipped = items.filter(it => !it.fields.length);
-    const row = it => '<div style="border:1px solid var(--border);border-radius:9px;padding:7px 10px;margin:6px 0"><b style="color:var(--sky)">Room ' + esc(it.room) + '</b> · ' + esc(it.name) + (it.notes.length ? '<div style="font-size:0.62rem;color:var(--amber)">' + it.notes.map(esc).join(' · ') + '</div>' : '') + '<div style="font-size:0.7rem;margin-top:4px">' + it.fields.map(f => chip(it, f)).join('') + '</div></div>';
-    card.innerHTML = '<div class="imm-h"><b>Step 4 · Fix the guests</b></div>' +
-      '<div class="imm-sum"><span class="ok">✔ ' + ready.length + ' ready</span><span class="ask">✋ ' + needs.length + ' need your choice</span><span class="skip">' + skipped.length + ' cannot be fixed</span></div>' +
-      (needs.length ? '<div class="imm-sub">Choose these, then they are ready too:</div><div style="max-height:46vh;overflow:auto">' + needs.map(row).join('') + '</div>' : '') +
-      (ready.length ? '<details class="imm-more"><summary>See the ' + ready.length + ' ready guests</summary>' + ready.map(row).join('') + '</details>' : '') +
-      (skipped.length ? '<details class="imm-more"><summary>Why ' + skipped.length + ' cannot be fixed</summary><div class="imm-small">' + skipped.map(it => 'Room ' + esc(it.room) + ' · ' + esc(it.name) + ' · ' + esc(it.notes.join(' · ') || 'nothing to fill')).join('<br>') + '</div></details>' : '') +
-      (!items.length ? '<div class="imm-sub">Nothing to fix. All good.</div>' : '') +
-      '<div class="imm-go"><button class="btn gold imm-big" id="immigFixCopy">▶ Start fixing (<span id="immigFixN">' + approvedCount() + '</span> ticked fields)</button> <button class="btn imm-big" id="immigFixCloud">Copy read-only check request</button></div>' +
-      '<div id="immigCloudBox" style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:10px 0"><b>Fix in Opera (cloud) · saves guest profiles</b>' +
-      '<ol class="imm-3" style="margin:8px 0 8px 18px;padding:0;line-height:1.7"><li>Load today\'s Immigration report and In House list above, and tick the fixes.</li>' +
-      '<li>Press the big button.<div style="margin:6px 0"><button class="btn gold imm-big" id="immigCloudOne">▶ Fix in Opera now (first 5 rooms, fills empty fields and SAVES)</button></div><div class="imm-small" style="margin:4px 0">First run is only 5 rooms. Check the results below in Opera, then use <button class="btn" id="immigCloudAll">Run all rooms</button></div><div class="imm-small">It fills only empty gender, nationality and ID in guest profiles and presses Save. It never overwrites a value and never touches folios, postings or cashiering.</div></li>' +
-      '<li>When it asks, type your fresh 6-digit code and press Send.<div style="display:flex;gap:8px;margin:6px 0"><input id="immigCloudCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code" style="width:130px"><button class="btn" id="immigCloudSend">Send code</button></div></li>' +
-      '<li>See the results below: rooms saved, nothing to fill, need a look.</li></ol>' +
-      '<div class="imm-small" id="immigCloudStartMsg" style="margin:4px 0;font-weight:600"></div><a id="immigCloudRunLink" class="btn" target="_blank" rel="noopener" hidden>Open cloud run</a><div class="imm-small" id="immigCloudWant" style="margin:4px 0"></div><div class="imm-small" id="immigCloudRes" style="margin:6px 0"></div>' +
-      '<div class="imm-small" id="immigCloudKeyRow" style="display:none;margin:4px 0">One-time setup on this device: paste the GitHub start key (the same one Neorcha uses). It stays on this device only.<br><input id="immigCloudKey" type="password" autocomplete="off" placeholder="GitHub start key" style="width:220px"> <button class="btn" id="immigCloudKeySave">Save key</button></div>' +
-      '<details class="imm-more" id="immigCloudAdv"><summary>Advanced</summary><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0"><button class="btn" id="immigCloudStartSignin">Start sign-in test only</button><button class="btn" id="immigCloudStartAudit">Read-only check (no saving)</button><button class="btn" id="immigCloudPlan">Send plan to cloud</button></div><label class="imm-small"><input type="checkbox" id="immigCloudSave"> Save mode for the Advanced plan button (the big button always saves).</label></details></div>' +
-      '<div class="imm-small" id="immigFixStatus" style="margin:6px 0">' + esc(S.fxNote || '') + '</div>' + extState() +
-      (helperFx() ? '<ol class="imm-3"><li>Press <b>Start fixing</b>. The list goes to your Opera tab.</li><li>In the fixer window there, press <b>Start</b>. It opens each guest and fills the empty boxes.</li><li>Check the guest, press Save in Opera yourself, then press <b>Next guest</b>.</li></ol>' : '<ol class="imm-3"><li>Press <b>Start fixing</b>. It copies the list.</li><li>In Opera: open the fixer window, paste the list, press <b>Load</b>.</li><li>Press <b>Start</b> in the window. It opens each guest and fills the empty boxes. You press Save in Opera.</li></ol>') +
-      '<details class="imm-more"><summary>More</summary><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="immigFixSave">Remember gender and nationality</button></div>' +
-      '<div class="imm-small" style="margin-top:10px">What the fixer changed (paste its log here)</div><textarea id="immigFixLogIn" style="width:100%;height:46px;font:11px monospace"></textarea><div style="margin-top:4px"><button class="btn" id="immigFixLogSave">Save this log</button></div><div id="immigFixLogList" style="font:10px monospace;color:var(--text3);margin-top:6px;white-space:pre-wrap"></div></details>';
-    card.onchange = e => {
-      const t = e.target;
-      if (t.dataset && t.dataset.ok) { const [id, f] = t.dataset.ok.split('|'); S.ok[id][f] = t.checked; paint(); }
-      else if (t.dataset && t.dataset.edit) {
-        const [id, field] = t.dataset.edit.split('|'), it = S.plan.items.find(x => x.id === id), f = it && it.fields.find(x => x.field === field);
-        if (f) { f.value = t.value; f.display = field === 'nationality' && t.value ? t.value + ' · ' + t.selectedOptions[0].textContent.split(' · ')[1] : t.value; f.source = 'you chose'; S.ok[id][field] = !!t.value; if (field === 'idType' && !t.value) S.ok[id].idNumber = false;
-          if (field === 'idType' && f.idKind === 'EID' && C.UAE_ID_TYPES.includes(t.value)) { S.uaeType = t.value; const d = db(); if (d) d.ref('hotels/' + HOTEL_ID + '/immigFixPrefs/uaeIdType').set(t.value).catch(() => {}); S.plan.items.forEach(o => o.fields.forEach(x => { if (x.field === 'idType' && x.idKind === 'EID' && !x.value) { x.value = t.value; x.display = t.value; x.source = 'your usual UAE type'; } })); }
-          paint(); }
+    const card=document.getElementById('immigFixerCard');if(!card||!S.plan)return;
+    const opened=new Set([...card.querySelectorAll('details[open][id]')].map(e=>e.id));
+    const oldScroll=card.querySelector('.imm-review-list')?.scrollTop||0;
+    const focus=document.activeElement,focusKey=focus?.dataset?.edit||focus?.dataset?.ok,focusAttr=focus?.dataset?.edit?'edit':'ok';
+    const code=card.querySelector('#immigCloudCode')?.value||'',keyValue=card.querySelector('#immigCloudKey')?.value||'';
+    const keyShown=card.querySelector('#immigCloudKeyRow')?.style.display==='';
+    const items=S.plan.items,full=it=>it.fields.length&&it.fields.every(f=>S.ok[it.id][f.field]);
+    const ready=items.filter(full),needs=items.filter(it=>it.fields.length&&!full(it)),skipped=items.filter(it=>!it.fields.length);
+    const selected=items.filter(it=>selectedFields(it).length).length;
+    if(!S.reviewIds)S.reviewIds=new Set(needs.map(it=>it.id));
+    const reviewItems=items.filter(it=>S.reviewIds.has(it.id)),readyItems=ready.filter(it=>!S.reviewIds.has(it.id));
+    const row=it=>{const notes=it.notes.filter(note=>!(/^Gender:/.test(note)&&it.fields.some(f=>f.field==='gender'&&f.value)));return '<article class="imm-guest"><div class="imm-guest-head"><b>Room '+esc(it.room)+'</b><span>'+esc(it.name)+'</span></div>'+it.fields.map(f=>chip(it,f)).join('')+(notes.length?'<p class="imm-small">'+notes.map(esc).join(' · ')+'</p>':'')+'</article>';};
+    card.classList.add('imm-review');
+    card.innerHTML='<div class="imm-eyebrow">REVIEW & FIX</div><p class="imm-small">'+esc(S.plan.hotel)+(S.plan.businessDate?' · '+esc(S.plan.businessDate.slice(0,10)):'')+'</p><div class="imm-h"><b>Check the suggested details</b></div><p class="imm-small">Tick the fields you want to add. Only empty fields in Opera will be filled.</p>'+
+      '<div class="imm-sum"><span class="ok">'+ready.length+' ready</span><span class="ask">'+needs.length+' need your choice</span>'+(skipped.length?'<span class="skip">'+skipped.length+' need more information</span>':'')+'</div>'+
+      (reviewItems.length?'<div class="imm-sub">Review these guests</div><div class="imm-review-list">'+reviewItems.map(row).join('')+'</div>':'')+
+      (readyItems.length?'<details class="imm-more" id="immigReadyGuests"><summary>Review '+readyItems.length+' ready guests</summary>'+readyItems.map(row).join('')+'</details>':'')+
+      (skipped.length?'<details class="imm-more" id="immigSkippedGuests"><summary>Guests that need more information</summary><div class="imm-small">'+skipped.map(it=>'Room '+esc(it.room)+' · '+esc(it.name)+' · '+esc(it.notes.join(' · ')||'No supported empty fields to fill')).join('<br>')+'</div></details>':'')+
+      (!items.length?'<div class="imm-empty"><b>No supported fields need fixing.</b><span>You can see the full report below.</span></div>':'')+
+      '<section id="immigCloudBox" class="imm-run"><div class="imm-h"><b>Fix in Opera</b><span id="immigSelectionCount">'+selected+' guests · '+approvedCount()+' fields selected</span></div>'+
+      '<div class="imm-run-actions"><label class="imm-scope" for="immigRunScope">Guests to fix<select id="immigRunScope"><option value="5"'+(S.scope==='5'?' selected':'')+'>First 5 selected guests</option><option value="all"'+(S.scope==='all'?' selected':'')+'>All selected guests</option></select></label><button class="btn gold imm-big" id="immigCloudOne">'+(S.scope==='all'?'Fix selected guests':'Fix first 5 guests')+'</button></div>'+
+      '<p class="imm-small">Saves the ticked details to guest profiles. It never overwrites a value and never touches folios, postings or cashiering.</p>'+
+      '<ol class="imm-run-steps" id="immigCloudSteps" aria-label="Automation progress"><li data-cloud-step="0">Connect</li><li data-cloud-step="1">Sign in</li><li data-cloud-step="2">Fix details</li><li data-cloud-step="3">Results</li></ol>'+
+      '<div id="immigCloudStartMsg" class="imm-run-note" role="status" aria-live="polite"></div>'+
+      '<div id="immigCloudCodeBox" class="imm-code" hidden><b>Enter your authentication code</b><p class="imm-small" id="immigCloudWant"></p><div class="imm-row"><input id="immigCloudCode" aria-label="Six-digit authentication code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code"><button class="btn gold" id="immigCloudSend">Send code</button></div></div>'+
+      '<div id="immigCloudRes" class="imm-result" aria-live="polite"></div>'+
+      '<div id="immigCloudKeyRow" class="imm-setup-key" style="display:none"><b>Connect cloud automation on this device</b><p class="imm-small">Use the same start key as Neorcha. You only need to save it once.</p><div class="imm-row"><input id="immigCloudKey" type="password" aria-label="GitHub start key" autocomplete="off" placeholder="Paste your GitHub start key"><button class="btn" id="immigCloudKeySave">Save key</button></div></div>'+
+      '<details class="imm-more" id="immigCloudAdv"><summary>Connection help & details</summary><div class="imm-support-actions"><button class="btn" id="immigCloudStartSignin">Check Opera sign-in only</button><button class="btn" id="immigCloudStartAudit">Preview without saving</button><a id="immigCloudRunLink" class="btn" target="_blank" rel="noopener" hidden>Open cloud run</a></div><p class="imm-small">Connection checks and previews do not save guest details.</p></details></section>'+
+      '<details class="imm-more imm-alternative" id="immigBrowserAlternative"><summary>Use my browser extension instead</summary><p class="imm-small">Open Opera on your computer, then send the selected fixes to your helper.</p><button class="btn" id="immigFixCopy">'+(helperFx()?'Send selected fixes to Opera':'Copy selected fixes for Opera')+' (<span id="immigFixN">'+approvedCount()+'</span> fields)</button><div class="imm-small" id="immigFixStatus">'+esc(S.fxNote||'')+'</div>'+extState()+'<p class="imm-small">'+(helperFx()?'Press Start in the Opera helper. It follows the selected fields.':'Paste the copied list into the Opera fixer, press Load, then Start.')+'</p></details>'+
+      '<details class="imm-more" id="immigFixMore"><summary>Team choices & previous changes</summary><button class="btn" id="immigFixSave">Remember gender and nationality</button><div id="immigFixLogList" class="imm-small"></div><details class="imm-more" id="immigLogImport"><summary>Import a helper log or copy a support request</summary><textarea id="immigFixLogIn" aria-label="Helper change log"></textarea><div class="imm-support-actions"><button class="btn" id="immigFixLogSave">Save this log</button><button class="btn" id="immigFixCloud">Copy read-only check request</button></div></details></details>';
+    card.onchange=e=>{
+      const t=e.target;
+      if(t.id==='immigRunScope'){S.scope=t.value==='all'?'all':'5';paint();return;}
+      if(t.dataset?.ok){const [id,f]=t.dataset.ok.split('|');S.ok[id][f]=t.checked;paint();}
+      else if(t.dataset?.edit){
+        const [id,field]=t.dataset.edit.split('|'),it=S.plan.items.find(x=>x.id===id),f=it?.fields.find(x=>x.field===field);
+        if(f){f.value=t.value;f.display=t.value;f.source='You chose';S.ok[id][field]=!!t.value;if(field==='idType'&&!t.value)S.ok[id].idNumber=false;
+          if(field==='idType'&&f.idKind==='EID'&&C.UAE_ID_TYPES.includes(t.value)){S.uaeType=t.value;const d=db();if(d)d.ref('hotels/'+HOTEL_ID+'/immigFixPrefs/uaeIdType').set(t.value).catch(()=>{});S.plan.items.forEach(o=>o.fields.forEach(x=>{if(x.field==='idType'&&x.idKind==='EID'&&!x.value){x.value=t.value;x.display=t.value;x.source='Your usual UAE type';}}));}
+          paint();}
       }
     };
-    document.getElementById('immigFixCopy').onclick = copyPlan;
-    document.getElementById('immigFixCloud').onclick = copyCloudRequest;
-    document.getElementById('immigCloudSend').onclick = sendCloudCode;
-    document.getElementById('immigCloudOne').onclick = () => oneButton(false);
-    document.getElementById('immigCloudAll').onclick = () => oneButton(true);
-    document.getElementById('immigCloudStartSignin').onclick = () => startCloud('signin');
-    document.getElementById('immigCloudStartAudit').onclick = () => startCloud('audit',null,()=>sendCloudPlan(false));   // read-only: plan without full ID numbers
-    document.getElementById('immigCloudKeySave').onclick = saveCloudKey;
-    document.getElementById('immigCloudPlan').onclick = sendCloudPlan;
-    cloudControls();watchCloudWant(); watchCloudResult();
-    document.getElementById('immigFixSave').onclick = saveShared;
-    document.getElementById('immigFixLogSave').onclick = saveLog;
-    showLog();
+    document.getElementById('immigFixCopy').onclick=copyPlan;
+    document.getElementById('immigFixCloud').onclick=copyCloudRequest;
+    document.getElementById('immigCloudSend').onclick=sendCloudCode;
+    document.getElementById('immigCloudOne').onclick=()=>oneButton(S.scope==='all');
+    document.getElementById('immigCloudStartSignin').onclick=()=>startCloud('signin');
+    document.getElementById('immigCloudStartAudit').onclick=()=>startCloud('audit',null,()=>sendCloudPlan(false));
+    document.getElementById('immigCloudKeySave').onclick=saveCloudKey;
+    document.getElementById('immigFixSave').onclick=saveShared;
+    document.getElementById('immigFixLogSave').onclick=saveLog;
+    opened.forEach(id=>{const el=document.getElementById(id);if(el)el.open=true;});
+    const list=card.querySelector('.imm-review-list');if(list)list.scrollTop=oldScroll;
+    document.getElementById('immigCloudCode').value=code;document.getElementById('immigCloudKey').value=keyValue;
+    if(keyShown)document.getElementById('immigCloudKeyRow').style.display='';
+    if(focusKey){const next=[...card.querySelectorAll('[data-'+focusAttr+']')].find(e=>e.dataset[focusAttr]===focusKey);next?.focus({preventScroll:true});}
+    else if(focus?.id==='immigRunScope')document.getElementById('immigRunScope').focus({preventScroll:true});
+    cloudControls();watchCloudWant();watchCloudResult();renderCloudState();showLog();guide();
   }
   const helperFx = () => { try { return !!document.documentElement.dataset.hoFxHelper; } catch (_) { return false; } };
   // one line: is the Chrome helper's fixer as new as this page?  (the helper takes new fixer code from this page by itself; only an old helper needs a download)
@@ -165,7 +186,44 @@
   }
   // All cloud launches share one guard; preparing a new plan must wait until no run is active.
   const GH_KEY = 'ho_gh_start_key_v1', GH_API = 'https://api.github.com/repos/ahmed0088/Depature-Tool/actions/workflows/opera-cloud.yml/dispatches';
-  function cloudMsg(t, bad) { const m = document.getElementById('immigCloudStartMsg'); if (m) { m.textContent = t; m.style.color = bad ? 'var(--red,#c0392b)' : ''; } }
+  let cloudNote='',cloudBad=false,cloudResult=null,cloudWant=null,codeSentChallenge='',focusedChallenge='',cloudStage=-1;
+  function cloudMsg(t,bad){cloudNote=String(t||'');cloudBad=!!bad;renderCloudState();}
+  function recovery(error){
+    if(/passkey|security key|windows hello/i.test(error))return {title:'Opera needs a different sign-in method',text:'This cloud computer cannot use a device passkey. Ask your administrator to enable a supported password and authentication-code method.',login:true};
+    if(/Microsoft|sign.in|password|account policy/i.test(error))return {title:'Opera sign-in needs attention',text:'Check the saved Opera login and the account’s sign-in method in connection settings, then try again.',login:true};
+    if(/code|authenticat/i.test(error))return {title:'A fresh authentication code is needed',text:'Start again. Enter a new code only when this page asks for it.'};
+    if(/plan|reviewed list/i.test(error))return {title:'Review the selected details again',text:'The previous list could not be used. Check the ticked fields, then press Fix again.'};
+    return {title:'The run stopped',text:'Check the explanation below before trying again. Only confirmed results are counted as saved.'};
+  }
+  function renderCloudState(){
+    const msg=document.getElementById('immigCloudStartMsg'),result=document.getElementById('immigCloudRes'),box=document.getElementById('immigCloudCodeBox');
+    if(!msg||!result||!box)return;
+    const v=cloudResult,terminal=v&&['done','failed'].includes(v.state),age=Date.now()-Number(cloudWant?.at||0);
+    wantedCode=cloudWant&&cloudWant.state==='waiting'&&age>=0&&age<180000&&(!cloudTag||cloudWant.tag===cloudTag)&&!terminal?cloudWant:null;
+    const challenge=wantedCode?String(wantedCode.tag||'')+'|'+wantedCode.at:'';
+    box.hidden=!wantedCode;const sent=!!challenge&&codeSentChallenge===challenge;
+    const input=document.getElementById('immigCloudCode'),send=document.getElementById('immigCloudSend');
+    input.disabled=sent;send.disabled=sent;
+    document.getElementById('immigCloudWant').textContent=sent?'Code sent. Waiting for Opera to continue…':'Open your authenticator app, type the current 6 digits, then press Send code.';
+    if(wantedCode&&!sent&&focusedChallenge!==challenge){focusedChallenge=challenge;input.focus({preventScroll:true});}
+    let stage=cloudStage;
+    if(v?.state==='running')stage=['starting'].includes(v.stage)?0:['email','password','signin','passkey','code','code-submit','signed-in'].includes(v.stage)?1:2;
+    if(terminal)stage=v.state==='done'?3:/Microsoft|sign.in|password|passkey|authenticat|code/i.test(v.error||'')?1:Math.max(0,stage);
+    if(wantedCode)stage=1;
+    document.querySelectorAll('#immigCloudSteps li').forEach((el,i)=>{el.classList.toggle('is-done',stage>i||(v?.state==='done'&&i===3));el.classList.toggle('is-active',stage===i&&!terminal);el.classList.toggle('is-stopped',stage===i&&v?.state==='failed');if(stage===i)el.setAttribute('aria-current','step');else el.removeAttribute('aria-current');});
+    msg.textContent=v?.state==='running'?(v.note||'Working through the reviewed guest list…'):cloudNote;
+    msg.classList.toggle('is-error',cloudBad&&!terminal);
+    if(!v){result.innerHTML='';cloudControls();return;}
+    const sm=C.cloudSummary(v.lines,v.state==='done'),rooms=a=>a.map(esc).join(', ')||'None';
+    if(v.state==='failed'){
+      const error=String(v.error||'No explanation was returned.'),help=recovery(error);
+      result.innerHTML='<div class="imm-help"><b>'+esc(help.title)+'</b><p>'+esc(help.text)+'</p>'+(help.login?'<a class="btn" href="https://github.com/ahmed0088/Depature-Tool/settings/secrets/actions" target="_blank" rel="noopener">Open login settings</a>':'')+'<details class="imm-more"><summary>Show the exact reason</summary><p>'+esc(error.slice(0,400))+'</p></details></div>';
+    }else if(v.state==='done'&&v.mode==='signin')result.innerHTML='<div class="imm-success"><b>Opera sign-in works</b><p>No guest records were changed.</p></div>';
+    else if(v.state==='done')result.innerHTML='<div class="imm-success"><b>'+(v.mode==='save'?'Finished · '+sm.saved.length+' saved':'Preview finished · nothing saved')+'</b><p>'+sm.none.length+' already complete · '+sm.bad.length+' need a look</p></div><details class="imm-more"'+(sm.bad.length?' open':'')+'><summary>Results by room</summary><p>Saved: '+rooms(sm.saved)+'<br>Already complete: '+rooms(sm.none)+'</p>'+(sm.bad.length?'<ul>'+sm.bad.map(b=>'<li>Room '+esc(b[0])+': '+esc(b[1])+'</li>').join('')+'</ul>':'')+'</details>';
+    else result.innerHTML='<p class="imm-small">'+sm.saved.length+' rooms confirmed saved so far'+(v.mode==='save'?'':' · Preview only; nothing saved')+'</p>';
+    if(terminal){const stamp=new Date(Number(v.at||0));if(v.at&&!isNaN(stamp))result.insertAdjacentHTML('beforeend','<div class="imm-small imm-result-time">Last run · '+esc(stamp.toLocaleString())+'</div>');}
+    cloudControls();
+  }
   function saveCloudKey() {
     const el = document.getElementById('immigCloudKey'), v = String(el && el.value || '').trim();
     if (!v) return toast('Paste the start key first.', 'err');
@@ -176,26 +234,33 @@
   function cloudContext(){
     const hotel=typeof HOTEL_ID==='undefined'?'':String(HOTEL_ID||'');
     if(cloudHotel===hotel)return;
-    const changed=!!cloudHotel;cloudHotel=hotel;watchTok++;cloudStarting=false;cloudRunning=false;cloudTag='';wantedCode=null;
+    const changed=!!cloudHotel;cloudHotel=hotel;watchTok++;cloudStarting=false;cloudRunning=false;cloudTag='';wantedCode=null;cloudNote='';cloudBad=false;cloudResult=null;cloudWant=null;codeSentChallenge='';focusedChallenge='';cloudStage=-1;
     if(resRef){resRef.off();resRef=null;}if(wantRef){wantRef.off();wantRef=null;}
-    if(changed){S.opera='';S.shared={};loadOperaLink();}
+    if(changed){S.opera='';S.shared={};S.lastRows=null;S.lastList=null;loadOperaLink();}
   }
   function keyProblem(status){
     if(![401,403,404].includes(status))return false;
     const row=document.getElementById('immigCloudKeyRow');if(row)row.style.display='';
     cloudMsg(status===401?'The GitHub start key has expired or was refused. Save a new key below, then start again.':'The GitHub key needs access to Depature-Tool with Actions: Read and write. Update the key below.',true);return true;
   }
-  function cloudControls(){for(const id of ['immigCloudOne','immigCloudAll','immigCloudStartSignin','immigCloudStartAudit','immigCloudPlan']){const b=document.getElementById(id);if(b)b.disabled=cloudStarting||cloudRunning;} }
+  function cloudControls(){
+    const busy=cloudStarting||cloudRunning,reportError=!!document.getElementById('immigError2')?.classList.contains('show');
+    for(const id of ['immigCloudOne','immigCloudStartSignin','immigCloudStartAudit','immigRunScope','immigReportsClear','immigInhouseXmlInput','immigFileInput2','immigGo']){const el=document.getElementById(id);if(el)el.disabled=busy||(['immigCloudOne','immigCloudStartAudit'].includes(id)&&(!approvedCount()||reportError));}
+    document.querySelectorAll('#immigFixerCard .imm-guest input, #immigFixerCard .imm-guest select').forEach(el=>{el.disabled=busy||el.dataset.idleDisabled==='true';});
+    const b=document.getElementById('immigCloudOne');if(b)b.textContent=busy?'Automation running…':S.scope==='all'?'Fix selected guests':'Fix first 5 guests';
+  }
   async function startCloud(mode, lim, prepare) {
     cloudContext();
     if (mode !== 'signin' && mode !== 'audit' && mode !== 'save') return;   // 'save' is started only by the big button
     if(cloudStarting||cloudRunning)return cloudMsg('An Opera automation is already starting or running. Finish that run before starting another.',true);
+    if(mode!=='signin'&&document.getElementById('immigError2')?.classList.contains('show'))return cloudMsg('Replace the Opera report above before starting. The previous review is out of date.',true);
+    cloudResult=null;
     let key = ''; try { key = localStorage.getItem(GH_KEY) || ''; } catch (_) {}
     if (!key) { const r = document.getElementById('immigCloudKeyRow'); if (r) r.style.display = ''; return cloudMsg('Needs the GitHub start key once on this device.', true); }
     const d = db(); if (!d) return cloudMsg('Not connected to the database. Refresh the page and try again.', true);
     const ov = S.opera ? A.validateOperaUrl(S.opera) : null, url = ov && ov.ok ? ov.url : '';
-    if(!url)return cloudMsg('Save this hotel’s Opera link before starting the cloud automation.',true);
-    cloudStarting=true;cloudControls();cloudMsg('Checking whether an Opera run is already active…');const t0=Date.now(),hotel=cloudHotel;
+    if(!url){const setup=document.getElementById('immigConnectionDetails');if(setup)setup.open=true;return cloudMsg('Add your hotel’s Opera link above, then press Fix again.',true);}
+    cloudStage=0;cloudStarting=true;cloudControls();cloudMsg('Checking whether an Opera run is already active…');const t0=Date.now(),hotel=cloudHotel;
     try {
       const active=await fetch(GH_API.replace('/dispatches','/runs?per_page=10'),{headers:{Accept:'application/vnd.github+json',Authorization:'Bearer '+key}});
       if(hotel!==String(HOTEL_ID))return;
@@ -203,15 +268,15 @@
       if(!active.ok)throw Error('Cannot check existing Opera runs (GitHub '+active.status+'). Check the start key’s Actions permission.');
       const running=(await active.json()).workflow_runs?.find(r=>['queued','in_progress','waiting','requested','pending'].includes(r.status));
       if(running){cloudRunning=true;cloudTag=(String(running.display_title||'').match(/\bim[a-z0-9]+\b/)||[])[0]||'';cloudMsg('An Opera run is already active. Following its progress; no second run was started.');watchRun(key,Date.parse(running.created_at)||t0,mode,cloudTag,running.id);return;}
-      cloudTag='im'+Date.now().toString(36)+Math.random().toString(36).slice(2,9);
-      if(prepare&&!(await prepare()))return cloudMsg('Load the reports and tick at least one verified fix before starting.',true);
+      cloudTag='im'+Date.now().toString(36)+Math.random().toString(36).slice(2,9);cloudResult=null;cloudWant=null;codeSentChallenge='';focusedChallenge='';
+      if(prepare&&!(await prepare())){if(!cloudBad)cloudMsg('Load the reports and tick at least one verified fix before starting.',true);return;}
       if(hotel!==String(HOTEL_ID))return;
-      if (mode !== 'signin') {const plan=(await d.ref('hotels/'+hotel+'/operaCloudPlan').once('value')).val();if(hotel!==String(HOTEL_ID))return;if(!plan)return cloudMsg('Send a reviewed plan before starting.',true);if(mode==='save'&&plan.mode!=='save')return cloudMsg('The plan is not approved for saving. Review the selected fixes again.',true);await d.ref('hotels/'+hotel+'/operaCloudPlan').update({tag:cloudTag});if(hotel!==String(HOTEL_ID))return;}
+      if (mode !== 'signin') {const plan=(await d.ref('hotels/'+hotel+'/operaCloudPlan').once('value')).val();if(hotel!==String(HOTEL_ID))return;if(!plan)return cloudMsg('Check your selected fields, then press Fix again.',true);if(mode==='save'&&plan.mode!=='save')return cloudMsg('The plan is not approved for saving. Review the selected fixes again.',true);await d.ref('hotels/'+hotel+'/operaCloudPlan').update({tag:cloudTag});if(hotel!==String(HOTEL_ID))return;}
       cloudMsg('Starting the cloud computer…');
       const r = await fetch(GH_API, { method: 'POST', headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: 'main', inputs: { mode, url, tag:cloudTag, hotel, limit: mode === 'signin' ? '2' : (lim === 'all' ? '0' : lim === '5' ? '5' : '0') } }) });
       if(keyProblem(r.status))return;
       if (!r.ok) return cloudMsg('GitHub answered ' + r.status + '.', true);
-      cloudMsg('Started (' + (mode === 'signin' ? 'sign-in test' : mode === 'save' ? 'fix in Opera, ' + (lim === '5' ? 'first 5 rooms' : 'all rooms') : 'read-only check') + '). GitHub is getting ready (about a minute). Type your code in step 3 when it asks.');
+      cloudMsg('Starting the automation. If Opera needs a code, the code box will appear here.');
       const b = document.getElementById('immigCloudBox'); if (b) b.open = true;
       cloudRunning=true;watchRun(key, t0, mode,cloudTag);
     } catch (e) { cloudMsg('Could not start the automation: ' + String(e && e.message || e).slice(0,160),true); }finally{if(hotel===cloudHotel){cloudStarting=false;cloudControls();}}
@@ -242,7 +307,7 @@
     }
     if(tok===watchTok){cloudRunning=false;cloudControls();cloudMsg('Live status has paused. Open the cloud run to check its final result before starting again.',true);}
   }
-  // one button: today's loaded report -> plan (read-only form, no full ID numbers) -> start the read-only run -> results show in the card below
+  // One action prepares the reviewed list and starts a save run; preview uses its own explicit action.
   async function oneButton(all) {
     try {await startCloud('save', all ? 'all' : '5',()=>sendCloudPlan(true));}catch(e){cloudMsg('Could not start ('+String(e&&e.message||e).slice(0,120)+').',true);}
   }
@@ -251,46 +316,33 @@
     const el = document.getElementById('immigCloudCode'), v = String(el && el.value || '').replace(/\D/g, ''), d = db();
     if (!/^\d{6}$/.test(v)) return toast('Type the 6 digits from your authenticator app.', 'err');
     if (!d) return toast('Not connected to the database.', 'err');
-    if(!wantedCode||Date.now()-Number(wantedCode.at)>180000)return toast('Wait for the cloud run to request a fresh authentication code first.','err');
-    try { await d.ref('hotels/' + HOTEL_ID + '/operaCloudCode').set({ code: v, at: Date.now(),tag:wantedCode.tag||'' }); el.value = ''; toast('Code sent. The cloud run uses it once.', 'ok'); } catch (_) { toast('Could not send the code.', 'err'); }
+    if(!wantedCode||codeSentChallenge===String(wantedCode.tag||'')+'|'+wantedCode.at||Date.now()-Number(wantedCode.at)>180000)return toast('Wait for the cloud run to request a fresh authentication code first.','err');
+    try { await d.ref('hotels/' + HOTEL_ID + '/operaCloudCode').set({ code: v, at: Date.now(),tag:wantedCode.tag||'' }); codeSentChallenge=String(wantedCode.tag||'')+'|'+wantedCode.at;el.value='';renderCloudState();toast('Code sent. The cloud run uses it once.', 'ok'); } catch (_) { toast('Could not send the code.', 'err'); }
   }
   // the plan for the GitHub cloud run: a private temporary path, read and deleted by the run when it starts. Names are needed to find the guests; they never go in a log.
   async function sendCloudPlan(forceSave,hotel=String(HOTEL_ID)) {
     if(cloudRunning){cloudMsg('This run already has its reviewed plan. Wait for it to finish before sending another.',true);return false;}
     const d = db(); if (!d) { toast('Not connected to the database.', 'err'); return false; }
     if (!approvedCount()) { toast('Tick at least one fix first.', 'err'); return false; }
-    const save = forceSave === true || (forceSave !== false && !!(document.getElementById('immigCloudSave') || {}).checked);
+    const save = forceSave === true;
     const copy = JSON.parse(JSON.stringify(S.plan));
     if (!save) copy.items.forEach(it => it.fields.forEach(f => { if (f.field === 'idNumber') f.value = String(f.display || '').replace(/\D/g, '').slice(-4).padStart(4, '0'); }));   // read-only: no full ID numbers leave the page
     const ov = S.opera ? A.validateOperaUrl(S.opera) : null;
     const code = C.encodePlan(copy, S.ok, { origin: ov && ov.ok ? ov.origin : '' });
-    try { await d.ref('hotels/' + hotel + '/operaCloudPlan').set({ code, mode: save ? 'save' : 'audit', at: Date.now(),tag:cloudTag }); await d.ref('hotels/' + hotel + '/operaCloudResult').remove().catch(() => {}); toast('Plan sent.', 'ok'); return true; } catch (_) { toast('Could not send the plan.', 'err'); return false; }
+    try { await d.ref('hotels/' + hotel + '/operaCloudPlan').set({ code, mode: save ? 'save' : 'audit', at: Date.now(),tag:cloudTag }); await d.ref('hotels/' + hotel + '/operaCloudResult').remove().catch(() => {}); return true; } catch (_) { cloudMsg('Could not prepare the selected details. Check the HotelOps connection and try again.',true);return false; }
   }
-  let resRef = null;
-  function watchCloudResult() {
-    cloudContext();
-    const d = db(); if (!d || resRef) return;
-    try { resRef = d.ref('hotels/' + HOTEL_ID + '/operaCloudResult'); resRef.on('value', snap => {
-      const v = snap.val(), el = document.getElementById('immigCloudRes'); if (!el) return;
-      if (!v) { el.innerHTML = ''; return; }
-      if(cloudTag&&v.tag&&v.tag!==cloudTag)return;
-      if(['done','failed'].includes(v.state)){cloudRunning=false;cloudControls();}
-      const sm = C.cloudSummary(v.lines, v.state === 'done'), rl = a => a.map(esc).join(', ') || 'none';
-      const head = v.state === 'running' ? '⏳ '+esc(v.note||'Running… ('+sm.saved.length+' saved so far)') : v.mode==='signin'&&v.state==='done'?'✅ Signed in to Opera · no guest records changed' : v.state === 'failed' ? '❌ Failed: ' + esc(String(v.error || 'unknown').slice(0, 140)) : '✅ Done: ' + sm.saved.length + ' saved, ' + sm.none.length + ' nothing to fill, ' + sm.bad.length + ' need a look';
-      el.innerHTML = '<b>' + head + '</b>' + (v.mode === 'save' ? '' : ' · read-only, nothing saved') + (v.state === 'failed' ? '' : '<br>Saved: rooms ' + rl(sm.saved) + '<br>Nothing to fill: rooms ' + rl(sm.none) + '<br>Need a look: ' + (sm.bad.length ? sm.bad.map(b => 'room ' + esc(b[0]) + ' (' + esc(b[1]) + ')').join('; ') : 'none')) + ' <button class="btn" id="immigCloudClear">Clear</button>';
-      const b = document.getElementById('immigCloudClear'); if (b) b.onclick = () => resRef.remove().catch(() => {});
-    }); } catch (_) { resRef = null; }
+  let resRef=null,wantRef=null;
+  function watchCloudResult(){
+    cloudContext();const d=db();if(!d||resRef)return;
+    try{resRef=d.ref('hotels/'+HOTEL_ID+'/operaCloudResult');resRef.on('value',snap=>{
+      const v=snap.val();if(v&&cloudTag&&v.tag!==cloudTag)return;cloudResult=v;
+      if(v&&['done','failed'].includes(v.state)){cloudRunning=false;cloudNote='';cloudBad=false;cloudStage=v.state==='done'?3:cloudStage;}
+      renderCloudState();
+    });}catch(_){resRef=null;}
   }
-  let wantRef = null;
-  function watchCloudWant() {
-    cloudContext();
-    const d = db(); if (!d || wantRef) return;
-    try { wantRef = d.ref('hotels/' + HOTEL_ID + '/operaCloudWant'); wantRef.on('value', snap => {
-      const v = snap.val(), el = document.getElementById('immigCloudWant'), box = document.getElementById('immigCloudBox'); if (!el) return;
-      const age=Date.now()-Number(v?.at||0);wantedCode=v&&v.state==='waiting'&&age>=0&&age<180000&&(!cloudTag||v.tag===cloudTag)?v:null;
-      if (wantedCode) { el.textContent = '⏳ Waiting for your code: type the 6 digits in step 3 and press Send.'; el.style.color = 'var(--red,#c0392b)'; if (box) box.open = true; const ci = document.getElementById('immigCloudCode'); if (ci && document.activeElement !== ci) { try { ci.scrollIntoView({ block: 'center' }); ci.focus(); } catch (_) {} } }
-      else { el.style.color = ''; el.textContent = ''; }
-    }); } catch (_) { wantRef = null; }
+  function watchCloudWant(){
+    cloudContext();const d=db();if(!d||wantRef)return;
+    try{wantRef=d.ref('hotels/'+HOTEL_ID+'/operaCloudWant');wantRef.on('value',snap=>{cloudWant=snap.val();renderCloudState();});}catch(_){wantRef=null;}
   }
   async function copyCloudRequest() {
     const t = cloudRequestText(); if (!t) return toast('Tick at least one fix first.', 'err');
@@ -327,26 +379,33 @@
     const el = document.getElementById('immigFixLogList'), d = db(); if (!el || !d) return;
     try { const snap = await d.ref('hotels/' + HOTEL_ID + '/immigFixLog').limitToLast(15).once('value'), v = snap.val() || {}; el.textContent = Object.keys(v).map(k => v[k]).map(r => (r.t || '').slice(0, 16).replace('T', ' ') + ' room ' + r.room + ' ' + r.field + ' ' + r.to + ' · ' + r.result + (r.dry ? ' (dry)' : '') + ' · ' + (r.by || '')).reverse().join('\n') || 'No log yet.'; } catch (_) { el.textContent = ''; }
   }
+  let renderToken=0;
   window.immigFixerRender = async function () {
+    const token=++renderToken;
     cloudContext();
     const res = document.getElementById('immigResults2'); if (!res) return;
     let card = document.getElementById('immigFixerCard');
     if (!card) { card = document.createElement('div'); card.id = 'immigFixerCard'; card.style.cssText = 'margin:12px 0;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--r)'; res.insertBefore(card, res.firstChild); }
     renderShell();
     try { if (typeof window.immigReconcileRender === 'function') window.immigReconcileRender(); } catch (_) {}
-    build(); paint(); await loadShared(); if (Object.keys(S.shared).length || S.uaeType) { build(); paint(); }
+    const rows=typeof immigAllRows2!=='undefined'?immigAllRows2:null,list=typeof _immigInhouseList!=='undefined'?_immigInhouseList:null;
+    const changed=S.lastRows!==rows||S.lastList!==list;
+    if(changed){S.reviewIds=null;build();await loadShared();if(token!==renderToken)return;build();S.lastRows=rows;S.lastList=list;}
+    paint();renderShell();
+    if(changed&&list?.length){const reports=document.getElementById('immigReports');if(reports)reports.open=false;}
+
   };
 
   // one clear next step at a time
-  function guide() {
-    const nx = document.getElementById('immigStep4Slot') && document.getElementById('immNext'); if (!nx) return;
-    const vic = document.getElementById('immigInhouseXmlLabel'), vOk = !!(vic && !/not loaded/i.test(vic.textContent || '')), res = document.getElementById('immigResults2'), shown = !!(res && res.style.display !== 'none' && S.plan);
-    const paste = document.getElementById('immigPasteInput2'), oOk = shown || !!(paste && paste.value.trim().length > 50);
-    const step = shown ? 4 : (!vOk ? 1 : (!oOk ? 2 : 3));
-    const txt = { 1: 'Next: Step 1. Choose the Vicas file.', 2: 'Next: Step 2. Choose the Opera file.', 3: 'Next: Step 3. Press Check guests.', 4: 'Next: Step 4. Press Start fixing.' }[step];
-    if (nx.textContent !== txt) nx.textContent = txt;
-    document.querySelectorAll('#panel-immig [data-step]').forEach(n => n.classList.toggle('imm-now', Number(n.dataset.step) === step));
-    const c = document.getElementById('immigFixerCard'); if (c) c.classList.toggle('imm-now', step === 4);
+  function guide(){
+    const nx=document.getElementById('immNext');if(!nx)return;
+    if(document.getElementById('immigError2')?.classList.contains('show')){const reports=document.getElementById('immigReports');if(reports)reports.open=true;nx.textContent='This Opera report could not be read. Replace it above.';document.querySelectorAll('#panel-immig [data-imm-phase]').forEach(el=>{const active=el.dataset.immPhase==='1';el.classList.toggle('is-current',active);el.classList.remove('is-complete');if(active)el.setAttribute('aria-current','step');else el.removeAttribute('aria-current');});cloudControls();return;}
+    const hasVicas=typeof _immigInhouseList!=='undefined'&&_immigInhouseList.length>0;
+    const res=document.getElementById('immigResults2'),shown=!!(res&&res.style.display!=='none'&&S.plan);
+    const phase=!shown||!hasVicas?1:cloudStarting||cloudRunning||cloudResult?3:2;
+    const text=!hasVicas?'Upload your Vicas In-house XML to begin.':!shown?'Upload the Opera Immigration XML next.':cloudStarting||cloudRunning?'Automation is working. Follow its progress below.':cloudResult?.state==='failed'?'The run needs attention. Follow the action shown below.':cloudResult?.state==='done'?'Your results are ready below.':approvedCount()?'Review the ticked details, then press Fix.':'Choose the details you want to add, or check the full report below.';
+    if(nx.textContent!==text)nx.textContent=text;
+    document.querySelectorAll('#panel-immig [data-imm-phase]').forEach(el=>{const n=Number(el.dataset.immPhase);el.classList.toggle('is-current',n===phase);el.classList.toggle('is-complete',n<phase);if(n===phase)el.setAttribute('aria-current','step');else el.removeAttribute('aria-current');});
   }
   setInterval(guide, 700); setTimeout(guide, 300);
   window.hoImmigFixerState = S;

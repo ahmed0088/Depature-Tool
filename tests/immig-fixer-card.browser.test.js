@@ -16,7 +16,7 @@ try{const page=await browser.newPage({viewport:{width:1200,height:900},serviceWo
  const op=()=>page.evaluate(()=>document.querySelectorAll('#immigFixerCard details').forEach(d=>d.open=true));await page.waitForSelector('#immigFixerCard input[type=checkbox]',{state:'attached'});await op();
  const rc=await page.locator('#immigReconCard').innerText();assert(/2\s*guests match/.test(rc)&&/Only in the Opera report/.test(rc)&&/Bob Faketwo/.test(rc)&&!/Only in the Vicas list/.test(rc),'reconcile card: Bob only in Opera, two match: '+rc);
  const text=await page.locator('#immigFixerCard').innerText();
- assert(/Room 102/.test(text)&&/ET · Ethiopia/.test(text),'nationality from Vicas by room+name');assert(/••••4321/.test(text)&&!/ZZ7654321/.test(await page.locator('#immigFixerCard').innerHTML()),'full ID number never shown');
+ assert(/Room 102/.test(text)&&/Ethiopia \(ET\)/.test(text),'nationality from Vicas by room+name');assert(/••••4321/.test(text)&&!/ZZ7654321/.test(await page.locator('#immigFixerCard').innerHTML()),'full ID number never shown');
  // defaults: nationality on, strong passport on, guessed/none gender off
  const st=await page.evaluate(()=>JSON.stringify(hoImmigFixerState.ok));const ok=JSON.parse(st),id=Object.keys(ok)[0];assert.equal(ok[id].nationality,true);assert.equal(ok[id].idNumber,true,'a passport from a strong Vicas match is pre-ticked');
  await page.locator('select[data-edit$="|gender"]').first().selectOption('F');await op();
@@ -27,7 +27,7 @@ try{const page=await browser.newPage({viewport:{width:1200,height:900},serviceWo
  await page.locator('#immigFixCloud').click();const ct=await page.evaluate(()=>window.copied);assert(/^CLOUD OPERA CHECK/.test(ct)&&/\n102\|/.test(ct),'cloud request lists room 102: '+ct);assert(!/[A-Za-z]{4,}\s[A-Za-z]{4,}\s*$/m.test(ct.split('\n').slice(2).join('\n')),'no names');assert(!/\d{7,}/.test(ct.split('\n').slice(2).join('\n')),'no full ID numbers in the cloud request');
  assert(await page.locator('#immigOperaOpen').count()===0,'no Open button before a link is saved');
  await page.locator('#immigOperaUrl').fill('https://user:pw@evil.example/x');await page.locator('#immigOperaSave').click();assert(/never store a login|Remove the username|does not look/i.test(await page.locator('#immigOperaMsg').innerText()),'a link with a login or another site is refused');
- await page.locator('#immigOperaUrl').fill('https://fake-hotel.oraclehospitality.eu-frankfurt-1.ocs.oraclecloud.com/FAKE/operacloud/faces/opera-cloud-index/OperaCloud');await page.locator('#immigOperaSave').click();await page.waitForSelector('#immigOperaOpen');
+ await page.locator('#immigOperaUrl').fill('https://fake-hotel.oraclehospitality.eu-frankfurt-1.ocs.oraclecloud.com/FAKE/operacloud/faces/opera-cloud-index/OperaCloud');await page.locator('#immigOperaSave').click();await page.waitForSelector('#immigOperaOpen',{state:'attached'});
  assert.equal(await page.locator('#immigOperaOpen').getAttribute('rel'),'noopener noreferrer');
  await page.locator('#immigFixCopy').click();const code2=await page.evaluate(()=>window.copied);assert.equal(require('../immig-fixer-core.js').decodePlan(code2).origin,'https://fake-hotel.oraclehospitality.eu-frankfurt-1.ocs.oraclecloud.com','plan is tied to the hotel Opera link');
  await page.locator('#immigFixSave').click();await page.waitForFunction(()=>writes.length>0);const w=await page.evaluate(()=>JSON.stringify(writes));
@@ -39,8 +39,11 @@ try{const page=await browser.newPage({viewport:{width:1200,height:900},serviceWo
  await page.evaluate(()=>{document.documentElement.dataset.hoFxHelper='633';window.__fx=[];window.postMessage=(m)=>{if(m&&m.source==='ho-fx-job')window.__fx.push(m)};window.copied='';});
  await page.locator('#immigFixCopy').click();await page.waitForFunction(()=>window.__fx.length>0);const fx=await page.evaluate(()=>window.__fx[0]);
  assert(/^HOFIX1\./.test(fx.code)&&/oraclecloud\.com/.test(fx.url),'job carries the list and the saved Opera link');assert.equal(await page.evaluate(()=>window.copied),'','nothing is put on the clipboard in helper mode');
- {const cb=await page.locator('#immigCloudBox').innerText();assert.equal(await page.locator('#immigCloudBox > ol > li').count(),4,'cloud card has 4 numbered steps');assert(/Load today/.test(cb)&&/Press the big button/.test(cb)&&/When it asks/.test(cb)&&/See the results/.test(cb),'steps read: load, press, code, results');
-  assert.equal(await page.locator('#immigCloudOne').count(),1,'one big button');assert.equal(await page.locator('#immigCloudAdv #immigCloudSave').count(),1,'Allow Save is inside Advanced');assert.equal(await page.locator('#immigCloudAdv #immigCloudStartSignin').count(),1,'extra buttons are inside Advanced');
-  assert(/<details class="imm-more" id="immigCloudAdv"><summary>Advanced/.test(fs.readFileSync(__dirname+'/../immig-fixer.js','utf8')),'Advanced is a details block without open');assert.equal(await page.locator('#immigCloudOne').isVisible(),true,'big button is visible without opening anything');}
+ {assert.equal(await page.locator('#immigCloudOne').count(),1,'one main cloud action');
+  assert.equal(await page.locator('#immigCloudSave').count(),0,'no save-mode switch');assert.equal(await page.locator('#immigCloudPlan').count(),0,'no manual send-plan step');
+  assert.equal(await page.locator('#immigCloudAdv #immigCloudStartSignin').count(),1,'connection helper is in support details');
+  assert.equal(await page.locator('#immigCloudCodeBox').isVisible(),false,'code prompt is hidden until requested');
+  assert.equal(await page.locator('#immigCloudOne').isVisible(),true,'main action is visible');
+  assert.equal(await page.locator('#immigCloudSteps > li').count(),4,'connect, sign in, fix, results');}
  assert.deepEqual(errors,[]);console.log('Fix in Opera card passed with fake guests: plan from both reports by room and name, ID numbers never stored or shown in full, only approved fields copied, shared saves hold gender/nationality and last 4 only.');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

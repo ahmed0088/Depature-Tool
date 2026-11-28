@@ -9,14 +9,14 @@ assert.deepEqual([...new Set(calls)].sort(), ['audit', 'signin'], 'small buttons
 const one = src.slice(src.indexOf('async function oneButton'), src.indexOf('// the authenticator code for the GitHub cloud run'));
 assert(/sendCloudPlan\(true\)/.test(one) && /startCloud\('save', all \? 'all' : '5',\(\)=>sendCloudPlan\(true\)\)/.test(one), 'the big button sends a save plan and starts save');
 assert.equal((src.match(/startCloud\('save'/g) || []).length, 1, 'save is started from the big button only');
-assert(/Fix in Opera now \(first 5 rooms, fills empty fields and SAVES\)/.test(src), 'the label says it saves');
+assert(/Saves the ticked details to guest profiles/.test(src), 'main action clearly says it saves');
 assert(/never overwrites a value and never touches folios, postings or cashiering/.test(src), 'the card says what it never does');
 assert(/plan\.mode\s*!==\s*'save'/.test(fn), 'save starts only when the plan was sent in save mode');
 assert(/opera-cloud\.yml\/dispatches/.test(src), 'dispatches the Opera fixer workflow');
 assert(/limit: mode === 'signin' \? '2' : \(lim === 'all' \? '0' : lim === '5' \? '5' : '0'\)/.test(src), 'signin 2 rooms, big button first 5 rooms, Run all rooms 0 = all');
-assert(/id="immigCloudAll">Run all rooms/.test(src) && /first 5 rooms/.test(src), 'card shows the 5-room cap and a Run all rooms choice');
+assert(/id="immigRunScope"/.test(src)&&/First 5 selected guests/.test(src)&&/All selected guests/.test(src),'one scope control gives the capped and full reviewed list choices');
 assert(/Authorization: 'Bearer ' \+ key/.test(fn) && !/console\.|toast\([^)]*key/.test(fn), 'key only goes to the GitHub header');
-const wf = src.slice(src.indexOf('async function watchRun'), src.indexOf('// one button:'));
+const wf = src.slice(src.indexOf('async function watchRun'), src.indexOf('// One action prepares'));
 assert(/watchRun\(key, t0, mode,cloudTag\)/.test(fn) && /Running on GitHub/.test(wf) && /The run stopped/.test(wf) && /Run finished/.test(wf), 'the card follows the run and shows one plain status line');
 assert(!/toast\('Not connected/.test(fn), 'no failure is shown only as a vanishing toast');
 assert(/Could not start/.test(fn) && /Load the reports and tick/.test(fn), 'startup and plan failures show a persistent line');

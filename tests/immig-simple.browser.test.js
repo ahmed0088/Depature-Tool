@@ -1,0 +1,74 @@
+'use strict';
+// Real page markup and file uploads; synthetic guests, mocked cloud services, no Opera writes.
+const fs=require('node:fs'),assert=require('node:assert/strict'),{chromium}=require('playwright-core');
+const read=p=>fs.readFileSync(__dirname+'/../'+p,'utf8');
+const html=read('index.html'),panel=html.slice(html.indexOf('<div class="panel" id="panel-immig">'),html.indexOf('<!-- ════════════════ INHOUSE TALLY'));
+const row=(first,last,room,sex,nat,doc)=>`<G_IMMIGRATION><FIRST_NAME>${first}</FIRST_NAME><LAST_NAME>${last}</LAST_NAME><ROOM>${room}</ROOM><SEX>${sex}</SEX><NATIONALITY>${nat}</NATIONALITY><PASSPORT>${doc}</PASSPORT><ARRIVAL_DATE>11/25/2026</ARRIVAL_DATE><DEPARTURE_DATE>11/30/2026</DEPARTURE_DATE></G_IMMIGRATION>`;
+const opera=`<DATA><P_RESORT1>Synthetic Hotel</P_RESORT1><P_BUSINESS_DATE>2026-11-26</P_BUSINESS_DATE><P_DATE>26/11/2026</P_DATE>${row('Ann','Synthetic','102','U','','')}${row('Cy','Example','104','F','','XX12345')}</DATA>`;
+const vicas='<CrystalReport xmlns="urn:crystal-reports:schemas:report-detail">'+[['Ann','Synthetic','Ethiopia','ZZ7654321','102'],['Cy','Example','Oman','OM12345','104']].map(values=>'<Section><Details Level="2">'+['GivenName1','FamilyName1','Nationality1','DocumentNumber1','RoomNumber1'].map((name,i)=>`<Field Name="${name}"><FormattedValue>${values[i]}</FormattedValue></Field>`).join('')+'</Details></Section>').join('')+'</CrystalReport>';
+(async()=>{
+ const browser=await chromium.launch({executablePath:[process.env.CHROME_PATH,'/usr/bin/google-chrome','/usr/bin/chromium'].find(p=>p&&fs.existsSync(p)),headless:true,args:['--no-sandbox']});
+ try{
+  for(const width of [390,1280]){
+   const p=await browser.newPage({viewport:{width,height:900}}),errors=[];p.on('pageerror',e=>errors.push(e.message));
+   const css=['styles.css','pro.css','immig-page.css','themes.css','themes-pro.css'].map(read).join('\n');
+   await p.route('https://hotelops.mock.test/**',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><html data-theme="night-ops"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'\nbody{margin:0}#panel-immig{display:block}</style><span id="immigTabCount"></span>'+panel+'</html>'}));
+   await p.goto('https://hotelops.mock.test/');
+   await p.evaluate(()=>{
+    window.escapeHtml=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));window.HOTEL_ID='h1';window.showToast=()=>{};window.store={};window.writes=[];window.requests=[];window.listeners={};
+    window.emit=(path,v)=>{store[path]=v;(listeners[path]||[]).forEach(f=>f({val:()=>v}));};
+    const url='https://fake-hotel.oraclecloud.com/FAKE/operacloud/faces/opera-cloud-index/OperaCloud';store['hotels/h1/operaUrl']=url;
+    localStorage.setItem('hoOperaUrl_h1',url);localStorage.setItem('ho_gh_start_key_v1','synthetic-key');
+    window.firebase={database:()=>({ref:path=>({once:async()=>({val:()=>store[path]||null}),set:async v=>{writes.push({path,v});emit(path,v);},update:async v=>emit(path,{...store[path],...v}),remove:async()=>emit(path,null),on:(event,fn)=>{(listeners[path]||=[]).push(fn);fn({val:()=>store[path]||null});},off:()=>{listeners[path]=[];},limitToLast(){return this;}})})};
+    window.fetch=async(url,opts={})=>{requests.push({url,method:opts.method||'GET',body:opts.body?JSON.parse(opts.body):null});return {ok:true,status:opts.method==='POST'?204:200,json:async()=>({workflow_runs:[]})};};
+   });
+   for(const f of ['state.js','reports.js','opera-auto-core.js','immig-fixer-core.js','immig-fixer.js'])await p.addScriptTag({content:read(f)});
+   assert.equal(await p.locator('#immigFixerCard').count(),0,'no run action before reports');
+   await p.locator('#immigInhouseXmlInput').setInputFiles({name:'vicas.xml',mimeType:'text/xml',buffer:Buffer.from(vicas)});
+   await p.waitForFunction(()=>_immigInhouseList.length===2);
+   await p.locator('#immigFileInput2').setInputFiles({name:'opera.xml',mimeType:'text/xml',buffer:Buffer.from(opera)});
+   await p.waitForSelector('#immigCloudOne',{timeout:8000}).catch(async e=>{console.error('Page errors:',errors,'Visible:',await p.locator('body').innerText());throw e;});
+   assert.equal(await p.locator('#immigReports').getAttribute('open'),null,'reports collapse after automatic check');
+   assert.equal(await p.locator('#immigCloudCodeBox').isVisible(),false,'no premature code prompt');
+   assert.equal(await p.locator('#immigBrowserAlternative').getAttribute('open'),null,'extension is optional');
+   assert.equal(await p.locator('#immigCloudAdv').getAttribute('open'),null,'support is collapsed');
+   assert.equal(await p.locator('#immigFixerCard button.gold:visible').count(),1,'one prominent action');
+   assert.equal(await p.locator('#immigCloudPlan,#immigCloudSave').count(),0,'no manual cloud plan or save-mode step');
+   const gender=p.locator('select[data-edit$="|gender"]').first();await gender.scrollIntoViewIfNeeded();
+   await gender.focus();const y=await p.evaluate(()=>scrollY);await gender.selectOption('F');
+   assert.equal(await gender.inputValue(),'F');assert.equal(await p.locator('.imm-review-list select[data-edit$="|gender"]').count(),1,'edited guest stays in place');
+   assert.equal(await gender.evaluate(e=>document.activeElement===e),true,'selection keeps focus');
+   assert(Math.abs((await p.evaluate(()=>scrollY))-y)<30,'field edit does not jump down the page');
+   await p.locator('#immigRunScope').selectOption('all');assert.match(await p.locator('#immigCloudOne').innerText(),/Fix selected guests/);
+   assert((await p.evaluate(()=>document.documentElement.scrollWidth))<=width,'no horizontal page overflow');
+   if(process.env.IMMIG_SHOTS)await p.screenshot({path:process.env.IMMIG_SHOTS+'/review-'+width+'.png',fullPage:true});
+   await p.locator('#immigCloudOne').click();await p.waitForFunction(()=>requests.some(r=>r.method==='POST'));
+   const request=await p.evaluate(()=>requests.find(r=>r.method==='POST'));assert.equal(request.body.inputs.limit,'0');assert.equal(request.body.inputs.mode,'save');
+   assert(!JSON.stringify(request).includes('ZZ7654321'),'documents do not go in GitHub dispatch');
+   assert.equal(await gender.isDisabled(),true,'running review is frozen');
+   const tag=request.body.inputs.tag;
+   await p.evaluate(tag=>emit('hotels/h1/operaCloudWant',{tag,at:Date.now(),state:'waiting'}),tag);
+   assert.equal(await p.locator('#immigCloudCodeBox').isVisible(),true);
+   await p.locator('#immigCloudCode').fill('123456');
+   await p.evaluate(()=>immigFixerRender());assert.equal(await p.locator('#immigCloudCode').inputValue(),'123456','redraw retains typed code');
+   await p.locator('#immigCloudSend').click();assert.equal(await p.locator('#immigCloudSend').isDisabled(),true);
+   assert.match(await p.locator('#immigCloudWant').innerText(),/Code sent/);
+   await p.evaluate(tag=>{emit('hotels/h1/operaCloudWant',null);emit('hotels/h1/operaCloudResult',{tag,at:Date.now(),mode:'save',state:'failed',error:'Microsoft rejected the account sign-in. Check the Opera username/password or account policy.',lines:[]});},tag);
+   assert.equal(await p.locator('#immigCloudCodeBox').isVisible(),false);
+   assert.match(await p.locator('#immigCloudRes').innerText(),/Opera sign-in needs attention/);
+   assert.equal(await p.locator('#immigCloudRes a').getAttribute('href'),'https://github.com/ahmed0088/Depature-Tool/settings/secrets/actions');
+   await p.locator('#immigRunScope').selectOption('5');assert.match(await p.locator('#immigCloudRes').innerText(),/Opera sign-in needs attention/,'error survives edits');
+   await p.locator('#immigCloudRes').scrollIntoViewIfNeeded();
+   if(process.env.IMMIG_SHOTS)await p.screenshot({path:process.env.IMMIG_SHOTS+'/error-'+width+'.png',fullPage:false});
+   await p.evaluate(tag=>emit('hotels/h1/operaCloudResult',{tag,at:Date.now(),mode:'save',state:'done',lines:[{room:'102',field:'guest',result:'SAVED and verified'},{room:'104',field:'guest',result:'FAILED name did not match'}]}),tag);
+   assert.match(await p.locator('#immigCloudRes').innerText(),/1 saved/);assert.match(await p.locator('#immigCloudRes').innerText(),/1 need a look/);
+   assert((await p.evaluate(()=>document.documentElement.scrollWidth))<=width);
+   await p.locator('#immigFileInput2').setInputFiles({name:'wrong.xml',mimeType:'text/xml',buffer:Buffer.from('<wrong>not an immigration report</wrong>')});
+   await p.waitForFunction(()=>document.getElementById('immigCloudOne').disabled);
+   assert.equal(await p.locator('#immigReports').evaluate(e=>e.open),true,'invalid replacement reopens report upload');
+   assert.match(await p.locator('#immNext').innerText(),/could not be read/);assert.deepEqual(errors,[]);
+   await p.close();
+  }
+  console.log('Simple Immigration Check passed on phone and desktop: automatic report review, one main action, stable edits, run scopes, code-on-request, persistent recovery and verified results.');
+ }finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exit(1);});

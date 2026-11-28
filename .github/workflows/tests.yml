@@ -60,6 +60,7 @@ jobs:
           node tests/opera-signin-methods.browser.test.js
           node tests/immig-cloud-start.test.js
           node tests/immig-cloud-start.browser.test.js
+          node tests/immig-simple.browser.test.js
           node tests/immig-save-never-overwrite.browser.test.js
       - name: Run history checks
         run: node tests/run-history.test.js
