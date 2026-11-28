@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 651, items: ['Immigration Check keeps code-send feedback correct even when the cloud worker accepts the code immediately.'] },
   { v: 650, items: ['Immigration Check is simpler: upload the two reports, review the ticked details, then use one Fix button. Cloud setup and extension options are tucked away, and the authentication-code box only appears when needed.', 'Guest edits stay in place and keep your choices. The run shows Connect, Sign in, Fix details and Results, with a clear explanation and next action when it stops. Choose the first five guests or all selected guests from one control.'] },
   { v: 649, items: ['Immigration Check: cloud sign-in now chooses an available password/code method instead of repeatedly cancelling Microsoft’s passkey prompt. If the account requires a device passkey, it stops with a clear explanation.', 'Cloud starts are protected against duplicate clicks and existing runs. Each plan and authentication code is tied to its own run and hotel. Live sign-in steps, private errors and a direct run link make failures easier to resolve.'] },
   { v: 648, items: ['Cloud run (GitHub): Send plan to cloud puts your fix plan in a private temporary spot, the GitHub run reads and deletes it when it starts, and the result shows here. Read-only unless you tick Allow Save.'] },

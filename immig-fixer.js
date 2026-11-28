@@ -317,7 +317,8 @@
     if (!/^\d{6}$/.test(v)) return toast('Type the 6 digits from your authenticator app.', 'err');
     if (!d) return toast('Not connected to the database.', 'err');
     if(!wantedCode||codeSentChallenge===String(wantedCode.tag||'')+'|'+wantedCode.at||Date.now()-Number(wantedCode.at)>180000)return toast('Wait for the cloud run to request a fresh authentication code first.','err');
-    try { await d.ref('hotels/' + HOTEL_ID + '/operaCloudCode').set({ code: v, at: Date.now(),tag:wantedCode.tag||'' }); codeSentChallenge=String(wantedCode.tag||'')+'|'+wantedCode.at;el.value='';renderCloudState();toast('Code sent. The cloud run uses it once.', 'ok'); } catch (_) { toast('Could not send the code.', 'err'); }
+    const request=wantedCode,hotel=String(HOTEL_ID),challenge=String(request.tag||'')+'|'+request.at;
+    try { await d.ref('hotels/' + hotel + '/operaCloudCode').set({ code:v,at:Date.now(),tag:request.tag||'' });if(hotel!==String(HOTEL_ID))return;codeSentChallenge=challenge;el.value='';renderCloudState();toast('Code sent. The cloud run uses it once.', 'ok'); } catch (_) { toast('Could not send the code.', 'err'); }
   }
   // the plan for the GitHub cloud run: a private temporary path, read and deleted by the run when it starts. Names are needed to find the guests; they never go in a log.
   async function sendCloudPlan(forceSave,hotel=String(HOTEL_ID)) {

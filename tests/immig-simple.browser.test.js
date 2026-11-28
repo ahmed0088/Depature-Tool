@@ -15,11 +15,11 @@ const vicas='<CrystalReport xmlns="urn:crystal-reports:schemas:report-detail">'+
    await p.route('https://hotelops.mock.test/**',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><html data-theme="night-ops"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'\nbody{margin:0}#panel-immig{display:block}</style><span id="immigTabCount"></span>'+panel+'</html>'}));
    await p.goto('https://hotelops.mock.test/');
    await p.evaluate(()=>{
-    window.escapeHtml=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));window.HOTEL_ID='h1';window.showToast=()=>{};window.store={};window.writes=[];window.requests=[];window.listeners={};
+    window.escapeHtml=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));window.HOTEL_ID='h1';window.toasts=[];window.showToast=m=>toasts.push(m);window.store={};window.writes=[];window.requests=[];window.listeners={};
     window.emit=(path,v)=>{store[path]=v;(listeners[path]||[]).forEach(f=>f({val:()=>v}));};
     const url='https://fake-hotel.oraclecloud.com/FAKE/operacloud/faces/opera-cloud-index/OperaCloud';store['hotels/h1/operaUrl']=url;
     localStorage.setItem('hoOperaUrl_h1',url);localStorage.setItem('ho_gh_start_key_v1','synthetic-key');
-    window.firebase={database:()=>({ref:path=>({once:async()=>({val:()=>store[path]||null}),set:async v=>{writes.push({path,v});emit(path,v);},update:async v=>emit(path,{...store[path],...v}),remove:async()=>emit(path,null),on:(event,fn)=>{(listeners[path]||=[]).push(fn);fn({val:()=>store[path]||null});},off:()=>{listeners[path]=[];},limitToLast(){return this;}})})};
+    window.firebase={database:()=>({ref:path=>({once:async()=>({val:()=>store[path]||null}),set:async v=>{writes.push({path,v});emit(path,v);if(path.endsWith('/operaCloudCode')&&window.consumeImmediately)emit('hotels/h1/operaCloudWant',null);},update:async v=>emit(path,{...store[path],...v}),remove:async()=>emit(path,null),on:(event,fn)=>{(listeners[path]||=[]).push(fn);fn({val:()=>store[path]||null});},off:()=>{listeners[path]=[];},limitToLast(){return this;}})})};
     window.fetch=async(url,opts={})=>{requests.push({url,method:opts.method||'GET',body:opts.body?JSON.parse(opts.body):null});return {ok:true,status:opts.method==='POST'?204:200,json:async()=>({workflow_runs:[]})};};
    });
    for(const f of ['state.js','reports.js','opera-auto-core.js','immig-fixer-core.js','immig-fixer.js'])await p.addScriptTag({content:read(f)});
@@ -53,6 +53,10 @@ const vicas='<CrystalReport xmlns="urn:crystal-reports:schemas:report-detail">'+
    await p.evaluate(()=>immigFixerRender());assert.equal(await p.locator('#immigCloudCode').inputValue(),'123456','redraw retains typed code');
    await p.locator('#immigCloudSend').click();assert.equal(await p.locator('#immigCloudSend').isDisabled(),true);
    assert.match(await p.locator('#immigCloudWant').innerText(),/Code sent/);
+   await p.waitForTimeout(10);await p.evaluate(tag=>{consumeImmediately=true;emit('hotels/h1/operaCloudWant',{tag,at:Date.now(),state:'waiting'});},tag);
+   await p.locator('#immigCloudCode').fill('654321');await p.locator('#immigCloudSend').click();
+   assert.equal(await p.locator('#immigCloudCodeBox').isVisible(),false,'instant code consumption closes prompt');
+   assert.equal(await p.evaluate(()=>toasts.filter(t=>t.startsWith('Code sent.')).length),2,'code consumption during send is reported as success');
    await p.evaluate(tag=>{emit('hotels/h1/operaCloudWant',null);emit('hotels/h1/operaCloudResult',{tag,at:Date.now(),mode:'save',state:'failed',error:'Microsoft rejected the account sign-in. Check the Opera username/password or account policy.',lines:[]});},tag);
    assert.equal(await p.locator('#immigCloudCodeBox').isVisible(),false);
    assert.match(await p.locator('#immigCloudRes').innerText(),/Opera sign-in needs attention/);
