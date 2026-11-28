@@ -1,5 +1,5 @@
 name: Opera fixer (cloud)
-run-name: Opera fixer · ${{ inputs.mode || 'signin' }}
+run-name: Opera fixer · ${{ inputs.mode || 'signin' }} · ${{ inputs.tag || 'manual' }}
 # Signs in to Opera Cloud on GitHub's machine and runs the HotelOps profile fixer (scripts/opera-cloud.js).
 # mode signin = only sign in and open In House (no guest data touched). audit = read-only. save = fill empty fields and Save.
 # Needs the Secrets OPERA_USER and OPERA_PASS (the same Microsoft login for every hotel) and the HOTELOPS_* ones Neorcha already uses.
@@ -13,6 +13,14 @@ on:
         default: 'signin'
       url:
         description: 'The hotel Opera Cloud link (paste the address you open Opera with). Empty = the OPERA_URL secret if there is one'
+        required: false
+        default: ''
+      tag:
+        description: 'Private run reference created by HotelOps'
+        required: false
+        default: ''
+      hotel:
+        description: 'HotelOps workspace for the reviewed plan and authentication code'
         required: false
         default: ''
       limit:
@@ -46,9 +54,11 @@ jobs:
           OPERA_URL: ${{ inputs.url || secrets.OPERA_URL }}
           OPERA_USER: ${{ secrets.OPERA_USER }}
           OPERA_PASS: ${{ secrets.OPERA_PASS }}
+          OPERA_TOTP: ${{ secrets.OPERA_TOTP }}
           HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
           HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
-          HOTELOPS_HOTEL: ${{ secrets.HOTELOPS_HOTEL }}
+          HOTELOPS_HOTEL: ${{ inputs.hotel || secrets.HOTELOPS_HOTEL }}
+          RUN_TAG: ${{ inputs.tag }}
       - name: Cleanup (always, also when cancelled or failed)
         if: always()
         run: node scripts/opera-cloud.js
@@ -57,4 +67,5 @@ jobs:
           CLEANUP_MAX_MIN: ${{ (inputs.mode || 'signin') == 'signin' && '180' || '' }}
           HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
           HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
-          HOTELOPS_HOTEL: ${{ secrets.HOTELOPS_HOTEL }}
+          HOTELOPS_HOTEL: ${{ inputs.hotel || secrets.HOTELOPS_HOTEL }}
+          RUN_TAG: ${{ inputs.tag }}

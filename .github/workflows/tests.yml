@@ -53,6 +53,14 @@ jobs:
           node tests/immig-fixer-auto.browser.test.js
           node tests/helper-fixer.browser.test.js
           node tests/enrolment-quick-layout.browser.test.js
+      - name: Immigration cloud startup and Microsoft sign-in
+        run: |
+          node tests/opera-cloud.test.js
+          node tests/opera-signin-flow.test.js
+          node tests/opera-signin-methods.browser.test.js
+          node tests/immig-cloud-start.test.js
+          node tests/immig-cloud-start.browser.test.js
+          node tests/immig-save-never-overwrite.browser.test.js
       - name: Run history checks
         run: node tests/run-history.test.js
       - name: Run history on mobile

@@ -15,6 +15,10 @@ console.log('opera-cloud: authenticator code and link checks passed');
   const c = await codeFromHotelOps(FB, '');
   assert.equal(c, '654321'); assert.equal(db.operaCloudCode, undefined, 'deleted after use'); assert.equal(db.operaCloudWant, undefined);
   console.log('opera-cloud: code-per-run path passed');
+  db.operaCloudCode={code:'123456',at:Date.now(),tag:'other-run'};
+  setTimeout(()=>{db.operaCloudCode={code:'234567',at:Date.now(),tag:'this-run'};},300);
+  assert.equal(await codeFromHotelOps(FB,'','this-run'),'234567','never consumes another run’s code');
+  console.log('opera-cloud: matching run challenge passed');
 })();
 // privacy cleanup: a fake database + sign-in server; an unused plan is removed, a fresh one is kept when a max age is set, and the public log says nothing about guests
 (async () => {
@@ -24,6 +28,7 @@ console.log('opera-cloud: authenticator code and link checks passed');
     if (q.method === 'POST') { r.setHeader('content-type', 'application/json'); return r.end(JSON.stringify({ idToken: 't', localId: 'u' })); }
     const k = decodeURIComponent(q.url.split('?')[0].replace(/^\//, '').replace(/\.json$/, ''));
     if (q.method === 'DELETE') { delete store[k]; return r.end('null'); }
+    if(q.method==='PUT'){let body='';q.on('data',s=>body+=s);q.on('end',()=>{store[k]=JSON.parse(body);r.end(body);});return;}
     r.setHeader('content-type', 'application/json'); r.end(JSON.stringify(store[k] === undefined ? null : store[k]));
   }).listen(0); await once(srv, 'listening');
   const base = 'http://127.0.0.1:' + srv.address().port, env = Object.assign({}, process.env, { MODE: 'cleanup', HOTELOPS_EMAIL: 'a@b.c', HOTELOPS_PASS: 'x', HOTELOPS_HOTEL: 'h1', FB_AUTH_URL: base + '/auth', FB_DB_URL: base });
@@ -34,6 +39,15 @@ console.log('opera-cloud: authenticator code and link checks passed');
   out = await run({ CLEANUP_MAX_MIN: '30' }); assert.equal(store['hotels/h1/operaCloudPlan'], undefined, 'a stale plan is removed');
   store['hotels/h1/operaCloudPlan'] = { code: 'SYNTHETIC', at: Date.now() };
   out = await run({}); assert.equal(store['hotels/h1/operaCloudPlan'], undefined, 'after a run the plan is removed at once');
+  for(const key of ['operaCloudPlan','operaCloudCode','operaCloudWant'])store['hotels/h1/'+key]={code:'SYNTHETIC',at:Date.now(),tag:'new-run'};
+  out=await run({RUN_TAG:'old-run'});
+  for(const key of ['operaCloudPlan','operaCloudCode','operaCloudWant'])assert(store['hotels/h1/'+key],'old cleanup cannot remove another run’s '+key);
+  out=await run({RUN_TAG:'new-run'});
+  for(const key of ['operaCloudPlan','operaCloudCode','operaCloudWant'])assert.equal(store['hotels/h1/'+key],undefined,'own data is removed: '+key);
+  store['hotels/h1/operaCloudPlan']={code:'SYNTHETIC',at:Date.now(),tag:'new-run',mode:'save'};
+  out=await run({MODE:'save',RUN_TAG:'old-run',OPERA_URL:'https://fake.oraclecloud.com/opera',OPERA_USER:'synthetic',OPERA_PASS:'synthetic'});
+  assert.equal(store['hotels/h1/operaCloudPlan'].tag,'new-run','worker refuses another run’s plan before deleting or opening Opera');
+  assert.equal(store['hotels/h1/operaCloudResult'].state,'failed','plan failure is reported privately');
   assert(!/0101|SYNTHETIC/.test(out)); srv.close();
   console.log('opera-cloud: privacy cleanup passed');
 })().catch(e => { console.error(e); process.exit(1); });

@@ -15,7 +15,7 @@
 // ═══════════════════════════════════════════════════════════
 'use strict';
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
-const ROOT = path.join(__dirname, '..'), E = process.env;
+const ROOT = path.join(__dirname, '..'), E = process.env, RUN_TAG=String(E.RUN_TAG||'');
 const mask = s => String(s || '').replace(/\S+@\S+/g, '•@•').replace(/\d{6,}/g, d => '••••' + d.slice(-4)).slice(0, 200);
 const say = m => console.log(new Date().toISOString().slice(11, 19) + '  ' + mask(m));
 const fail = (m, code) => { console.log('::error::' + mask(m)); process.exit(code == null ? 1 : code); };
@@ -31,48 +31,7 @@ const okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' 
 
 // ── Microsoft sign-in, step by step; on a surprise it logs only the page's title and button labels ──
 // A cloud machine has no passkey device. Hide WebAuthn so Microsoft does not offer "Face, fingerprint, PIN or security key" and goes to the password instead.
-const NO_PASSKEY = '(()=>{try{delete window.PublicKeyCredential;Object.defineProperty(navigator,"credentials",{get:()=>undefined,configurable:true});}catch(e){}})();';
-async function msSignIn(page, user, pass, getCode) {
-  const seen = async () => { const t = await page.title().catch(() => ''); const b = await page.$$eval('button,input[type=submit],a,[role=button],[role=link],[role=option],[data-value]', n => n.filter(x => x.offsetParent !== null).map(x => ((x.id ? '#' + x.id + ' ' : '') + (x.value || x.getAttribute('aria-label') || x.textContent || '')).replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 12)).catch(() => []); return 'title "' + t.slice(0, 60) + '"; buttons: ' + b.join(' | ').slice(0, 300); };
-  // click with a short wait; if something covers the element, click it through the page itself (never hangs 30 s)
-  const tap = async el => { try { await el.click({ timeout: 6000 }); } catch (_) { say('click was blocked, trying again; ' + await seen()); await el.evaluate(n => n.click()).catch(() => {}); } };
-  const bail = m => { throw new Error(mask(m)); };
-  let usedCode = '', passkeyTries = 0;
-  for (let step = 0; step < 40; step++) {
-    await page.waitForTimeout(1500);
-    const url = page.url();
-    if (/oraclecloud\.com/i.test(new URL(url).hostname) && !/login|signin|sso|idcs/i.test(url) && await page.$('a[id*="ode_pg_sdbr_"], [id*="pt1:"]').catch(() => null)) { say('signed in to Opera'); return true; }
-    const vis = async s => { const e = await page.$(s); return e && await e.isVisible().catch(() => false) ? e : null; };
-    let e;
-    if ((e = await vis('input[name="loginfmt"]'))) { say('step: Microsoft email'); await e.fill(user); await (await vis('#idSIButton9') || e).press('Enter').catch(() => {}); continue; }
-    if ((e = await vis('input[name="passwd"]'))) { say('step: Microsoft password'); await e.fill(pass); await (await vis('#idSIButton9') || e).press('Enter').catch(() => {}); continue; }
-    if ((e = await vis('input[name="otc"]'))) {
-      say('step: authenticator code needed'); const code = await getCode(usedCode); if (!code) bail('No authenticator code arrived within 3 minutes. Press the button again and type the code when the card asks.'); usedCode = code; say('step: typing the code'); await e.fill(code); await (await vis('#idSubmit_SAOTCC_Continue') || await vis('#idSIButton9') || e).press('Enter').catch(() => {}); continue;
-    }
-    // Microsoft offers a passkey ("Face, fingerprint, PIN or security key") that a cloud machine cannot answer: go to the other sign-in ways, then pick the password
-    const pt = await page.title().catch(() => ''), bodyTxt = await page.evaluate(() => (document.body && document.body.innerText || '').slice(0, 600)).catch(() => '');
-    if (/face, fingerprint|passkey|security key|windows hello/i.test(pt + ' ' + bodyTxt) && !(await vis('input[name="passwd"]')) && !(await vis('input[name="otc"]'))) {
-      if ((e = await vis('#idA_PWD_SwitchToCredPicker, a:has-text("Sign-in options"), a:has-text("Other ways to sign in"), button:has-text("Other ways to sign in"), a:has-text("Use another method"), a:has-text("Use your password"), button:has-text("Use your password"), a:has-text("Sign in another way")'))) { say('step: passkey page, choosing another sign-in way'); await tap(e); continue; }
-      passkeyTries++;
-      if (passkeyTries === 1 || passkeyTries === 4) say('passkey page labels; ' + await seen());
-      if (passkeyTries > 8) bail('Microsoft keeps asking for a passkey that the cloud machine cannot answer. Last page: ' + await seen());
-      if (passkeyTries > 2 && (e = await page.$('a:text-matches("password|another way|other ways|options", "i"), [role=button]:text-matches("password|another way|other ways|options", "i")')) && await e.isVisible().catch(() => false)) { say('step: passkey page, trying a password link'); await tap(e); continue; }
-      if ((e = await vis('button:has-text("Cancel"), input[value="Cancel"], #idBtn_Back'))) { say('step: passkey page, cancelling it'); await tap(e); continue; }
-    }
-    if (/how do you want to sign in|sign-in options|choose a way to sign in|verify your identity/i.test(pt + ' ' + bodyTxt) && !(await vis('input[name="passwd"]')) && !(await vis('input[name="otc"]'))) {
-      if ((e = await vis('[role="button"]:has-text("Use your password"), [role="button"]:has-text("Password"), button:has-text("Use your password"), a:has-text("Use your password"), [data-value="Password"]'))) { say('step: choosing password sign-in'); await tap(e); continue; }
-    }
-    const other = await vis('#signInAnotherWay, a:has-text("Sign in another way"), a:has-text("I can\'t use my Microsoft Authenticator app right now")');
-    if (other) { say('step: choose another sign-in way'); await tap(other); continue; }
-    const codeOpt = await vis('div[data-value="PhoneAppOTP"], [data-value="PhoneAppOTP"], div:has-text("Use a verification code")');
-    if (codeOpt) { say('step: pick verification code'); await tap(codeOpt); continue; }
-    // "Stay signed in?" page only (#idBtn_Back is also the Back arrow on other Microsoft pages: clicking that one stalls, so wait for the real next page instead)
-    if ((e = await vis('#idBtn_Back')) && (await page.$('#KmsiCheckboxField, #KmsiDescription').catch(() => null) || /stay signed in/i.test(await page.title().catch(() => '') + ' ' + await page.evaluate(() => (document.body && document.body.innerText || '').slice(0, 400)).catch(() => '')))) { say('step: stay signed in? No'); await tap(e); continue; }
-    if ((e = await vis('button:has-text("Sign in with Microsoft"), a:has-text("Sign in with Microsoft"), button:has-text("Microsoft")'))) { say('step: choose Microsoft'); await tap(e); continue; }
-    if (step > 3 && step % 4 === 0) say('waiting; ' + await seen());
-  }
-  bail('Microsoft sign-in did not finish. Last page: ' + await seen());
-}
+const { NO_PASSKEY, msSignIn } = require('./opera-signin.js');
 
 // ── the code path: HotelOps writes {code, at}; the runner reads it once and deletes it ──
 function fbConfig() {
@@ -90,22 +49,20 @@ async function fbOpen() {
   if (!hid) { const u = await (await fetch(db + '/userHotels/' + a.localId + '.json?auth=' + a.idToken)).json().catch(() => null); hid = typeof u === 'string' ? u : u && typeof u === 'object' ? String(u.hotelId || u.id || Object.keys(u)[0] || '') : ''; }
   if (!/^[\w-]{1,80}$/.test(hid)) fail('No hotel found for the HotelOps account (add the HOTELOPS_HOTEL secret)');
   const at = p => db + '/hotels/' + hid + '/' + p + '.json?auth=' + a.idToken;
-  return {
-    get: async p => (await fetch(at(p))).json().catch(() => null),
-    put: async (p, v) => { await fetch(at(p), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(v) }).catch(() => {}); },
-    del: async p => { await fetch(at(p), { method: 'DELETE' }).catch(() => {}); },
-  };
+  const request=async(p,method,value)=>{const response=await fetch(at(p),{method,...(value===undefined?{}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(value)})});if(!response.ok)throw Error('HotelOps could not '+(method==='GET'?'read':'save')+' the private automation state ('+response.status+'). Check the worker account’s database access.');return response.json().catch(()=>null);};
+  return {get:p=>request(p,'GET'),put:(p,v)=>request(p,'PUT',v),del:p=>request(p,'DELETE')};
 }
 // waits up to 3 minutes for a code typed within the last 2 minutes; reads it once and deletes it at once
-async function codeFromHotelOps(FB, notThis) {
-  await FB.put('operaCloudWant', { at: Date.now(), state: 'waiting' });
+async function codeFromHotelOps(FB, notThis,tag='') {
+  await FB.put('operaCloudWant', { at: Date.now(), state: 'waiting',tag });
   const t0 = Date.now();
   while (Date.now() - t0 < 180000) {
     const v = await FB.get('operaCloudCode');
-    if (v && /^\d{6}$/.test(String(v.code || '')) && Date.now() - Number(v.at || 0) < 120000 && String(v.code) !== notThis) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); return String(v.code); }
+    const age=Date.now()-Number(v?.at||0);
+    if (v && (!tag||v.tag===tag) && /^\d{6}$/.test(String(v.code || '')) && age>=0 && age < 120000 && String(v.code) !== notThis) { await FB.del('operaCloudCode');const want=await FB.get('operaCloudWant');if(!tag||want?.tag===tag)await FB.del('operaCloudWant'); return String(v.code); }
     await new Promise(r => setTimeout(r, 2000));
   }
-  await FB.del('operaCloudWant'); return '';
+  const want=await FB.get('operaCloudWant');if(!tag||want?.tag===tag)await FB.del('operaCloudWant');return '';
 }
 
 async function main() {
@@ -113,24 +70,25 @@ async function main() {
   if (MODE === 'cleanup') {   // privacy: remove any plan/code/want nobody picked up. CLEANUP_MAX_MIN = only if older than that (scheduled); empty = remove now (after a run)
     const F = await fbOpen(), max = parseFloat(E.CLEANUP_MAX_MIN || '');
     const pl = await F.get('operaCloudPlan');
-    if (pl !== null && (!max || !pl || Date.now() - Number(pl.at || 0) > max * 60000)) { await F.del('operaCloudPlan'); say('cleanup: removed an unused plan'); } else say('cleanup: no stale plan');
-    for (const k of ['operaCloudCode', 'operaCloudWant']) { const v = await F.get(k); if (v !== null && (!max || Date.now() - Number(v && v.at || 0) > max * 60000)) await F.del(k); }
+    if (pl !== null && (!RUN_TAG||pl?.tag===RUN_TAG) && (!max || !pl || Date.now() - Number(pl.at || 0) > max * 60000)) { await F.del('operaCloudPlan'); say('cleanup: removed an unused plan'); } else say('cleanup: no stale plan');
+    for (const k of ['operaCloudCode', 'operaCloudWant']) { const v = await F.get(k); if (v !== null && (!RUN_TAG||v?.tag===RUN_TAG) && (!max || Date.now() - Number(v && v.at || 0) > max * 60000)) await F.del(k); }
     const r = await F.get('operaCloudResult'); if (r !== null && Date.now() - Number(r && r.at || 0) > 864e5) await F.del('operaCloudResult');
     return;
   }
   if (!['signin', 'audit', 'save'].includes(MODE)) fail('MODE must be signin, audit or save');
-  const url = String(E.OPERA_URL || '').trim();
-  if (!okUrl(url)) fail('OPERA_URL is missing or is not an https oraclecloud.com link');
   for (const k of ['OPERA_USER', 'OPERA_PASS']) if (!E[k]) fail('The ' + k + ' secret is missing');
-  const FB = E.OPERA_TOTP && MODE === 'signin' ? null : await fbOpen();   // the private path: the code, the plan, the results
-  if (FB) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); }   // never use an old code
-  const getCode = async notThis => E.OPERA_TOTP ? totp(E.OPERA_TOTP) : codeFromHotelOps(FB, notThis);
+  const FB = await fbOpen();   // the private path: the code, the plan, the results
+  const url=String(E.OPERA_URL||await FB.get('operaUrl')||'').trim();
+  if(!okUrl(url)){const error='Save a valid Opera Cloud link for this hotel in Immigration Check before starting.';await FB.put('operaCloudResult',{at:Date.now(),state:'failed',mode:MODE,tag:RUN_TAG,error,lines:[]});throw Error(error);}
+  if (FB) { for(const key of ['operaCloudCode','operaCloudWant']){const value=await FB.get(key);if(!RUN_TAG||value?.tag===RUN_TAG||Date.now()-Number(value?.at||0)>180000)await FB.del(key);} }   // never use an old code
+  const getCode = async notThis => E.OPERA_TOTP ? totp(E.OPERA_TOTP) : codeFromHotelOps(FB, notThis,RUN_TAG);
   // the plan is read and deleted at once, before anything else, so it never outlives this run (a stale result is dropped after a day)
+  const rejectPlan=async error=>{await FB.put('operaCloudResult',{at:Date.now(),state:'failed',mode:MODE,tag:RUN_TAG,error,lines:[]});throw Error(error);};
   let job = null;
   if (MODE !== 'signin' && !E.PLAN_FILE) {
-    job = await FB.get('operaCloudPlan'); await FB.del('operaCloudPlan');
-    if (!job || typeof job.code !== 'string') fail('No plan found. In HotelOps press "Send plan to cloud", then run this again.');
-    if (Date.now() - Number(job.at || 0) > 3 * 3600e3) fail('The plan is older than 3 hours and was deleted. Send it again from HotelOps.');
+    job = await FB.get('operaCloudPlan');if(RUN_TAG&&job?.tag!==RUN_TAG)await rejectPlan('This reviewed plan belongs to another cloud run. Review the current plan and start again.');await FB.del('operaCloudPlan');
+    if (!job || typeof job.code !== 'string') await rejectPlan('No plan found. In HotelOps press "Send plan to cloud", then run this again.');
+    if (Date.now() - Number(job.at || 0) > 3 * 3600e3) await rejectPlan('The plan is older than 3 hours and was deleted. Send it again from HotelOps.');
   }
   if (FB) { const old = await FB.get('operaCloudResult'); if (old && Date.now() - Number(old.at || 0) > 864e5) await FB.del('operaCloudResult'); }
   const { chromium } = require('playwright-core');
@@ -140,20 +98,22 @@ async function main() {
   const page = await ctx.newPage();
   page.setDefaultTimeout(30000);
   const limit = Math.max(0, parseInt(E.LIMIT, 10) || 0);
+  const reportStatus=async(stage,note)=>{say(note);if(FB)await FB.put('operaCloudResult',{at:Date.now(),state:'running',mode:MODE,stage,note,lines:[],tag:RUN_TAG});};
   try {
+    await reportStatus('starting','Cloud computer ready; opening the selected Opera link');
     say('mode ' + MODE + (limit ? ', first ' + limit + ' room(s)' : '') + ': opening Opera');
     await page.goto(url, { waitUntil: 'domcontentloaded' });
-    await msSignIn(page, E.OPERA_USER, E.OPERA_PASS, getCode);
+    await msSignIn(page, E.OPERA_USER, E.OPERA_PASS, getCode,{progress:reportStatus});
     await page.waitForTimeout(4000);
     await page.addScriptTag({ content: fs.readFileSync(path.join(ROOT, 'tools/hotelops-opera-fixer.console.js'), 'utf8') });
     const counts = { total: 0 }; 
     const lines = []; let lastPush = 0;
-    const pushResult = async (state, extra) => { if (FB) await FB.put('operaCloudResult', Object.assign({ at: Date.now(), state, mode: MODE, lines: lines.slice(-400) }, extra || {})); };
+    const pushResult = async (state, extra) => { if (FB) await FB.put('operaCloudResult', Object.assign({ at: Date.now(), state, mode: MODE, tag:RUN_TAG, lines: lines.slice(-400) }, extra || {})); };
     await page.exposeFunction('__opLog', async e => { counts.total++; if (counts.total % 20 === 0) say('progress: ' + counts.total + ' steps'); lines.push({ room: String(e.room || ''), field: String(e.field || ''), to: String(e.to || '').replace(/\d{5,}/g, d => '••••' + d.slice(-4)).slice(0, 40), result: mask(e.result).slice(0, 160), dry: !!e.dry }); if (FB && Date.now() - lastPush > 8000) { lastPush = Date.now(); await pushResult('running'); } });
     await page.evaluate(() => window.__hoFixer.setHook((k, a) => { if (k === 'log') window.__opLog(a); }));
     if (MODE === 'signin') {
       const why = await page.evaluate(() => window.__hoFixer._test.ensureInHouse());
-      say(why ? 'In House did not open: ' + why : 'In House opened. Sign-in test passed.'); if (why) process.exitCode = 1;
+      say(why ? 'In House did not open: ' + why : 'In House opened. Sign-in test passed.'); if (why) process.exitCode = 1;await pushResult(why?'failed':'done',{stage:'signed-in',note:why?'Signed in, but the In House page could not open.':'Signed in to Opera. In House is ready; no guest records were changed.',...(why?{error:'The In House page could not open.'}:{})});
     } else {
       let code = '';
       let wantSave = MODE === 'save';
@@ -165,9 +125,9 @@ async function main() {
       await page.evaluate(() => window.__hoFixer._test.autoRun(0));
       say('finished: ' + counts.total + ' steps (room details are only in the HotelOps card)'); await pushResult('done', { rooms: n, saved: wantSave });
     }
-  } catch (e) { try { if (FB) await FB.put('operaCloudResult', { at: Date.now(), state: 'failed', mode: MODE, error: mask(e && e.message || e).slice(0, 200), lines: [] }); } catch (_) {} throw e;
+  } catch (e) { try { if (FB) await FB.put('operaCloudResult', { at: Date.now(), state: 'failed', mode: MODE, tag:RUN_TAG,error: mask(e && e.message || e).slice(0, 200), lines: [] }); } catch (_) {} throw e;
   // a sign-in test never touches a plan that was sent for a check
-  } finally { try { if (FB) { await FB.del('operaCloudCode'); await FB.del('operaCloudWant'); if (MODE !== 'signin') await FB.del('operaCloudPlan'); } } catch (_) {} await browser.close(); }
+  } finally { try { if (FB) { for(const key of ['operaCloudCode','operaCloudWant',...(MODE==='signin'?[]:['operaCloudPlan'])]){const value=await FB.get(key);if(!RUN_TAG||value?.tag===RUN_TAG)await FB.del(key);} } } catch (_) {} await browser.close(); }
 }
 if (require.main === module) main().catch(e => fail(/^(audit|save)$/i.test(String(E.MODE || 'audit')) ? 'Runner stopped (details are only in the HotelOps card, not in this public log)' : 'Runner stopped: ' + (e && e.message || e)));
-module.exports = { NO_PASSKEY, totp, b32, okUrl, codeFromHotelOps, msSignIn };
+module.exports = { fbOpen, NO_PASSKEY, totp, b32, okUrl, codeFromHotelOps, msSignIn };
