@@ -151,6 +151,7 @@ jobs:
         run: |
           node tests/ingauge-settings.test.js
           node tests/ingauge-settings.browser.test.js
+          node tests/ingauge-quick-review.browser.test.js
 
       - name: Independent audit hotels
         run: |

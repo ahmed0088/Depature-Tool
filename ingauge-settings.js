@@ -2,7 +2,7 @@
 (function (W) {
   'use strict';
   const SCHEMA = 1;
-  const DEFAULTS = Object.freeze({ monthly: true, manual: true, automatic: true, find: true, automation: true,
+  const DEFAULTS = Object.freeze({ quickReview: true, monthly: true, manual: true, automatic: true, find: true, automation: true,
     add: true, edit: true, approve: true, deny: true, remove: true, graphs: true, breakdown: true,
     history: true, hints: true, compact: false, autoOpenRun: true, landing: W.InGaugeOverview ? 'overview' : 'monthly' });
   const KEYS = Object.freeze(Object.keys(DEFAULTS));
@@ -73,6 +73,7 @@
   function reset(S = {}) { return set(S, { ...DEFAULTS }); }
   const GROUPS = [
     ['Tools', [
+      ['quickReview', 'Review list', 'A list for approvals, denials and individual package reviews.'],
       ['monthly', 'Monthly totals', 'Compare Opera postings with approved and pending sales.'],
       ['manual', 'Manual upsells', 'Check Journal sales and seller requests.'],
       ['automatic', 'Automatic packages', 'Check imported packages and automatic seller credit.'],
