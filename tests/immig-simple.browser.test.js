@@ -17,8 +17,8 @@ const vicas='<CrystalReport xmlns="urn:crystal-reports:schemas:report-detail">'+
    await p.evaluate(()=>{
     window.escapeHtml=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));window.HOTEL_ID='h1';window.toasts=[];window.showToast=m=>toasts.push(m);window.store={};window.writes=[];window.requests=[];window.listeners={};
     window.emit=(path,v)=>{store[path]=v;(listeners[path]||[]).forEach(f=>f({val:()=>v}));};
-    const url='https://fake-hotel.oraclecloud.com/FAKE/operacloud/faces/opera-cloud-index/OperaCloud';store['hotels/h1/operaUrl']=url;
-    localStorage.setItem('hoOperaUrl_h1',url);localStorage.setItem('ho_gh_start_key_v1','synthetic-key');
+    const url='https://fake-hotel.oraclecloud.com/FAKE/operacloud/faces/opera-cloud-index/OperaCloud';store['hotels/h1/operaUrl']={url,at:Date.now(),src:'reader'};
+    localStorage.setItem('ho_gh_start_key_v1','synthetic-key');
     window.firebase={database:()=>({ref:path=>({once:async()=>({val:()=>store[path]||null}),set:async v=>{writes.push({path,v});emit(path,v);if(path.endsWith('/operaCloudCode')&&window.consumeImmediately)emit('hotels/h1/operaCloudWant',null);},update:async v=>emit(path,{...store[path],...v}),remove:async()=>emit(path,null),on:(event,fn)=>{(listeners[path]||=[]).push(fn);fn({val:()=>store[path]||null});},off:()=>{listeners[path]=[];},limitToLast(){return this;}})})};
     window.fetch=async(url,opts={})=>{requests.push({url,method:opts.method||'GET',body:opts.body?JSON.parse(opts.body):null});return {ok:true,status:opts.method==='POST'?204:200,json:async()=>({workflow_runs:[]})};};
    });

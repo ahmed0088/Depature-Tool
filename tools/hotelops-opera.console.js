@@ -487,6 +487,31 @@
     var rows = finishRows([rowFrom(cells, map)], order);
     return rows[0] || null;
   }
+  /** Opera's individual profile uses Name for the family name beside First Name. */
+  function profilePairs(pairs) {
+    var first=(pairs||[]).find(function(p){return normH(p[0])==='FIRST NAME';}),name=(pairs||[]).find(function(p){return normH(p[0])==='NAME';});
+    if(!first||!name||(pairs||[]).some(function(p){return normH(p[0])==='LAST NAME';}))return pairs;
+    var given=nameKey(first[1]).split(' ').filter(Boolean),full=nameKey(name[1]).split(' ');
+    if(!given.length||given.every(function(w){return full.indexOf(w)>=0;})||String(name[1]).indexOf(',')>=0)return pairs;
+    return pairs.map(function(p){return p===name?['Last Name',p[1]]:p;});
+  }
+  function companyProfile(pairs){
+    return (pairs||[]).some(function(p){return normH(p[0])==='PROFILE TYPE'&&/^(?:company|travel agent|source|group)$/i.test(sp(p[1]).trim());})
+      ||(pairs||[]).some(function(p){return normH(p[0])==='COMPANY NAME';})&&!(pairs||[]).some(function(p){return /^(?:FIRST NAME|LAST NAME|GUEST NAME|FULL NAME)$/.test(normH(p[0]));});
+  }
+  function contactColumns(head){
+    var h=(head||[]).map(normH);return {type:h.indexOf('TYPE'),value:h.indexOf('COMMUNICATION VALUE'),primary:h.indexOf('PRIMARY')};
+  }
+  /** Only an explicit email row; an ambiguous set of primary emails is never guessed. */
+  function communicationEmail(tables){
+    var found=[];(tables||[]).forEach(function(t){var m=contactColumns(t.head);if(m.type<0||m.value<0)return;
+      (t.rows||[]).forEach(function(r){if(!/^(?:E[ -]?MAIL|E[ -]?MAIL ADDRESS)$/i.test(sp(r[m.type]).trim()))return;var value=sp(r[m.value]).trim(),email=emailOf(value);if(!email||value!==email||maskCards(email)!==email)return;
+        found.push({email:email,primary:m.primary>=0&&/^(?:Y|YES|TRUE|1|PRIMARY|\*|✓|✔)$/i.test(sp(r[m.primary]).trim())});});});
+    var primary=found.filter(function(x){return x.primary;}),candidates=primary.length?primary:found,unique={};candidates.forEach(function(x){unique[x.email.toLowerCase()]=x.email;});var emails=Object.keys(unique);return emails.length===1?unique[emails[0]]:'';
+  }
+  function isRoomBlockTable(head){
+    var h=(head||[]).map(normH);return ['ROOM','REASON CODE','FROM DATE','THROUGH DATE','RETURN STATUS'].every(function(x){return h.indexOf(x)>=0;})&&!h.some(function(x){return /^(?:NAME|GUEST NAME|CONFIRMATION NO|CONFIRMATION NUMBER)$/.test(x);});
+  }
   // what a screen is, from its title, headings and address (most specific first)
   var KINDS = [
     ['billing', /\bbilling\b|\bfolios?\b|post(?:ing)?\s*charges?|\bsettlement\b|\bsettle\b|\bcashier(?:ing)?\b|advance\s*(?:bill|folio)|\binvoices?\b/],
@@ -678,6 +703,9 @@
     t = t.replace(/[^\p{L}\p{N}&\/+.'\- ]/gu, ' ').replace(/\s+/g, ' ').replace(/^[\s.\-]+|[\s.\-]+$/g, '').trim();
     if (!t || /\d{3,}|@|,|\d[.,]\d|•/.test(t) || !/\p{L}{2,}/u.test(t) || t.split(' ').length > 6) return '';
     return t.slice(0, 40).trim();
+  }
+  function learningNoise(label) {
+    return /^(?:hello|welcome|opera(?: cloud)?|oracle jet(?: vdom)? starter template|initializing(?: application)?|initialising(?: application)?|loading(?: complete| application)?|please wait|other screen|dashboard|home)$/i.test(String(label||'').replace(/\s+/g,' ').trim());
   }
   /** a screen's title as it may be kept: the part before " - ", "|", ":", "(" or a comma, cleaned like a label */
   function safeTitle(s) { return cleanLabel(sp(s).split(/\s[-–—|:]\s|[,(|:]/)[0]); }
@@ -1128,6 +1156,8 @@
   }
   /** Opera's report screens (Report Parameters, report list): settings for a report, not guests → never "unknown". */
   function isReportForm(c) {
+    var labels=(c.pairs||[]).map(function(p){return normH(p[0]);});
+    if(['PROPERTY','ACTION TYPE','START DATE','END DATE','USER'].every(function(l){return labels.indexOf(l)>=0;}))return true;
     return (c.pairs || []).some(function (p) { return /^(?:report name|report group|file format|sort order|from date|to date|include internal notes|primary only)$/i.test(String(p[0] || '').replace(/\s+/g, ' ').trim()); })
       || (c.heads || []).some(function (h) { return /report\s+parameters|changes?\s*log|user\s*activity\s*log|^\s*reports?\s*$/i.test(h); });
   }
@@ -1135,7 +1165,7 @@
     setTaught: setTaught, screenKey: screenKey, shapeOf: shapeOf, headText: headText, structText: structText, pathShape: pathShape, classShape: classShape, mapName: mapName, reportLeaks: reportLeaks, makeReport: makeReport, reportText: reportText, linkDiag: linkDiag,
     maskCards: maskCards, secretLabel: secretLabel, scrub: scrub, payType: payType, normRoomStatus: normRoomStatus, postFieldOf: postFieldOf, traceFieldOf: traceFieldOf, usablePost: usablePost, usableTrace: usableTrace,
     postingsFrom: postingsFrom, folioFrom: folioFrom, tracesFrom: tracesFrom, tableFrom: tableFrom, pairsExtra: pairsExtra, auditState: auditState, cleanLabel: cleanLabel, safeTitle: safeTitle,
-    isRoomStatusSummary: isRoomStatusSummary, normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, businessDateFromText: businessDateFromText, normStatus: normStatus, money: money,
+    learningNoise: learningNoise, profilePairs: profilePairs, companyProfile: companyProfile, communicationEmail: communicationEmail, contactColumns: contactColumns, isRoomBlockTable: isRoomBlockTable, isRoomStatusSummary: isRoomStatusSummary, normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, businessDateFromText: businessDateFromText, normStatus: normStatus, money: money,
     roomOf: roomOf, roomKey: roomKey, nameKey: nameKey, confOf: confOf, emailOf: emailOf, rowFrom: rowFrom, finishRows: finishRows, rowKey: rowKey, mergeRows: mergeRows, pairsToRow: pairsToRow,
     sameReservation: sameReservation, actionOf: actionOf, successOf: successOf, countEvidence: countEvidence, liveRows: liveRows, kindOfText: kindOfText, pageKind: pageKind, sigKind: sigKind, formLabel: formLabel, dataLook: dataLook, isReportForm: isReportForm, KNOWN_HEAD: KNOWN_HEAD, hash: hash, summary: summary, totalOf: totalOf, totalLine: totalLine, FIELDS: FIELDS, VERSION: VERSION, READER_REV: READER_REV };
   if (typeof module !== 'undefined' && module.exports) { module.exports = H; return; }
@@ -1274,7 +1304,8 @@
     var kindOfHead = function (h) {
       if (!h) return '';
       var mg = mapHeaders(h), mt = mapHeaders(h, traceFieldOf);
-      if (isRoomStatusSummary(h)) return 'known';
+      if (isRoomStatusSummary(h)||isRoomBlockTable(h)) return 'known';
+      var contact=contactColumns(h);if(contact.type>=0&&contact.value>=0)return 'contact';
       if (hint === 'traces' && usableTrace(mt)) return 'trace';
       var hs = ' ' + h.map(normH).join(' | ') + ' ';
       if (/ CARD NUMBER | CARD HOLDER | EXPIRATION /.test(hs)) return 'card';   // payment instructions / memberships: a card column — never read, never kept
@@ -1297,7 +1328,7 @@
       if (!ok) { skipped++; return; }
       if (!visibleOpera(e)) return; var g = readGrid(e); if (g.rows.length) gs.push(g);
     });
-    var out = [], total = 0, post = [], trace = [], other = [], seen = [];
+    var out = [], total = 0, post = [], trace = [], other = [], seen = [], contacts=[];
     gs.forEach(function (g) {
       if (!g.rows.length) return;
       var head = g.head, k = head ? kindOfHead(head) : '', hel = null;
@@ -1317,6 +1348,7 @@
       s.n = body.length; s.rows = body;
       if (k === 'post') { post.push({ head: head, rows: body, map: mapHeaders(head, postFieldOf).map, el: g.el }); return; }
       if (k === 'trace') { trace.push({ head: head, rows: body, map: mapHeaders(head, traceFieldOf).map }); return; }
+      if(k==='contact'){contacts.push({head:head,rows:body,el:g.el});s.k='known';return;}
       if (k === 'card') { s.n = 0; s.rows = []; return; }   // nothing of it is kept
       if (k === 'known') k = 'other';
       if (k === 'other') { if (other.length < 4 && (body.length > 1 || /\d/.test((body[0] || []).join(' ')))) other.push({ head: head, rows: body }); return; }   // a lone line without a number ("Hello, …") is not a table
@@ -1342,7 +1374,7 @@
       local.forEach(function (n) { counts.add(n); });
     });
     if (counts.size) count = counts.size === 1 ? { known: true, total: Array.from(counts)[0] } : { known: false, total: total };
-    return { raw: out, count: count, total: count.known ? count.total : total, post: post, trace: trace, other: other, seen: seen, skipped: skipped };
+    return { raw: out, count: count, total: count.known ? count.total : total, post: post, trace: trace, contacts: contacts, other: other, seen: seen, skipped: skipped };
   }
   // ── Oracle ADF forms (a reservation, a profile): a short text that names a field, and the value shown next to it ──
   var LABEL_TAGS = { SPAN: 1, LABEL: 1, DIV: 1, TD: 1, TH: 1, DT: 1 };
@@ -1439,7 +1471,10 @@
   }
   /** label → value pairs on screen (reservation details), outside the lists. Never a password, PIN or card field.
    *  pairs.form: the ADF form fields found by their place (for the card lists and the reports). */
-  function readPairs(doc) {
+  function editingProfileIdentity(pairs){
+    return (pairs.form||[]).some(function(h){if(!/^(?:name|first|last)$/.test(h.f))return false;var el=h.vel;if(!el)return false;if(!/^(?:INPUT|TEXTAREA|SELECT)$/.test(el.tagName))el=el.querySelector&&el.querySelector('input,textarea,select');return !!el&&!el.readOnly&&!el.disabled&&el.getAttribute('aria-readonly')!=='true';});
+  }
+  function readPairs(doc,contacts) {
     var pairs = [], seen = new Set();
     var add = function (l, v, el) { l = sp(l).replace(/[:*]\s*$/, '').trim(); v = sp(v).trim(); if (!l || !v || l.length > 40 || v.length > 200 || seen.has(l + '|' + v) || secretLabel(l) || /^loading complete$/i.test(l)) return; if (el && (mine(el) || inData(el))) return; seen.add(l + '|' + v); pairs.push([l, maskCards(v)]); };
     var field = function (n) { return n && n.querySelector ? n.querySelector('input,textarea,select') : null; };
@@ -1458,6 +1493,7 @@
       add(txt(e), f ? valOf(f) : txt(n), e);
     });
     var form = []; try { form = readForm(doc); } catch (_) {}
+    form=form.filter(function(h){return !(contacts||[]).some(function(t){return t.el&&t.el.contains(h.el);});});
     form.forEach(function (h) { add(h.l, h.v, null); });
     pairs = pairs.slice(0, 200); pairs.form = form;
     return pairs;
@@ -1622,13 +1658,19 @@
       var rows = finishRows(g.raw, order);
       // label → value pairs only where they matter (a long list with nothing else is read without them: fast)
       var readP = !rows.length || REPLACE[hint] || g.post.length;
-      var pairs = readP ? readPairs(document) : [];
-      var det = null;
+      var pairs = readP ? readPairs(document,g.contacts) : [];
+      var det = null,editingProfile=editingProfileIdentity(pairs);
+      var contactProfile=!editingProfile&&!companyProfile(pairs)&&(g.contacts||[]).length&&pairs.some(function(p){return normH(p[0])==='FIRST NAME';})&&pairs.some(function(p){return /^(?:NAME|LAST NAME)$/.test(normH(p[0]));});
+      if((!hint||hint==='other')&&contactProfile)hint='profile';
+      if(hint==='profile'&&!editingProfile&&!companyProfile(pairs))pairs=Object.assign(profilePairs(pairs).slice(),{form:pairs.form});
       // a list shown as cards (In House / Queue in Opera's list view): one line per card
       if (!rows.length && pairs.form && !REPLACE[hint]) { var recs = recordsOf(pairs.form, order); if (recs.length) rows = recs; }
       if (!rows.length && pairs.length) det = pairsToRow(pairs, order) || (LOOSE[hint] || g.post.length ? pairsToRow(pairs, order, true) : null);
       if (det) rows = [det];
       var kind = pageKind(parts, rows);
+      if(hint==='profile'&&contactProfile&&(!kind||kind==='other'||kind==='list'))kind='profile';
+      if((!kind||kind==='other')&&g.seen.some(function(t){return isRoomBlockTable(t.head);}))kind='rooms';
+      if(kind==='profile'&&det&&!editingProfile&&!det.email&&!companyProfile(pairs)&&pairs.some(function(p){return /^(?:FIRST NAME|GUEST NAME|FULL NAME)$/.test(normH(p[0]));})&&nameKey(det.name).split(' ').filter(Boolean).length>=2){var email=communicationEmail(g.contacts);if(email)det.email=email;}
       if (g.post.length) kind = 'billing';   // a folio's postings: Billing / Check Out / Cashiering, whatever the title says
       else if (g.trace.length && (!g.raw.length || hint === 'traces')) kind = 'traces';
       else if (det && kind !== 'details' && !g.raw.length && !SPECIAL[kind]) kind = 'details';
@@ -1845,6 +1887,7 @@
   function noteScreen(kind, title) {
     if (!LEARN) return;
     var s = kind || 'other', ti = safeTitle(title), k = s + '|' + ti;
+    if(s==='other'&&(!ti||learningNoise(ti)))return;
     if (k === lastScreen) return; lastScreen = k;
     steps.push({ t: Date.now(), k: 's', s: s, l: ti });
     if (!flushT) flushT = setTimeout(flushLearn, 1500);

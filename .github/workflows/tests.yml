@@ -68,6 +68,11 @@ jobs:
         run: node tests/run-history.test.js
       - name: Run history on mobile
         run: node tests/run-history.browser.test.js
+      - name: Opera reader knowledge and profile contacts
+        run: |
+          node --test tests/opera-reader-knowledge.test.js
+          node tests/opera-reader-knowledge.browser.test.js
+
       - name: Opera Departures checks
         run: |
           node tests/opera-departures.test.js

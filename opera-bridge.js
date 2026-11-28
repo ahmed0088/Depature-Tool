@@ -588,6 +588,10 @@ function cleanLabel(s) {
 }
 /** all the words of a label are words of a guest's name → it is the guest, not a button */
 function guesty(l, words) { if (!words || !words.size) return false; const ws = nameKey(l).split(' ').filter(w => w.length >= 3); return ws.length > 0 && ws.every(w => words.has(w)); }
+/** Loading shells are not useful workflow steps, including entries saved by older readers. */
+function learningNoise(label) {
+  return /^(?:hello|welcome|opera(?: cloud)?|oracle jet(?: vdom)? starter template|initializing(?: application)?|initialising(?: application)?|loading(?: complete| application)?|please wait|other screen|dashboard|home)$/i.test(String(label||'').replace(/\s+/g,' ').trim());
+}
 /** what the reader saw → safe events [{t, k, v, l}] (k: s screen, c click, r a line of a list) */
 function learnClean(list, words) {
   const out = [];
@@ -597,8 +601,8 @@ function learnClean(list, words) {
     if (e.k === 's') {
       const kind = LEARN_KINDS[e.s] ? e.s : 'other';
       if (kind !== 'other') { out.push({ t, k: 's', v: kind, l: LEARN_KINDS[kind] }); return; }
-      const l = cleanLabel(e.l); const ok = l && !guesty(l, words);
-      out.push({ t, k: 's', v: ok ? 'other:' + l.toLowerCase() : 'other', l: ok ? l : 'Other screen' });
+      const l = cleanLabel(e.l); if(!l||guesty(l,words)||learningNoise(l))return;
+      out.push({ t, k: 's', v: 'other:' + l.toLowerCase(), l });
     } else if (e.k === 'r') out.push({ t, k: 'r', v: 'line', l: 'a line of a list' });
     else if (e.k === 'c') { const l = cleanLabel(e.l); if (l && !guesty(l, words)) out.push({ t, k: 'c', v: l.toLowerCase(), l }); }
   });
@@ -612,7 +616,7 @@ const sameWords = (a, b) => String(a || '').toLowerCase().replace(/[^a-z]/g, '')
  *  same name is that screen (one step); a check-out ends a task. */
 function sessionsOf(ev) {
   const S = []; let cur = null, last = 0, endNext = false;
-  const E = (ev || []).slice().sort((a, b) => a.t - b.t);
+  const E = (ev || []).filter(e=>e&&!(e.k==='s'&&learningNoise(e.l))).slice().sort((a, b) => a.t - b.t);
   E.forEach((e, i) => {
     const n = E[i + 1];
     if (e.k === 'c' && n && n.k === 's' && n.t - e.t < 8000 && (sameWords(e.l, n.l) || sameWords(e.v, n.v))) return;
@@ -634,6 +638,7 @@ function hoursText(hours) {
 }
 /** events → what was learned: routines (common sequences, their usual hours and time), what comes before a check-out, time per screen, next-step counts */
 function learnModel(ev, minN) {
+  ev=(ev||[]).filter(e=>e&&!(e.k==='s'&&learningNoise(e.l)));
   minN = minN || 3;
   const label = {}; (ev || []).forEach(e => { label[tokOf(e)] = e.l; });
   const S = sessionsOf(ev), grams = {}, next = {};
@@ -937,7 +942,7 @@ function guardThrottle(T, e, now, what) {
   return { T, send: [], wait: OG_GAP - (now - T.sentAt) };
 }
 
-W.hoOperaPure = { propBlock, shouldReopen, pinHash, pinVerify, guardThrottle, guardFlush, ogLine, OG_GAP, OG_VISIT, depRecon, reconAuto, reconHead, reconPlan, teachKey, teachChoices, operaThoughts, operaEntry, shapeOf, reportText, reportLeaks, stuckText, stuckLeaks, stuckClean, operaHome, openState, maskCards, secretLabel, cleanFolio, cleanLabel, learnClean, learnModel, learnRecent, learnNext, learnSummary, sessionsOf, toIso, operaDay, roomKey, nameKey, sameGuest, isOtaEmail, goodEmail, natName, firstLast, sanitize, plan, departureMatch, summaryText, worthAlert, depReport, hashOf, isPm };
+W.hoOperaPure = { propBlock, shouldReopen, pinHash, pinVerify, guardThrottle, guardFlush, ogLine, OG_GAP, OG_VISIT, depRecon, reconAuto, reconHead, reconPlan, teachKey, teachChoices, operaThoughts, operaEntry, shapeOf, reportText, reportLeaks, stuckText, stuckLeaks, stuckClean, operaHome, openState, maskCards, secretLabel, cleanFolio, cleanLabel, learningNoise, learnClean, learnModel, learnRecent, learnNext, learnSummary, sessionsOf, toIso, operaDay, roomKey, nameKey, sameGuest, isOtaEmail, goodEmail, natName, firstLast, sanitize, plan, departureMatch, summaryText, worthAlert, depReport, hashOf, isPm };
 if (!doc) return;
 
 // ══ State ═══════════════════════════════════════════════════
@@ -1122,7 +1127,7 @@ let DB_ON = false;
 function dbStart() {
   if (DB_ON || typeof fbListen !== 'function' || !signedIn() || typeof _ref === 'undefined' || !_ref) return;
   DB_ON = true;
-  safe(() => fbListen('operaUrl', v => { if (v && v.url) setOperaUrl(v.url, v.src || 'hotel', true); }));
+  safe(() => fbListen('operaUrl', v => { const url=typeof v==='string'?v:v&&v.url;if(url)setOperaUrl(url,v.src||'hotel',true); }));
   safe(() => fbListen('operaStuck', v => safe(() => stuckMerge(v))));
   safe(() => fbListen('operaProp', v => { OPPROP = v && /^[A-Z0-9]{3,8}$/.test(v.code || '') ? v.code : ''; }));
   const taughtFrom = kind => v => safe(() => { const box = {}; Object.values(v || {}).forEach(x => { if (x && x.k && x.v) box[String(x.k).slice(0, 60)] = String(x.v).slice(0, 20); }); if (kind === 's') TEACH.s = Object.assign({}, box); else TEACH.h = Object.assign({}, box); LS.set(LS_TEACH, TEACH); });
@@ -1966,7 +1971,7 @@ function learnStore() {
   return LRN;
 }
 const learnOn = () => learnStore().on !== false;
-function learnSave() { const L = learnStore(), cut0 = Date.now() - 21 * 864e5; L.ev = L.ev.filter(e => e && e.t >= cut0).slice(-4000); LS.set(LRN_KEY, L); LRN_M = null; }
+function learnSave() { const L = learnStore(), cut0 = Date.now() - 21 * 864e5; L.ev = L.ev.filter(e => e && e.t >= cut0 && !(e.k==='s'&&learningNoise(e.l))).slice(-4000); LS.set(LRN_KEY, L); LRN_M = null; }
 function learnModelNow() { if (!LRN_M) LRN_M = learnModel(learnStore().ev); return LRN_M; }
 /** the words of today's guests' names (a "button" that is only a guest's name is not kept) */
 function guestWords() {

@@ -56,7 +56,7 @@
   async function loadOperaLink() {
     const hotel=typeof HOTEL_ID==='undefined'?'':String(HOTEL_ID||'');
     try { const l = localStorage.getItem(lsKey()); if (l && A.validateOperaUrl(l).ok) S.opera = l; } catch (_) {}
-    const d = db(); if (d) { try { const o = await d.ref('hotels/' + hotel + '/operaUrl').once('value'); if(hotel!==String(HOTEL_ID))return;if (o.val() && A.validateOperaUrl(o.val()).ok) S.opera = o.val(); } catch (_) {} }
+    const d = db(); if (d) { try { const o = await d.ref('hotels/' + hotel + '/operaUrl').once('value'); if(hotel!==String(HOTEL_ID))return;const link=A.validateOperaUrl(o.val());if(link.ok)S.opera=link.url; } catch (_) {} }
     renderShell();
   }
   async function saveOperaLink() {
@@ -74,7 +74,7 @@
     const results=await Promise.allSettled(['operaUrl','immigFixPrefs/uaeIdType','immigFix/'+day].map(path=>d.ref('hotels/'+hotel+'/'+path).once('value')));
     if(hotel!==String(HOTEL_ID))return;
     const values=results.map(r=>r.status==='fulfilled'?r.value.val():null);
-    if(values[0]&&A.validateOperaUrl(values[0]).ok)S.opera=values[0];
+    const link=A.validateOperaUrl(values[0]);if(link.ok)S.opera=link.url;
     S.uaeType=C.UAE_ID_TYPES.includes(values[1])?values[1]:'';S.shared=values[2]||{};
   }
   function chip(it, f) {

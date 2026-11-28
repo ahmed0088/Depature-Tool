@@ -84,7 +84,7 @@ async function main() {
   if (!['signin', 'audit', 'save'].includes(MODE)) fail('MODE must be signin, audit or save');
   for (const k of ['OPERA_USER', 'OPERA_PASS']) if (!E[k]) fail('The ' + k + ' secret is missing');
   const FB = await fbOpen();   // the private path: the code, the plan, the results
-  const url=String(E.OPERA_URL||await FB.get('operaUrl')||'').trim();
+  const link=require('../opera-auto-core').validateOperaUrl(E.OPERA_URL||await FB.get('operaUrl')),url=link.ok?link.url:'';
   if(!okUrl(url)){const error='Save a valid Opera Cloud link for this hotel in Immigration Check before starting.';await FB.put('operaCloudResult',{at:Date.now(),state:'failed',mode:MODE,tag:RUN_TAG,error,lines:[]});throw Error(error);}
   if (FB) { for(const key of ['operaCloudCode','operaCloudWant']){const value=await FB.get(key);if(!RUN_TAG||value?.tag===RUN_TAG||Date.now()>(key==='operaCloudWant'?Number(value?.expiresAt)||Number(value?.at||0)+180000:Number(value?.at||0)+180000))await FB.del(key);} }   // never use an old code
   const getCode = async notThis => E.OPERA_TOTP ? freshTotp(E.OPERA_TOTP,notThis) : codeFromHotelOps(FB, notThis,RUN_TAG);

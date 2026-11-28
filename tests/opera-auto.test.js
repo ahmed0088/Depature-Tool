@@ -20,3 +20,5 @@ test('the pasted fixer script follows the same rules',()=>{
   for(const t of ['Save','Save and Close','Delete','New','Cancel','Enroll Guest','Create Guest Profile','Check In','Check Out','OK','Post','Merge','Edit','Show Masked Information','Identification'])assert.equal(re.test(t),A.isForbiddenControl(t),'rule differs for '+t);
   assert(/plan\.origin !== location\.origin/.test(src),'fixer refuses a plan made for another Opera link');
 });
+
+test('a reader-saved Opera link object keeps the same URL and credential checks',()=>{const url='https://fake.oraclecloud.com/OperaCloud';assert.equal(A.validateOperaUrl({url,src:'reader'}).url,url);assert.equal(A.validateOperaUrl({url:'https://u:p@fake.oraclecloud.com/OperaCloud'}).ok,false);assert.equal(A.validateOperaUrl({url:'https://fake.oraclecloud.com/OperaCloud?token=secret'}).ok,false);});

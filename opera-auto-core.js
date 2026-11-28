@@ -14,7 +14,7 @@
   'use strict';
   /** Opera Cloud lives on oraclecloud.com / oraclehospitality hosts. A link with credentials in it is refused. */
   function validateOperaUrl(input) {
-    const raw = String(input || '').trim();
+    const raw = String(input&&typeof input==='object'?input.url||'':input||'').trim();
     if (!raw) return { ok: false, reason: 'Paste the hotel\'s Opera Cloud link.' };
     let u; try { u = new URL(raw); } catch (_) { return { ok: false, reason: 'That is not a web link.' }; }
     if (u.protocol !== 'https:') return { ok: false, reason: 'The Opera link must start with https://' };
