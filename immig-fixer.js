@@ -34,6 +34,39 @@
       });
     });
   }
+  function cloudPanelHtml(){
+    const selected=(S.plan?.items||[]).filter(it=>selectedFields(it).length).length;
+    return '<section id="immigCloudBox" class="imm-run"><div class="imm-cloud-heading"><div><div class="imm-eyebrow">GITHUB CLOUD</div><h2>Run selected fixes</h2></div><span id="immigCloudState" class="imm-state">Ready</span></div><p class="imm-cloud-sub">Your computer can stay off.</p><div class="imm-selection" id="immigSelectionCount">'+selected+' guests · '+approvedCount()+' fields selected</div>'+
+      '<div class="imm-run-actions"><label class="imm-scope" for="immigRunScope">Guests to fix<select id="immigRunScope"><option value="5"'+(S.scope==='5'?' selected':'')+'>First 5 selected guests</option><option value="all"'+(S.scope==='all'?' selected':'')+'>All selected guests</option></select></label><button class="btn gold imm-big" id="immigCloudOne">'+(S.scope==='all'?'Fix selected guests':'Fix first 5 guests')+'</button></div>'+
+      '<p class="imm-small">Saves the ticked details to guest profiles. It never overwrites a value and never touches folios, postings or cashiering.</p>'+
+      '<ol class="imm-run-steps" id="immigCloudSteps" aria-label="Automation progress"><li data-cloud-step="0">Connect</li><li data-cloud-step="1">Sign in</li><li data-cloud-step="2">Fix details</li><li data-cloud-step="3">Results</li></ol>'+
+      '<div id="immigCloudStartMsg" class="imm-run-note" role="status" aria-live="polite"></div>'+
+      '<div id="immigCloudCodeBox" class="imm-code" hidden><b>Enter your authentication code</b><p class="imm-small" id="immigCloudWant"></p><p class="imm-code-time" id="immigCloudTime" role="timer" aria-live="off"></p><p class="imm-small">Your authenticator has its own code timer. If that code is about to change, wait for the next one before typing it here.</p><div class="imm-row"><input id="immigCloudCode" aria-label="Six-digit authentication code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code"><button class="btn gold" id="immigCloudSend">Send code</button></div></div>'+
+      '<div id="immigCloudRes" class="imm-result" aria-live="polite"></div>'+
+      '<div id="immigCloudKeyRow" class="imm-setup-key" style="display:none"><b>Connect cloud automation on this device</b><p class="imm-small">Use the same start key as Neorcha. You only need to save it once.</p><div class="imm-row"><input id="immigCloudKey" type="password" aria-label="GitHub start key" autocomplete="off" placeholder="Paste your GitHub start key"><button class="btn" id="immigCloudKeySave">Save key</button></div></div>'+
+      '<details class="imm-more" id="immigCloudAdv"><summary>Connection help & details</summary><div class="imm-support-actions"><button class="btn" id="immigCloudStartSignin">Check Opera sign-in only</button><button class="btn" id="immigCloudStartAudit">Preview without saving</button><a id="immigCloudRunLink" class="btn" target="_blank" rel="noopener" hidden>Open cloud run</a></div><p class="imm-small">Connection checks and previews do not save guest details.</p></details></section>';
+  }
+  function ensureCloudPanel(){
+    let dock=document.getElementById('immigCloudDock');
+    if(!dock){const res=document.getElementById('immigResults2');if(!res)return;const aside=document.createElement('aside');aside.id='immigCloudHome';aside.innerHTML='<details id="immigCloudSetup" class="imm-cloud-setup"><summary>Cloud connection & authentication</summary><div id="immigCloudDock"></div></details>';res.insertAdjacentElement('afterend',aside);dock=document.getElementById('immigCloudDock');}
+    if(!document.getElementById('immigCloudBox')){
+      dock.innerHTML=cloudPanelHtml();
+      document.getElementById('immigCloudSend').onclick=sendCloudCode;
+      document.getElementById('immigCloudOne').onclick=()=>oneButton(S.scope==='all');
+      document.getElementById('immigCloudStartSignin').onclick=()=>startCloud('signin');
+      document.getElementById('immigCloudStartAudit').onclick=()=>startCloud('audit',null,()=>sendCloudPlan(false));
+      document.getElementById('immigCloudKeySave').onclick=saveCloudKey;
+      document.getElementById('immigRunScope').onchange=e=>{S.scope=e.target.value==='all'?'all':'5';cloudControls();};
+    }
+    const res=document.getElementById('immigResults2'),review=!!(S.plan&&res&&res.style.display!=='none');
+    document.getElementById('immigWorkArea')?.classList.toggle('has-review',review);
+    if(review)document.getElementById('immigCloudSetup').open=true;
+    cloudControls();
+  }
+  function watchCloudReady(){
+    if(!db()||(typeof currentUser!=='undefined'&&!currentUser))return;
+    cloudContext();watchCloudWant();watchCloudResult();
+  }
   function operaRow() {
     const ok = S.opera ? A.validateOperaUrl(S.opera) : null;
     return '<details id="immigConnectionDetails" class="imm-more"'+(ok&&ok.ok?'':' open')+'><summary>'+(ok&&ok.ok?'✓ Opera link saved · Change link':'Set up Opera once')+'</summary>' +
@@ -50,8 +83,9 @@
       if (anchor && anchor.id === 'immigStep4Slot') anchor.appendChild(el); else if (anchor) anchor.after(el); else { const res = document.getElementById('immigResults2'); if (!res) return; res.insertBefore(el, res.firstChild); }
     }
     const typing = document.activeElement && document.activeElement.id === 'immigOperaUrl',opened=el.querySelector('details')?.open;
-    if (!typing) {const same=el.dataset.opera===S.opera;el.innerHTML=operaRow();if(same&&opened)el.querySelector('details').open=true;el.dataset.opera=S.opera;}
+    if (!typing&&(!el.firstChild||el.dataset.opera!==S.opera)) {const same=el.dataset.opera===S.opera;el.innerHTML=operaRow();if(same&&opened)el.querySelector('details').open=true;el.dataset.opera=S.opera;}
     const b = document.getElementById('immigOperaSave'); if (b) b.onclick = saveOperaLink;
+    ensureCloudPanel();watchCloudReady();renderCloudState();
   }
   async function loadOperaLink() {
     const hotel=typeof HOTEL_ID==='undefined'?'':String(HOTEL_ID||'');
@@ -100,35 +134,23 @@
     const opened=new Set([...card.querySelectorAll('details[open][id]')].map(e=>e.id));
     const oldScroll=card.querySelector('.imm-review-list')?.scrollTop||0;
     const focus=document.activeElement,focusKey=focus?.dataset?.edit||focus?.dataset?.ok,focusAttr=focus?.dataset?.edit?'edit':'ok';
-    const code=card.querySelector('#immigCloudCode')?.value||'',keyValue=card.querySelector('#immigCloudKey')?.value||'';
-    const keyShown=card.querySelector('#immigCloudKeyRow')?.style.display==='';
     const items=S.plan.items,full=it=>it.fields.length&&it.fields.every(f=>S.ok[it.id][f.field]);
     const ready=items.filter(full),needs=items.filter(it=>it.fields.length&&!full(it)),skipped=items.filter(it=>!it.fields.length);
-    const selected=items.filter(it=>selectedFields(it).length).length;
     if(!S.reviewIds)S.reviewIds=new Set(needs.map(it=>it.id));
     const reviewItems=items.filter(it=>S.reviewIds.has(it.id)),readyItems=ready.filter(it=>!S.reviewIds.has(it.id));
-    const row=it=>{const notes=it.notes.filter(note=>!(/^Gender:/.test(note)&&it.fields.some(f=>f.field==='gender'&&f.value)));return '<article class="imm-guest"><div class="imm-guest-head"><b>Room '+esc(it.room)+'</b><span>'+esc(it.name)+'</span></div>'+it.fields.map(f=>chip(it,f)).join('')+(notes.length?'<p class="imm-small">'+notes.map(esc).join(' · ')+'</p>':'')+'</article>';};
-    card.classList.add('imm-review');
-    card.innerHTML='<div class="imm-eyebrow">REVIEW & FIX</div><p class="imm-small">'+esc(S.plan.hotel)+(S.plan.businessDate?' · '+esc(S.plan.businessDate.slice(0,10)):'')+'</p><div class="imm-h"><b>Check the suggested details</b></div><p class="imm-small">Tick the fields you want to add. Only empty fields in Opera will be filled.</p>'+
-      '<div class="imm-sum"><span class="ok">'+ready.length+' ready</span><span class="ask">'+needs.length+' need your choice</span>'+(skipped.length?'<span class="skip">'+skipped.length+' need more information</span>':'')+'</div>'+
+    const row=it=>{const notes=it.notes.filter(note=>!(/^Gender:/.test(note)&&it.fields.some(f=>f.field==='gender'&&f.value)));return '<article class="imm-guest"><div class="imm-guest-head"><b><small>ROOM</small>'+esc(it.room)+'</b><span>'+esc(it.name)+'<small>Review the ticked details</small></span></div>'+it.fields.map(f=>chip(it,f)).join('')+(notes.length?'<p class="imm-small">'+notes.map(esc).join(' · ')+'</p>':'')+'</article>';};
+    card.classList.add('imm-review');card.style.cssText='';
+    card.innerHTML='<div class="imm-eyebrow">REVIEW & FIX</div><p class="imm-small">'+esc(S.plan.hotel)+(S.plan.businessDate?' · '+esc(S.plan.businessDate.slice(0,10)):'')+'</p><div class="imm-h"><b>Review suggested details</b></div><p class="imm-small">Tick the fields you want to add. Only empty fields in Opera will be filled.</p>'+
+      '<div class="imm-sum"><span class="ok"><b>'+ready.length+'</b><small>Ready</small></span><span class="ask"><b>'+needs.length+'</b><small>Needs your choice</small></span><span class="skip"><b>'+skipped.length+'</b><small>More information</small></span></div>'+
       (reviewItems.length?'<div class="imm-sub">Review these guests</div><div class="imm-review-list">'+reviewItems.map(row).join('')+'</div>':'')+
       (readyItems.length?'<details class="imm-more" id="immigReadyGuests"><summary>Review '+readyItems.length+' ready guests</summary>'+readyItems.map(row).join('')+'</details>':'')+
       (skipped.length?'<details class="imm-more" id="immigSkippedGuests"><summary>Guests that need more information</summary><div class="imm-small">'+skipped.map(it=>'Room '+esc(it.room)+' · '+esc(it.name)+' · '+esc(it.notes.join(' · ')||'No supported empty fields to fill')).join('<br>')+'</div></details>':'')+
       (!items.length?'<div class="imm-empty"><b>No supported fields need fixing.</b><span>You can see the full report below.</span></div>':'')+
-      '<section id="immigCloudBox" class="imm-run"><div class="imm-h"><b>Fix in Opera</b><span id="immigSelectionCount">'+selected+' guests · '+approvedCount()+' fields selected</span></div>'+
-      '<div class="imm-run-actions"><label class="imm-scope" for="immigRunScope">Guests to fix<select id="immigRunScope"><option value="5"'+(S.scope==='5'?' selected':'')+'>First 5 selected guests</option><option value="all"'+(S.scope==='all'?' selected':'')+'>All selected guests</option></select></label><button class="btn gold imm-big" id="immigCloudOne">'+(S.scope==='all'?'Fix selected guests':'Fix first 5 guests')+'</button></div>'+
-      '<p class="imm-small">Saves the ticked details to guest profiles. It never overwrites a value and never touches folios, postings or cashiering.</p>'+
-      '<ol class="imm-run-steps" id="immigCloudSteps" aria-label="Automation progress"><li data-cloud-step="0">Connect</li><li data-cloud-step="1">Sign in</li><li data-cloud-step="2">Fix details</li><li data-cloud-step="3">Results</li></ol>'+
-      '<div id="immigCloudStartMsg" class="imm-run-note" role="status" aria-live="polite"></div>'+
-      '<div id="immigCloudCodeBox" class="imm-code" hidden><b>Enter your authentication code</b><p class="imm-small" id="immigCloudWant"></p><p class="imm-code-time" id="immigCloudTime" role="timer" aria-live="off"></p><p class="imm-small">Your authenticator has its own code timer. If that code is about to change, wait for the next one before typing it here.</p><div class="imm-row"><input id="immigCloudCode" aria-label="Six-digit authentication code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code"><button class="btn gold" id="immigCloudSend">Send code</button></div></div>'+
-      '<div id="immigCloudRes" class="imm-result" aria-live="polite"></div>'+
-      '<div id="immigCloudKeyRow" class="imm-setup-key" style="display:none"><b>Connect cloud automation on this device</b><p class="imm-small">Use the same start key as Neorcha. You only need to save it once.</p><div class="imm-row"><input id="immigCloudKey" type="password" aria-label="GitHub start key" autocomplete="off" placeholder="Paste your GitHub start key"><button class="btn" id="immigCloudKeySave">Save key</button></div></div>'+
-      '<details class="imm-more" id="immigCloudAdv"><summary>Connection help & details</summary><div class="imm-support-actions"><button class="btn" id="immigCloudStartSignin">Check Opera sign-in only</button><button class="btn" id="immigCloudStartAudit">Preview without saving</button><a id="immigCloudRunLink" class="btn" target="_blank" rel="noopener" hidden>Open cloud run</a></div><p class="imm-small">Connection checks and previews do not save guest details.</p></details></section>'+
       '<details class="imm-more imm-alternative" id="immigBrowserAlternative"><summary>Use my browser extension instead</summary><p class="imm-small">Open Opera on your computer, then send the selected fixes to your helper.</p><button class="btn" id="immigFixCopy">'+(helperFx()?'Send selected fixes to Opera':'Copy selected fixes for Opera')+' (<span id="immigFixN">'+approvedCount()+'</span> fields)</button><div class="imm-small" id="immigFixStatus">'+esc(S.fxNote||'')+'</div>'+extState()+'<p class="imm-small">'+(helperFx()?'Press Start in the Opera helper. It follows the selected fields.':'Paste the copied list into the Opera fixer, press Load, then Start.')+'</p></details>'+
       '<details class="imm-more" id="immigFixMore"><summary>Team choices & previous changes</summary><button class="btn" id="immigFixSave">Remember gender and nationality</button><div id="immigFixLogList" class="imm-small"></div><details class="imm-more" id="immigLogImport"><summary>Import a helper log or copy a support request</summary><textarea id="immigFixLogIn" aria-label="Helper change log"></textarea><div class="imm-support-actions"><button class="btn" id="immigFixLogSave">Save this log</button><button class="btn" id="immigFixCloud">Copy read-only check request</button></div></details></details>';
+    ensureCloudPanel();
     card.onchange=e=>{
       const t=e.target;
-      if(t.id==='immigRunScope'){S.scope=t.value==='all'?'all':'5';paint();return;}
       if(t.dataset?.ok){const [id,f]=t.dataset.ok.split('|');S.ok[id][f]=t.checked;paint();}
       else if(t.dataset?.edit){
         const [id,field]=t.dataset.edit.split('|'),it=S.plan.items.find(x=>x.id===id),f=it?.fields.find(x=>x.field===field);
@@ -139,20 +161,13 @@
     };
     document.getElementById('immigFixCopy').onclick=copyPlan;
     document.getElementById('immigFixCloud').onclick=copyCloudRequest;
-    document.getElementById('immigCloudSend').onclick=sendCloudCode;
-    document.getElementById('immigCloudOne').onclick=()=>oneButton(S.scope==='all');
-    document.getElementById('immigCloudStartSignin').onclick=()=>startCloud('signin');
-    document.getElementById('immigCloudStartAudit').onclick=()=>startCloud('audit',null,()=>sendCloudPlan(false));
-    document.getElementById('immigCloudKeySave').onclick=saveCloudKey;
     document.getElementById('immigFixSave').onclick=saveShared;
     document.getElementById('immigFixLogSave').onclick=saveLog;
     opened.forEach(id=>{const el=document.getElementById(id);if(el)el.open=true;});
     const list=card.querySelector('.imm-review-list');if(list)list.scrollTop=oldScroll;
-    document.getElementById('immigCloudCode').value=code;document.getElementById('immigCloudKey').value=keyValue;
-    if(keyShown)document.getElementById('immigCloudKeyRow').style.display='';
     if(focusKey){const next=[...card.querySelectorAll('[data-'+focusAttr+']')].find(e=>e.dataset[focusAttr]===focusKey);next?.focus({preventScroll:true});}
     else if(focus?.id==='immigRunScope')document.getElementById('immigRunScope').focus({preventScroll:true});
-    cloudControls();watchCloudWant();watchCloudResult();renderCloudState();showLog();guide();
+    cloudControls();watchCloudReady();renderCloudState();showLog();guide();
   }
   const helperFx = () => { try { return !!document.documentElement.dataset.hoFxHelper; } catch (_) { return false; } };
   // one line: is the Chrome helper's fixer as new as this page?  (the helper takes new fixer code from this page by itself; only an old helper needs a download)
@@ -215,17 +230,19 @@
     const v=cloudResult,terminal=v&&['done','failed'].includes(v.state),age=Date.now()-Number(cloudWant?.at||0);
     wantedCode=cloudWant&&cloudWant.state==='waiting'&&age>=0&&Date.now()<codeDeadline(cloudWant)&&(!cloudTag||cloudWant.tag===cloudTag)&&!terminal?cloudWant:null;
     const challenge=wantedCode?String(wantedCode.tag||'')+'|'+wantedCode.at:'';
-    box.hidden=!wantedCode;const sent=!!challenge&&codeSentChallenge===challenge;
+    box.hidden=!wantedCode;const setup=document.getElementById('immigCloudSetup');if(wantedCode&&setup)setup.open=true;
+    const pill=document.getElementById('immigCloudState');if(pill){const label=wantedCode?'Code needed':v?.state==='failed'?'Needs attention':v?.state==='done'?'Finished':cloudStarting?'Starting':cloudRunning||v?.state==='running'?'Running':'Ready';pill.textContent=label;pill.dataset.state=label.toLowerCase().replace(/ /g,'-');}
+    const sent=!!challenge&&codeSentChallenge===challenge;
     const input=document.getElementById('immigCloudCode'),send=document.getElementById('immigCloudSend');
     input.disabled=sent;send.disabled=sent;
     document.getElementById('immigCloudWant').textContent=sent?'Code sent. Waiting for Opera to continue…':'Open your authenticator app, type the current 6 digits, then press Send code.';
     updateCodeCountdown();
-    if(wantedCode&&!sent&&focusedChallenge!==challenge){focusedChallenge=challenge;input.focus({preventScroll:true});}
+    if(wantedCode&&!sent&&focusedChallenge!==challenge){focusedChallenge=challenge;input.focus({preventScroll:true});if(box.getClientRects().length)box.scrollIntoView({block:'nearest'});}
     let stage=cloudStage;
     if(v?.state==='running')stage=['starting'].includes(v.stage)?0:['email','password','signin','passkey','code','code-submit','signed-in'].includes(v.stage)?1:2;
     if(terminal)stage=v.state==='done'?3:/Microsoft|sign.in|password|passkey|authenticat|code/i.test(v.error||'')?1:Math.max(0,stage);
     if(wantedCode)stage=1;
-    document.querySelectorAll('#immigCloudSteps li').forEach((el,i)=>{el.classList.toggle('is-done',stage>i||(v?.state==='done'&&i===3));el.classList.toggle('is-active',stage===i&&!terminal);el.classList.toggle('is-stopped',stage===i&&v?.state==='failed');if(stage===i)el.setAttribute('aria-current','step');else el.removeAttribute('aria-current');});
+    document.querySelectorAll('#immigCloudSteps li').forEach((el,i)=>{if(i===2)el.textContent=v?.mode==='signin'?'Check access':v?.mode==='audit'?'Preview details':'Fix details';el.classList.toggle('is-done',stage>i||(v?.state==='done'&&i===3));el.classList.toggle('is-active',stage===i&&!terminal);el.classList.toggle('is-stopped',stage===i&&v?.state==='failed');if(stage===i)el.setAttribute('aria-current','step');else el.removeAttribute('aria-current');});
     msg.textContent=v?.state==='running'?(v.note||'Working through the reviewed guest list…'):cloudNote;
     msg.classList.toggle('is-error',cloudBad&&!terminal);
     if(!v){result.innerHTML='';cloudControls();return;}
@@ -251,7 +268,7 @@
     if(cloudHotel===hotel)return;
     const changed=!!cloudHotel;cloudHotel=hotel;watchTok++;cloudStarting=false;cloudRunning=false;cloudTag='';wantedCode=null;cloudNote='';cloudBad=false;cloudResult=null;cloudWant=null;codeSentChallenge='';focusedChallenge='';cloudStage=-1;
     if(resRef){resRef.off();resRef=null;}if(wantRef){wantRef.off();wantRef=null;}
-    if(changed){S.opera='';S.shared={};S.lastRows=null;S.lastList=null;loadOperaLink();}
+    if(changed){const code=document.getElementById('immigCloudCode');if(code)code.value='';S.opera='';S.shared={};S.lastRows=null;S.lastList=null;loadOperaLink();}
   }
   function keyProblem(status){
     if(![401,403,404].includes(status))return false;
@@ -259,9 +276,11 @@
     cloudMsg(status===401?'The GitHub start key has expired or was refused. Save a new key below, then start again.':'The GitHub key needs access to Depature-Tool with Actions: Read and write. Update the key below.',true);return true;
   }
   function cloudControls(){
+    const review=!!(S.plan&&document.getElementById('immigResults2')?.style.display!=='none');
     const busy=cloudStarting||cloudRunning,reportError=!!document.getElementById('immigError2')?.classList.contains('show');
-    for(const id of ['immigCloudOne','immigCloudStartSignin','immigCloudStartAudit','immigRunScope','immigReportsClear','immigInhouseXmlInput','immigFileInput2','immigGo']){const el=document.getElementById(id);if(el)el.disabled=busy||(['immigCloudOne','immigCloudStartAudit'].includes(id)&&(!approvedCount()||reportError));}
+    for(const id of ['immigCloudOne','immigCloudStartSignin','immigCloudStartAudit','immigRunScope','immigReportsClear','immigInhouseXmlInput','immigFileInput2','immigGo']){const el=document.getElementById(id);if(el)el.disabled=busy||(['immigCloudOne','immigCloudStartAudit'].includes(id)&&(!review||!approvedCount()||reportError));}
     document.querySelectorAll('#immigFixerCard .imm-guest input, #immigFixerCard .imm-guest select').forEach(el=>{el.disabled=busy||el.dataset.idleDisabled==='true';});
+    const count=document.getElementById('immigSelectionCount');if(count){const guests=review?(S.plan?.items||[]).filter(it=>selectedFields(it).length).length:0;count.textContent=guests+' guests · '+(review?approvedCount():0)+' fields selected';}
     const b=document.getElementById('immigCloudOne');if(b)b.textContent=busy?'Automation running…':S.scope==='all'?'Fix selected guests':'Fix first 5 guests';
   }
   async function startCloud(mode, lim, prepare) {
@@ -269,6 +288,7 @@
     if (mode !== 'signin' && mode !== 'audit' && mode !== 'save') return;   // 'save' is started only by the big button
     if(cloudStarting||cloudRunning)return cloudMsg('An Opera automation is already starting or running. Finish that run before starting another.',true);
     if(mode!=='signin'&&document.getElementById('immigError2')?.classList.contains('show'))return cloudMsg('Replace the Opera report above before starting. The previous review is out of date.',true);
+    if(mode!=='signin'&&(!S.plan||document.getElementById('immigResults2')?.style.display==='none'))return cloudMsg('Upload and review the two reports before starting a fix.',true);
     cloudResult=null;
     let key = ''; try { key = localStorage.getItem(GH_KEY) || ''; } catch (_) {}
     if (!key) { const r = document.getElementById('immigCloudKeyRow'); if (r) r.style.display = ''; return cloudMsg('Needs the GitHub start key once on this device.', true); }
@@ -352,6 +372,7 @@
     cloudContext();const d=db();if(!d||resRef)return;
     try{resRef=d.ref('hotels/'+HOTEL_ID+'/operaCloudResult');resRef.on('value',snap=>{
       const v=snap.val();if(v&&cloudTag&&v.tag!==cloudTag)return;cloudResult=v;
+      if(v?.state==='running'&&Number(v.at)>Date.now()-600000)cloudRunning=true;
       if(v&&['done','failed'].includes(v.state)){cloudRunning=false;cloudNote='';cloudBad=false;cloudStage=v.state==='done'?3:cloudStage;}
       renderCloudState();
     });}catch(_){resRef=null;}
@@ -415,11 +436,16 @@
   // one clear next step at a time
   function guide(){
     const nx=document.getElementById('immNext');if(!nx)return;
+    ensureCloudPanel();watchCloudReady();
+    const operaLabel=document.getElementById('immigOperaFileLabel'),operaInput=document.getElementById('immigFileInput2'),valid=!!(S.plan&&document.getElementById('immigResults2')?.style.display!=='none'&&!document.getElementById('immigError2')?.classList.contains('show'));
+    if(operaLabel)operaLabel.textContent=valid?'✓ '+(operaInput?.files?.[0]?.name||'Report loaded'):'Not loaded';
+    const vicas=document.getElementById('immigInhouseXmlLabel');if(vicas)vicas.closest('.imm-upload')?.classList.toggle('is-loaded',typeof _immigInhouseList!=='undefined'&&_immigInhouseList.length>0);if(operaLabel)operaLabel.closest('.imm-upload')?.classList.toggle('is-loaded',valid);
     if(document.getElementById('immigError2')?.classList.contains('show')){const reports=document.getElementById('immigReports');if(reports)reports.open=true;nx.textContent='This Opera report could not be read. Replace it above.';document.querySelectorAll('#panel-immig [data-imm-phase]').forEach(el=>{const active=el.dataset.immPhase==='1';el.classList.toggle('is-current',active);el.classList.remove('is-complete');if(active)el.setAttribute('aria-current','step');else el.removeAttribute('aria-current');});cloudControls();return;}
     const hasVicas=typeof _immigInhouseList!=='undefined'&&_immigInhouseList.length>0;
     const res=document.getElementById('immigResults2'),shown=!!(res&&res.style.display!=='none'&&S.plan);
-    const phase=!shown||!hasVicas?1:cloudStarting||cloudRunning||cloudResult?3:2;
-    const text=!hasVicas?'Upload your Vicas In-house XML to begin.':!shown?'Upload the Opera Immigration XML next.':cloudStarting||cloudRunning?'Automation is working. Follow its progress below.':cloudResult?.state==='failed'?'The run needs attention. Follow the action shown below.':cloudResult?.state==='done'?'Your results are ready below.':approvedCount()?'Review the ticked details, then press Fix.':'Choose the details you want to add, or check the full report below.';
+    const result=cloudResult?.mode==='signin'?null:cloudResult;
+    const phase=!shown||!hasVicas?1:cloudStarting||cloudRunning||result?3:2;
+    const text=!hasVicas?'Upload your Vicas In-house XML to begin.':!shown?'Upload the Opera Immigration XML next.':cloudStarting||cloudRunning?'Automation is working. Follow its progress below.':result?.state==='failed'?'The run needs attention. Follow the action shown below.':result?.state==='done'?'Your results are ready below.':approvedCount()?'Review the ticked details, then press Fix.':'Choose the details you want to add, or check the full report below.';
     if(nx.textContent!==text)nx.textContent=text;
     document.querySelectorAll('#panel-immig [data-imm-phase]').forEach(el=>{const n=Number(el.dataset.immPhase);el.classList.toggle('is-current',n===phase);el.classList.toggle('is-complete',n<phase);if(n===phase)el.setAttribute('aria-current','step');else el.removeAttribute('aria-current');});
   }

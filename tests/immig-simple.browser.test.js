@@ -9,10 +9,10 @@ const vicas='<CrystalReport xmlns="urn:crystal-reports:schemas:report-detail">'+
 (async()=>{
  const browser=await chromium.launch({executablePath:[process.env.CHROME_PATH,'/usr/bin/google-chrome','/usr/bin/chromium'].find(p=>p&&fs.existsSync(p)),headless:true,args:['--no-sandbox']});
  try{
-  for(const width of [390,1280]){
+  for(const width of (process.env.IMMIG_NARROW?[320,390,1280]:[390,1280])){
    const p=await browser.newPage({viewport:{width,height:900}}),errors=[];p.on('pageerror',e=>errors.push(e.message));
    const css=['styles.css','pro.css','immig-page.css','themes.css','themes-pro.css'].map(read).join('\n');
-   await p.route('https://hotelops.mock.test/**',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><html data-theme="night-ops"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'\nbody{margin:0}#panel-immig{display:block}</style><span id="immigTabCount"></span>'+panel+'</html>'}));
+   await p.route('https://hotelops.mock.test/**',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><html data-theme="'+(process.env.IMMIG_THEME||'night-ops')+'"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'\nhtml,body{overflow:auto!important}body{display:block;margin:0;height:auto!important;max-height:none!important}#panel-immig{display:block}</style><span id="immigTabCount"></span>'+panel+'</html>'}));
    await p.goto('https://hotelops.mock.test/');
    await p.evaluate(()=>{
     window.escapeHtml=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));window.HOTEL_ID='h1';window.toasts=[];window.showToast=m=>toasts.push(m);window.store={};window.writes=[];window.requests=[];window.listeners={};
@@ -23,7 +23,20 @@ const vicas='<CrystalReport xmlns="urn:crystal-reports:schemas:report-detail">'+
     window.fetch=async(url,opts={})=>{requests.push({url,method:opts.method||'GET',body:opts.body?JSON.parse(opts.body):null});return {ok:true,status:opts.method==='POST'?204:200,json:async()=>({workflow_runs:[]})};};
    });
    for(const f of ['state.js','reports.js','opera-auto-core.js','immig-fixer-core.js','immig-fixer.js'])await p.addScriptTag({content:read(f)});
-   assert.equal(await p.locator('#immigFixerCard').count(),0,'no run action before reports');
+   assert.equal(await p.locator('#immigFixerCard').count(),0,'no review before reports');
+   await p.waitForSelector('#immigCloudOne',{state:'attached'});
+   assert.equal(await p.locator('#immigCloudOne').isDisabled(),true,'guest saves require reports');
+   if(process.env.IMMIG_SHOTS)await p.screenshot({path:process.env.IMMIG_SHOTS+'/upload-'+width+'.png',fullPage:true});
+   await p.evaluate(()=>{const tag='imPreUpload',at=Date.now();emit('hotels/h1/operaCloudResult',{tag,at,state:'running',mode:'signin',stage:'code',note:'Waiting for your code'});emit('hotels/h1/operaCloudWant',{tag,at,expiresAt:at+300000,state:'waiting'});});
+   assert.equal(await p.locator('#immigCloudCodeBox').isVisible(),true,'phone code entry works before uploading reports');
+   assert.equal(await p.locator('#immigCloudSetup').evaluate(e=>e.open),true);
+   assert.equal(await p.locator('#immigFileInput2').isDisabled(),true,'active connection run is kept separate from review uploads');
+   if(process.env.IMMIG_SHOTS)await p.screenshot({path:process.env.IMMIG_SHOTS+'/code-'+width+'.png',fullPage:true});
+   await p.locator('#immigCloudCode').fill('333333');await p.locator('#immigCloudSend').click();
+   await p.evaluate(()=>{const tag='imPreUpload';emit('hotels/h1/operaCloudWant',null);emit('hotels/h1/operaCloudResult',{tag,at:Date.now(),mode:'signin',state:'done',lines:[]});});
+   assert.equal(await p.locator('#immigCloudOne').isDisabled(),true,'a successful sign-in cannot enable saves without reports');
+   await p.evaluate(()=>{writes.length=0;toasts.length=0;emit('hotels/h1/operaCloudCode',null);});
+
    await p.locator('#immigInhouseXmlInput').setInputFiles({name:'vicas.xml',mimeType:'text/xml',buffer:Buffer.from(vicas)});
    await p.waitForFunction(()=>_immigInhouseList.length===2);
    await p.locator('#immigFileInput2').setInputFiles({name:'opera.xml',mimeType:'text/xml',buffer:Buffer.from(opera)});
@@ -32,7 +45,7 @@ const vicas='<CrystalReport xmlns="urn:crystal-reports:schemas:report-detail">'+
    assert.equal(await p.locator('#immigCloudCodeBox').isVisible(),false,'no premature code prompt');
    assert.equal(await p.locator('#immigBrowserAlternative').getAttribute('open'),null,'extension is optional');
    assert.equal(await p.locator('#immigCloudAdv').getAttribute('open'),null,'support is collapsed');
-   assert.equal(await p.locator('#immigFixerCard button.gold:visible').count(),1,'one prominent action');
+   assert.equal(await p.locator('#immigCloudBox button.gold:visible').count(),1,'one prominent action');
    assert.equal(await p.locator('#immigCloudPlan,#immigCloudSave').count(),0,'no manual cloud plan or save-mode step');
    const gender=p.locator('select[data-edit$="|gender"]').first();await gender.scrollIntoViewIfNeeded();
    await gender.focus();const y=await p.evaluate(()=>scrollY);await gender.selectOption('F');
@@ -41,7 +54,7 @@ const vicas='<CrystalReport xmlns="urn:crystal-reports:schemas:report-detail">'+
    assert(Math.abs((await p.evaluate(()=>scrollY))-y)<30,'field edit does not jump down the page');
    await p.locator('#immigRunScope').selectOption('all');assert.match(await p.locator('#immigCloudOne').innerText(),/Fix selected guests/);
    assert((await p.evaluate(()=>document.documentElement.scrollWidth))<=width,'no horizontal page overflow');
-   if(process.env.IMMIG_SHOTS)await p.screenshot({path:process.env.IMMIG_SHOTS+'/review-'+width+'.png',fullPage:true});
+   if(process.env.IMMIG_SHOTS){await p.evaluate(()=>scrollTo(0,0));await p.screenshot({path:process.env.IMMIG_SHOTS+'/review-'+width+'.png',fullPage:true});}
    await p.locator('#immigCloudOne').click();await p.waitForFunction(()=>requests.some(r=>r.method==='POST'));
    const request=await p.evaluate(()=>requests.find(r=>r.method==='POST'));assert.equal(request.body.inputs.limit,'0');assert.equal(request.body.inputs.mode,'save');
    assert(!JSON.stringify(request).includes('ZZ7654321'),'documents do not go in GitHub dispatch');
@@ -77,6 +90,8 @@ const vicas='<CrystalReport xmlns="urn:crystal-reports:schemas:report-detail">'+
    await p.waitForFunction(()=>document.getElementById('immigCloudOne').disabled);
    assert.equal(await p.locator('#immigReports').evaluate(e=>e.open),true,'invalid replacement reopens report upload');
    assert.match(await p.locator('#immNext').innerText(),/could not be read/);assert.deepEqual(errors,[]);
+   await p.locator('#immigReportsClear').click();
+   assert.equal(await p.locator('#immigCloudOne').isDisabled(),true,'clearing reports cannot reuse an old save plan');
    await p.close();
   }
   console.log('Simple Immigration Check passed on phone and desktop: automatic report review, one main action, stable edits, run scopes, code-on-request, persistent recovery and verified results.');

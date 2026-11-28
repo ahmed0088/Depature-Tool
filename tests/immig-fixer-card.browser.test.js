@@ -16,7 +16,7 @@ try{const page=await browser.newPage({viewport:{width:1200,height:900},serviceWo
  const op=()=>page.evaluate(()=>document.querySelectorAll('#immigFixerCard details').forEach(d=>d.open=true));await page.waitForSelector('#immigFixerCard input[type=checkbox]',{state:'attached'});await op();
  const rc=await page.locator('#immigReconCard').innerText();assert(/2\s*guests match/.test(rc)&&/Only in the Opera report/.test(rc)&&/Bob Faketwo/.test(rc)&&!/Only in the Vicas list/.test(rc),'reconcile card: Bob only in Opera, two match: '+rc);
  const text=await page.locator('#immigFixerCard').innerText();
- assert(/Room 102/.test(text)&&/Ethiopia \(ET\)/.test(text),'nationality from Vicas by room+name');assert(/••••4321/.test(text)&&!/ZZ7654321/.test(await page.locator('#immigFixerCard').innerHTML()),'full ID number never shown');
+ assert(/102/.test(text)&&/Ethiopia \(ET\)/.test(text),'nationality from Vicas by room+name');assert(/••••4321/.test(text)&&!/ZZ7654321/.test(await page.locator('#immigFixerCard').innerHTML()),'full ID number never shown');
  // defaults: nationality on, strong passport on, guessed/none gender off
  const st=await page.evaluate(()=>JSON.stringify(hoImmigFixerState.ok));const ok=JSON.parse(st),id=Object.keys(ok)[0];assert.equal(ok[id].nationality,true);assert.equal(ok[id].idNumber,true,'a passport from a strong Vicas match is pre-ticked');
  await page.locator('select[data-edit$="|gender"]').first().selectOption('F');await op();

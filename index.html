@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v653"/>
+<meta name="ho-version" content="v654"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="immig-page.css"/>
@@ -1349,40 +1349,24 @@
 <!-- ════════════════ IMMIGRATION ════════════════ -->
 <div class="panel" id="panel-immig">
   <div style="max-width:1100px;">
-    <div class="page-hd">
-      <div class="page-hd-left"><h1>Immigration Check</h1><p>Upload two reports, review the details, and fix the selected guests in Opera.</p></div>
-      
-    </div>
-    <ol class="imm-journey" aria-label="Immigration workflow"><li data-imm-phase="1"><span>1</span>Upload reports</li><li data-imm-phase="2"><span>2</span>Review details</li><li data-imm-phase="3"><span>3</span>Fix & results</li></ol>
-    <div class="imm-next" id="immNext" role="status" aria-live="polite"></div>
-    <details id="immigReports" class="imm-reports" open><summary>Upload or replace reports</summary><div class="imm-upload-grid">
+    <header class="imm-hero"><div class="imm-hero-emblem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg></div><div class="imm-hero-copy"><div class="imm-eyebrow">GUEST DETAILS · OPERA CLOUD</div><h1>Immigration Check</h1><p>Complete guest details. Keep every stay in order.</p></div><span class="imm-cloud-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M7 18h11a4 4 0 0 0 .8-7.9A7 7 0 0 0 5.2 8.6 4.8 4.8 0 0 0 7 18Z"/></svg>Runs in the cloud</span></header>
+    <ol class="imm-journey" aria-label="Immigration workflow"><li data-imm-phase="1" class="is-current" aria-current="step"><span>1</span><div><b>Upload reports</b><small>Your two source files</small></div></li><li data-imm-phase="2"><span>2</span><div><b>Review details</b><small>Choose what to include</small></div></li><li data-imm-phase="3"><span>3</span><div><b>Fix & results</b><small>Follow the cloud run</small></div></li></ol>
+    <div class="imm-next" id="immNext" role="status" aria-live="polite">Upload your Vicas In-house XML to begin.</div>
+    <details id="immigReports" class="imm-reports" open><summary><span class="imm-summary-title">Source reports</span><span class="imm-summary-note">2 XML files</span></summary><div class="imm-upload-grid">
     <div class="card imm-inputs" data-step="1">
       <div class="imm-h"><b>Upload the Vicas file</b><span>Vicas In-house guests (XML). Helps fill nationality and passport.</span></div>
-      <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('immigInhouseXmlInput').click()">
-        <div style="display:flex;flex-direction:column;align-items:center;padding:14px;text-align:center;gap:4px;">
-          <div style="font-size:1.4rem;">🛏️</div>
-          <div style="font-size:0.78rem;font-weight:600;">Tap to choose the Vicas file</div>
-          <div id="immigInhouseXmlLabel" style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">Not loaded</div>
-          <input type="file" id="immigInhouseXmlInput" accept=".xml,.XML" style="display:none;" onchange="immigLoadInhouseXml(this)"/>
-        </div>
-      </div>
+      <label class="imm-upload" for="immigInhouseXmlInput"><span class="imm-upload-symbol"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span><span class="imm-upload-copy"><b>Choose Vicas In-house XML</b><small>Nationality and document details</small><span id="immigInhouseXmlLabel" class="imm-upload-status">Not loaded</span></span><svg class="imm-upload-arrow" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg><input type="file" id="immigInhouseXmlInput" accept=".xml,.XML" class="imm-file-input" onchange="immigLoadInhouseXml(this)"/></label>
     </div>
     <div class="card" data-step="2">
       <div class="imm-h"><b>Upload the Opera file</b><span>Opera → Immigration Report → Export XML</span></div>
-      <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('immigFileInput2').click()">
-        <div style="display:flex;flex-direction:column;align-items:center;padding:24px;text-align:center;gap:8px;">
-          <div style="font-size:2rem;">📋</div>
-          <div style="font-size:0.86rem;font-weight:600;">Tap to choose the Opera file</div>
-            <input type="file" id="immigFileInput2" accept=".xml,.XML" style="display:none;" onchange="immigLoadFile2(this)"/>
-        </div>
-      </div>
+      <label class="imm-upload" for="immigFileInput2"><span class="imm-upload-symbol"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span><span class="imm-upload-copy"><b>Choose Opera Immigration XML</b><small>The guest details to check</small><span id="immigOperaFileLabel" class="imm-upload-status">Not loaded</span></span><svg class="imm-upload-arrow" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg><input type="file" id="immigFileInput2" accept=".xml,.XML" class="imm-file-input" onchange="immigLoadFile2(this)"/></label>
       <details class="imm-more"><summary>Paste Opera XML instead</summary><div class="upload-zone"><textarea id="immigPasteInput2" style="height:90px;" aria-label="Opera immigration XML" placeholder="Paste the Opera report XML here."></textarea></div><button class="btn" id="immigGo" data-step="3" onclick="processImmig2()">Check guests</button></details>
       <div class="error-box" id="immigError2"><span>⚠</span><span id="immigErrorMsg2"></span></div>
 
     </div>
     </div><p class="imm-small">The review appears after upload. Both files should cover the same hotel and business date.</p><button class="btn" id="immigReportsClear" onclick="clearImmig()">Clear reports</button></details>
     <div id="immigStep4Slot"></div>
-    <div id="immigResults2" style="display:none;">
+    <div id="immigWorkArea" class="imm-work-area"><div id="immigResults2" style="display:none;">
       <details class="imm-more imm-all"><summary>See all guests and checks</summary><div id="immigMissingWrap" style="display:none;margin-top:18px;">
       <div class="card" style="border-color:rgba(240,107,122,0.3);">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
@@ -1409,7 +1393,7 @@
         <thead><tr><th>Room</th><th>Sex</th><th>Name</th><th>Nationality</th><th>Passport</th><th>Email</th><th>Arrival</th><th>Departure</th><th>Issues</th></tr></thead>
         <tbody id="immigTable2"></tbody>
       </table></div></details>
-    </div>
+    </div><aside id="immigCloudHome"><details id="immigCloudSetup" class="imm-cloud-setup"><summary>Cloud connection & authentication</summary><div id="immigCloudDock"></div></details></aside></div>
   </div>
 </div>
 

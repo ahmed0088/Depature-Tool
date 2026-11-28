@@ -63,9 +63,10 @@ const read=p=>fs.readFileSync(__dirname+'/../'+p,'utf8');
    assert.equal(await p.evaluate(()=>writes.find(w=>w.path.endsWith('/operaCloudCode')).v.tag),input.tag);
    await p.evaluate(tag=>emit('hotels/h1/operaCloudResult',{state:'failed',mode:'save',tag,error:'Microsoft requires a supported sign-in method',lines:[]}),input.tag);
    assert.match(await p.locator('#immigCloudRes').innerText(),/Opera sign-in needs attention/);assert.equal(await p.locator('#immigCloudOne').isDisabled(),false);
-   await p.evaluate(async()=>{HOTEL_ID='h2';await immigFixerRender();});
+   await p.evaluate(async()=>{document.getElementById('immigCloudCode').value='111111';HOTEL_ID='h2';await immigFixerRender();});
    assert.equal(await p.evaluate(()=>listeners['hotels/h1/operaCloudWant'].length),0,'old hotel listener removed');
    assert.equal(await p.evaluate(()=>hoImmigFixerState.opera),'','other hotel must supply its own Opera URL');
+   assert.equal(await p.locator('#immigCloudCode').inputValue(),'','authentication input is cleared when switching hotels');
    assert.deepEqual(errors,[]);await p.close();
   }
   {
