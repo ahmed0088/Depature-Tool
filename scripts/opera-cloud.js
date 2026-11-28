@@ -27,6 +27,11 @@ function totp(key, nowMs) {
   const h = crypto.createHmac('sha1', b32(key)).update(b).digest(), o = h[h.length - 1] & 15;
   return String(((h[o] & 0x7f) << 24 | h[o + 1] << 16 | h[o + 2] << 8 | h[o + 3]) % 1e6).padStart(6, '0');
 }
+async function freshTotp(key,previous,{now=Date.now,delay=ms=>new Promise(r=>setTimeout(r,ms))}={}){
+  const remaining=30000-(now()%30000);
+  if(remaining<=10000||totp(key,now())===previous)await delay(remaining+200);
+  return totp(key,now());
+}
 const okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' && /(^|\.)oraclecloud\.com$/i.test(x.hostname); } catch (_) { return false; } };
 
 // ── Microsoft sign-in, step by step; on a surprise it logs only the page's title and button labels ──
@@ -52,15 +57,16 @@ async function fbOpen() {
   const request=async(p,method,value)=>{const response=await fetch(at(p),{method,...(value===undefined?{}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(value)})});if(!response.ok)throw Error('HotelOps could not '+(method==='GET'?'read':'save')+' the private automation state ('+response.status+'). Check the worker account’s database access.');return response.json().catch(()=>null);};
   return {get:p=>request(p,'GET'),put:(p,v)=>request(p,'PUT',v),del:p=>request(p,'DELETE')};
 }
-// waits up to 3 minutes for a code typed within the last 2 minutes; reads it once and deletes it at once
-async function codeFromHotelOps(FB, notThis,tag='') {
-  await FB.put('operaCloudWant', { at: Date.now(), state: 'waiting',tag });
-  const t0 = Date.now();
-  while (Date.now() - t0 < 180000) {
+// HotelOps waits five minutes for a CURRENT code; this never extends the provider's code validity.
+const CODE_WAIT_MS=5*60*1000;
+async function codeFromHotelOps(FB,notThis,tag='',{now=Date.now,delay=ms=>new Promise(r=>setTimeout(r,ms))}={}) {
+  const t0=now(),expiresAt=t0+CODE_WAIT_MS;
+  await FB.put('operaCloudWant',{at:t0,expiresAt,state:'waiting',tag});
+  while(now()<expiresAt){
     const v = await FB.get('operaCloudCode');
-    const age=Date.now()-Number(v?.at||0);
+    const age=now()-Number(v?.at||0);
     if (v && (!tag||v.tag===tag) && /^\d{6}$/.test(String(v.code || '')) && age>=0 && age < 120000 && String(v.code) !== notThis) { await FB.del('operaCloudCode');const want=await FB.get('operaCloudWant');if(!tag||want?.tag===tag)await FB.del('operaCloudWant'); return String(v.code); }
-    await new Promise(r => setTimeout(r, 2000));
+    await delay(1000);
   }
   const want=await FB.get('operaCloudWant');if(!tag||want?.tag===tag)await FB.del('operaCloudWant');return '';
 }
@@ -80,8 +86,8 @@ async function main() {
   const FB = await fbOpen();   // the private path: the code, the plan, the results
   const url=String(E.OPERA_URL||await FB.get('operaUrl')||'').trim();
   if(!okUrl(url)){const error='Save a valid Opera Cloud link for this hotel in Immigration Check before starting.';await FB.put('operaCloudResult',{at:Date.now(),state:'failed',mode:MODE,tag:RUN_TAG,error,lines:[]});throw Error(error);}
-  if (FB) { for(const key of ['operaCloudCode','operaCloudWant']){const value=await FB.get(key);if(!RUN_TAG||value?.tag===RUN_TAG||Date.now()-Number(value?.at||0)>180000)await FB.del(key);} }   // never use an old code
-  const getCode = async notThis => E.OPERA_TOTP ? totp(E.OPERA_TOTP) : codeFromHotelOps(FB, notThis,RUN_TAG);
+  if (FB) { for(const key of ['operaCloudCode','operaCloudWant']){const value=await FB.get(key);if(!RUN_TAG||value?.tag===RUN_TAG||Date.now()>(key==='operaCloudWant'?Number(value?.expiresAt)||Number(value?.at||0)+180000:Number(value?.at||0)+180000))await FB.del(key);} }   // never use an old code
+  const getCode = async notThis => E.OPERA_TOTP ? freshTotp(E.OPERA_TOTP,notThis) : codeFromHotelOps(FB, notThis,RUN_TAG);
   // the plan is read and deleted at once, before anything else, so it never outlives this run (a stale result is dropped after a day)
   const rejectPlan=async error=>{await FB.put('operaCloudResult',{at:Date.now(),state:'failed',mode:MODE,tag:RUN_TAG,error,lines:[]});throw Error(error);};
   let job = null;
@@ -130,4 +136,4 @@ async function main() {
   } finally { try { if (FB) { for(const key of ['operaCloudCode','operaCloudWant',...(MODE==='signin'?[]:['operaCloudPlan'])]){const value=await FB.get(key);if(!RUN_TAG||value?.tag===RUN_TAG)await FB.del(key);} } } catch (_) {} await browser.close(); }
 }
 if (require.main === module) main().catch(e => fail(/^(audit|save)$/i.test(String(E.MODE || 'audit')) ? 'Runner stopped (details are only in the HotelOps card, not in this public log)' : 'Runner stopped: ' + (e && e.message || e)));
-module.exports = { fbOpen, NO_PASSKEY, totp, b32, okUrl, codeFromHotelOps, msSignIn };
+module.exports = { fbOpen, NO_PASSKEY, totp, freshTotp, CODE_WAIT_MS, b32, okUrl, codeFromHotelOps, msSignIn };

@@ -63,6 +63,7 @@
 #panel-immig .imm-run-note.is-error { color: var(--red,#c0392b); }
 #panel-immig .imm-code, #panel-immig .imm-setup-key { margin: 14px 0; padding: 15px; border: 1px solid var(--gold,#d5a81b); border-radius: 12px; }
 #panel-immig .imm-code[hidden] { display: none; }
+#panel-immig .imm-code-time { font-size: .9rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
 #panel-immig #immigCloudCode { letter-spacing: .18em; font-size: 1.1rem; }
 #panel-immig .imm-help, #panel-immig .imm-success { border-left: 3px solid var(--amber,#a76b0d); padding: 12px 14px; margin-top: 14px; background: var(--card); border-radius: 0 10px 10px 0; }
 #panel-immig .imm-success { border-color: var(--green,#228455); }

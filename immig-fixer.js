@@ -120,7 +120,7 @@
       '<p class="imm-small">Saves the ticked details to guest profiles. It never overwrites a value and never touches folios, postings or cashiering.</p>'+
       '<ol class="imm-run-steps" id="immigCloudSteps" aria-label="Automation progress"><li data-cloud-step="0">Connect</li><li data-cloud-step="1">Sign in</li><li data-cloud-step="2">Fix details</li><li data-cloud-step="3">Results</li></ol>'+
       '<div id="immigCloudStartMsg" class="imm-run-note" role="status" aria-live="polite"></div>'+
-      '<div id="immigCloudCodeBox" class="imm-code" hidden><b>Enter your authentication code</b><p class="imm-small" id="immigCloudWant"></p><div class="imm-row"><input id="immigCloudCode" aria-label="Six-digit authentication code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code"><button class="btn gold" id="immigCloudSend">Send code</button></div></div>'+
+      '<div id="immigCloudCodeBox" class="imm-code" hidden><b>Enter your authentication code</b><p class="imm-small" id="immigCloudWant"></p><p class="imm-code-time" id="immigCloudTime" role="timer" aria-live="off"></p><p class="imm-small">Your authenticator has its own code timer. If that code is about to change, wait for the next one before typing it here.</p><div class="imm-row"><input id="immigCloudCode" aria-label="Six-digit authentication code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code"><button class="btn gold" id="immigCloudSend">Send code</button></div></div>'+
       '<div id="immigCloudRes" class="imm-result" aria-live="polite"></div>'+
       '<div id="immigCloudKeyRow" class="imm-setup-key" style="display:none"><b>Connect cloud automation on this device</b><p class="imm-small">Use the same start key as Neorcha. You only need to save it once.</p><div class="imm-row"><input id="immigCloudKey" type="password" aria-label="GitHub start key" autocomplete="off" placeholder="Paste your GitHub start key"><button class="btn" id="immigCloudKeySave">Save key</button></div></div>'+
       '<details class="imm-more" id="immigCloudAdv"><summary>Connection help & details</summary><div class="imm-support-actions"><button class="btn" id="immigCloudStartSignin">Check Opera sign-in only</button><button class="btn" id="immigCloudStartAudit">Preview without saving</button><a id="immigCloudRunLink" class="btn" target="_blank" rel="noopener" hidden>Open cloud run</a></div><p class="imm-small">Connection checks and previews do not save guest details.</p></details></section>'+
@@ -187,11 +187,25 @@
   // All cloud launches share one guard; preparing a new plan must wait until no run is active.
   const GH_KEY = 'ho_gh_start_key_v1', GH_API = 'https://api.github.com/repos/ahmed0088/Depature-Tool/actions/workflows/opera-cloud.yml/dispatches';
   let cloudNote='',cloudBad=false,cloudResult=null,cloudWant=null,codeSentChallenge='',focusedChallenge='',cloudStage=-1;
+  function codeDeadline(want){
+    const at=Number(want?.at||0),expires=Number(want?.expiresAt||0);
+    return Math.min(at+300000,expires>at?expires:at+180000);
+  }
+  function updateCodeCountdown(){
+    const el=document.getElementById('immigCloudTime'),box=document.getElementById('immigCloudCodeBox');
+    if(!el||!box||box.hidden||!wantedCode)return;
+    const challenge=String(wantedCode.tag||'')+'|'+wantedCode.at;
+    if(codeSentChallenge===challenge){el.textContent='Code sent. Waiting for confirmation…';return;}
+    const left=Math.max(0,Math.ceil((codeDeadline(wantedCode)-Date.now())/1000));
+    el.textContent=left?'Time to send a current code: '+Math.floor(left/60)+':'+String(left%60).padStart(2,'0'):'The waiting time ended. Start again to request a current code.';
+    if(!left){document.getElementById('immigCloudCode').disabled=true;document.getElementById('immigCloudSend').disabled=true;}
+  }
+  setInterval(updateCodeCountdown,1000);
   function cloudMsg(t,bad){cloudNote=String(t||'');cloudBad=!!bad;renderCloudState();}
   function recovery(error){
     if(/passkey|security key|windows hello/i.test(error))return {title:'Opera needs a different sign-in method',text:'This cloud computer cannot use a device passkey. Ask your administrator to enable a supported password and authentication-code method.',login:true};
+    if(/authentication code|authenticator code|verification code|code.*not accepted|code.*arrived|rejected.*codes/i.test(error))return {title:'A current authentication code is needed',text:'Start again and wait for the code box. If your authenticator’s code is about to change, wait for its next code before sending.'};
     if(/Microsoft|sign.in|password|account policy/i.test(error))return {title:'Opera sign-in needs attention',text:'Check the saved Opera login and the account’s sign-in method in connection settings, then try again.',login:true};
-    if(/code|authenticat/i.test(error))return {title:'A fresh authentication code is needed',text:'Start again. Enter a new code only when this page asks for it.'};
     if(/plan|reviewed list/i.test(error))return {title:'Review the selected details again',text:'The previous list could not be used. Check the ticked fields, then press Fix again.'};
     return {title:'The run stopped',text:'Check the explanation below before trying again. Only confirmed results are counted as saved.'};
   }
@@ -199,12 +213,13 @@
     const msg=document.getElementById('immigCloudStartMsg'),result=document.getElementById('immigCloudRes'),box=document.getElementById('immigCloudCodeBox');
     if(!msg||!result||!box)return;
     const v=cloudResult,terminal=v&&['done','failed'].includes(v.state),age=Date.now()-Number(cloudWant?.at||0);
-    wantedCode=cloudWant&&cloudWant.state==='waiting'&&age>=0&&age<180000&&(!cloudTag||cloudWant.tag===cloudTag)&&!terminal?cloudWant:null;
+    wantedCode=cloudWant&&cloudWant.state==='waiting'&&age>=0&&Date.now()<codeDeadline(cloudWant)&&(!cloudTag||cloudWant.tag===cloudTag)&&!terminal?cloudWant:null;
     const challenge=wantedCode?String(wantedCode.tag||'')+'|'+wantedCode.at:'';
     box.hidden=!wantedCode;const sent=!!challenge&&codeSentChallenge===challenge;
     const input=document.getElementById('immigCloudCode'),send=document.getElementById('immigCloudSend');
     input.disabled=sent;send.disabled=sent;
     document.getElementById('immigCloudWant').textContent=sent?'Code sent. Waiting for Opera to continue…':'Open your authenticator app, type the current 6 digits, then press Send code.';
+    updateCodeCountdown();
     if(wantedCode&&!sent&&focusedChallenge!==challenge){focusedChallenge=challenge;input.focus({preventScroll:true});}
     let stage=cloudStage;
     if(v?.state==='running')stage=['starting'].includes(v.stage)?0:['email','password','signin','passkey','code','code-submit','signed-in'].includes(v.stage)?1:2;
@@ -316,7 +331,7 @@
     const el = document.getElementById('immigCloudCode'), v = String(el && el.value || '').replace(/\D/g, ''), d = db();
     if (!/^\d{6}$/.test(v)) return toast('Type the 6 digits from your authenticator app.', 'err');
     if (!d) return toast('Not connected to the database.', 'err');
-    if(!wantedCode||codeSentChallenge===String(wantedCode.tag||'')+'|'+wantedCode.at||Date.now()-Number(wantedCode.at)>180000)return toast('Wait for the cloud run to request a fresh authentication code first.','err');
+    if(!wantedCode||codeSentChallenge===String(wantedCode.tag||'')+'|'+wantedCode.at||Date.now()>=codeDeadline(wantedCode))return toast('Wait for the cloud run to request a fresh authentication code first.','err');
     const request=wantedCode,hotel=String(HOTEL_ID),challenge=String(request.tag||'')+'|'+request.at;
     try { await d.ref('hotels/' + hotel + '/operaCloudCode').set({ code:v,at:Date.now(),tag:request.tag||'' });if(hotel!==String(HOTEL_ID))return;codeSentChallenge=challenge;el.value='';renderCloudState();toast('Code sent. The cloud run uses it once.', 'ok'); } catch (_) { toast('Could not send the code.', 'err'); }
   }

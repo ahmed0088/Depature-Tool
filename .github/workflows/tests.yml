@@ -56,6 +56,8 @@ jobs:
       - name: Immigration cloud startup and Microsoft sign-in
         run: |
           node tests/opera-cloud.test.js
+          node --test tests/opera-auth-window.test.js
+          node tests/opera-auth-code.browser.test.js
           node tests/opera-signin-flow.test.js
           node tests/opera-signin-methods.browser.test.js
           node tests/immig-cloud-start.test.js
